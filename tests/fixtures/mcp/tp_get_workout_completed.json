@@ -1,0 +1,45 @@
+{
+  "args": {
+    "workout_id": "3907691818"
+  },
+  "result": {
+    "id": "3907691818",
+    "date": "2026-08-24",
+    "title": "Z2 Run",
+    "sport": "Run",
+    "workout_type": 3,
+    "description": null,
+    "rpe": null,
+    "feeling": null,
+    "new_comment": null,
+    "has_private_workout_note": false,
+    "metrics": {
+      "duration_planned": 0.5,
+      "duration_actual": 0.5850855708122253,
+      "tss_planned": 12.1,
+      "tss_actual": 31.02,
+      "if_planned": 0.47057773035040795,
+      "if_actual": 0.6965218537920074,
+      "distance_planned_km": 4.59812646484375,
+      "distance_actual_km": 5.44658984375,
+      "avg_power": 303.0,
+      "normalized_power": null,
+      "avg_hr": 146,
+      "avg_cadence": 165.0,
+      "elevation_gain": 23.0,
+      "calories": 445
+    },
+    "completed": null,
+    "structured_workout": null,
+    "workout_comments": [],
+    "device_files": [
+      {
+        "file_id": "753546503",
+        "file_system_id": "753546503",
+        "file_name": "tp-3891122.2026-08-24-11-22-53-586Z.GarminPing.AAAAAGqMKY2baWWq.FIT.gz",
+        "uploaded_at": "2026-08-24T05:22:53"
+      }
+    ],
+    "attachment_files": []
+  }
+}

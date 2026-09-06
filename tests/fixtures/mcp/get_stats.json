@@ -1,0 +1,36 @@
+{
+  "args": {
+    "date": "2026-09-06"
+  },
+  "result": {
+    "date": "2026-09-06",
+    "total_steps": 44,
+    "daily_step_goal": 6050,
+    "distance_meters": 36,
+    "total_calories": 449.0,
+    "active_calories": 2.0,
+    "bmr_calories": 447.0,
+    "highly_active_seconds": 120,
+    "active_seconds": 60,
+    "sedentary_seconds": 2556,
+    "sleeping_seconds": 15384,
+    "moderate_intensity_minutes": 0,
+    "vigorous_intensity_minutes": 0,
+    "intensity_minutes_goal": 500,
+    "min_heart_rate_bpm": 42,
+    "max_heart_rate_bpm": 78,
+    "resting_heart_rate_bpm": 43,
+    "last_7_days_avg_resting_hr": 40,
+    "avg_stress_level": 14,
+    "max_stress_level": 56,
+    "stress_qualifier": "UNKNOWN",
+    "body_battery_charged": 32,
+    "body_battery_drained": 2,
+    "body_battery_highest": 75,
+    "body_battery_lowest": 43,
+    "body_battery_current": 73,
+    "avg_waking_respiration": 13.0,
+    "highest_respiration": 20.0,
+    "lowest_respiration": 7.0
+  }
+}

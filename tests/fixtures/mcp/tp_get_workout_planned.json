@@ -1,0 +1,38 @@
+{
+  "args": {
+    "workout_id": "3907691706"
+  },
+  "result": {
+    "id": "3907691706",
+    "date": "2026-08-23",
+    "title": "Strength",
+    "sport": "Strength",
+    "workout_type": 9,
+    "description": null,
+    "rpe": null,
+    "feeling": null,
+    "new_comment": null,
+    "has_private_workout_note": false,
+    "metrics": {
+      "duration_planned": 1.0,
+      "duration_actual": null,
+      "tss_planned": 72.2,
+      "tss_actual": null,
+      "if_planned": 0.85,
+      "if_actual": null,
+      "distance_planned_km": null,
+      "distance_actual_km": null,
+      "avg_power": null,
+      "normalized_power": null,
+      "avg_hr": null,
+      "avg_cadence": null,
+      "elevation_gain": null,
+      "calories": null
+    },
+    "completed": null,
+    "structured_workout": null,
+    "workout_comments": [],
+    "device_files": [],
+    "attachment_files": []
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "args": {
+    "activity_id": 24234275446
+  },
+  "result": {
+    "id": 24234275446,
+    "name": "Sturbridge Road Cycling",
+    "type": "road_biking",
+    "event_type": "uncategorized",
+    "parent_type": 2,
+    "start_time_local": "2026-09-04T06:17:49.0",
+    "start_time_gmt": "2026-09-04T10:17:49.0",
+    "duration_seconds": 4595.157,
+    "moving_duration_seconds": 4583.506,
+    "elapsed_duration_seconds": 4837.142,
+    "distance_meters": 27465.01,
+    "avg_speed_mps": 5.9770002365112305,
+    "max_speed_mps": 17.756000518798828,
+    "avg_hr_bpm": 139.0,
+    "max_hr_bpm": 166.0,
+    "min_hr_bpm": 82.0,
+    "calories": 695.0,
+    "bmr_calories": 114.0,
+    "avg_power_watts": 127.0,
+    "max_power_watts": 474.0,
+    "normalized_power_watts": 150.0,
+    "training_effect": 3.200000047683716,
+    "anaerobic_training_effect": 0.20000000298023224,
+    "training_effect_label": "AEROBIC_BASE",
+    "training_load": 79.14982604980469,
+    "moderate_intensity_minutes": 14,
+    "vigorous_intensity_minutes": 55,
+    "elevation_gain_meters": 312.0,
+    "elevation_loss_meters": 318.0,
+    "max_elevation_meters": 271.6,
+    "min_elevation_meters": 175.4,
+    "recovery_hr_bpm": 7,
+    "lap_count": 4,
+    "has_splits": true,
+    "device_manufacturer": "GARMIN"
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "args": {
+    "activity_id": 24234275446
+  },
+  "result": {
+    "activity_id": 24234275446,
+    "lap_count": 4,
+    "laps": [
+      {
+        "lap_number": 1,
+        "start_time": "2026-09-04T10:17:49.0",
+        "distance_meters": 8046.72,
+        "duration_seconds": 1528.954,
+        "moving_duration_seconds": 1524.0,
+        "elapsed_duration_seconds": 1703.937,
+        "avg_speed_mps": 5.263000011444092,
+        "avg_moving_speed_mps": 5.2800001409735895,
+        "max_speed_mps": 12.345000267028809,
+        "avg_hr_bpm": 131.0,
+        "max_hr_bpm": 159.0,
+        "calories": 208.0,
+        "bmr_calories": 38.0,
+        "avg_power_watts": 111.0,
+        "total_strokes": 1788,
+        "elevation_gain_meters": 84.0,
+        "elevation_loss_meters": 60.0
+      },
+      {
+        "lap_number": 2,
+        "start_time": "2026-09-04T10:46:14.0",
+        "distance_meters": 8046.72,
+        "duration_seconds": 1218.506,
+        "moving_duration_seconds": 1218.506,
+        "elapsed_duration_seconds": 1218.506,
+        "avg_speed_mps": 6.604000091552735,
+        "avg_moving_speed_mps": 6.6037593063755455,
+        "max_speed_mps": 12.819999694824219,
+        "avg_hr_bpm": 146.0,
+        "max_hr_bpm": 160.0,
+        "calories": 208.0,
+        "bmr_calories": 30.0,
+        "avg_power_watts": 146.0,
+        "total_strokes": 1613,
+        "elevation_gain_meters": 109.0,
+        "elevation_loss_meters": 111.0
+      },
+      {
+        "lap_number": 3,
+        "start_time": "2026-09-04T11:06:33.0",
+        "distance_meters": 8046.72,
+        "duration_seconds": 1100.755,
+        "moving_duration_seconds": 1100.0,
+        "elapsed_duration_seconds": 1113.755,
+        "avg_speed_mps": 7.309999942779541,
+        "avg_moving_speed_mps": 7.315200195312501,
+        "max_speed_mps": 17.756000518798828,
+        "avg_hr_bpm": 150.0,
+        "max_hr_bpm": 166.0,
+        "calories": 186.0,
+        "bmr_calories": 27.0,
+        "avg_power_watts": 144.0,
+        "total_strokes": 1542,
+        "elevation_gain_meters": 74.0,
+        "elevation_loss_meters": 122.0
+      },
+      {
+        "lap_number": 4,
+        "start_time": "2026-09-04T11:25:07.0",
+        "distance_meters": 3324.85,
+        "duration_seconds": 746.942,
+        "moving_duration_seconds": 741.0,
+        "elapsed_duration_seconds": 800.944,
+        "avg_speed_mps": 4.451000213623047,
+        "avg_moving_speed_mps": 4.486977189819501,
+        "max_speed_mps": 8.678000450134277,
+        "avg_hr_bpm": 131.0,
+        "max_hr_bpm": 150.0,
+        "calories": 93.0,
+        "bmr_calories": 18.0,
+        "avg_power_watts": 100.0,
+        "total_strokes": 836,
+        "elevation_gain_meters": 45.0,
+        "elevation_loss_meters": 25.0
+      }
+    ]
+  }
+}

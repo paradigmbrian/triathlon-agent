@@ -1,0 +1,389 @@
+{
+  "args": {},
+  "result": {
+    "settings": {
+      "athleteId": 3891122,
+      "preferredRunningTssSource": 0,
+      "coachedBy": 0,
+      "athleteType": 4,
+      "thresholdsAutoApply": false,
+      "thresholdsNotifyAthlete": false,
+      "thresholdsNotifyCoach": false,
+      "virtualCoachEmailHour": 5,
+      "enableVirtualCoachEmails": false,
+      "enableWorkoutCommentNotification": false,
+      "enablePostWorkoutNotifications": false,
+      "heartRateZones": [
+        {
+          "zoneCalculatorId": null,
+          "threshold": 0,
+          "maximumHeartRate": 0,
+          "restingHeartRate": 0,
+          "calculationMethod": 3,
+          "workoutTypeId": 0,
+          "zones": [
+            {
+              "label": "Zone 1: Recovery",
+              "maximum": 126,
+              "minimum": 0
+            },
+            {
+              "label": "Zone 2: Aerobic",
+              "maximum": 141,
+              "minimum": 127
+            },
+            {
+              "label": "Zone 3: Tempo",
+              "maximum": 147,
+              "minimum": 142
+            },
+            {
+              "label": "Zone 4: SubThreshold",
+              "maximum": 157,
+              "minimum": 148
+            },
+            {
+              "label": "Zone 5A: SuperThreshold",
+              "maximum": 161,
+              "minimum": 158
+            },
+            {
+              "label": "Zone 5B: Aerobic Capacity",
+              "maximum": 168,
+              "minimum": 162
+            },
+            {
+              "label": "Zone 5C: Anaerobic Capacity",
+              "maximum": 255,
+              "minimum": 169
+            }
+          ]
+        },
+        {
+          "zoneCalculatorId": null,
+          "threshold": 0,
+          "maximumHeartRate": 171,
+          "restingHeartRate": 0,
+          "calculationMethod": 33,
+          "workoutTypeId": 1,
+          "zones": [
+            {
+              "label": "Zone 1",
+              "maximum": 125,
+              "minimum": 116
+            },
+            {
+              "label": "Zone 2",
+              "maximum": 137,
+              "minimum": 126
+            },
+            {
+              "label": "Zone 3",
+              "maximum": 149,
+              "minimum": 138
+            },
+            {
+              "label": "Zone 4",
+              "maximum": 159,
+              "minimum": 150
+            },
+            {
+              "label": "Zone 5",
+              "maximum": 171,
+              "minimum": 160
+            }
+          ]
+        },
+        {
+          "zoneCalculatorId": null,
+          "threshold": 162,
+          "maximumHeartRate": 175,
+          "restingHeartRate": 46,
+          "calculationMethod": 32,
+          "workoutTypeId": 2,
+          "zones": [
+            {
+              "label": "Zone 1",
+              "maximum": 110,
+              "minimum": 89
+            },
+            {
+              "label": "Zone 2",
+              "maximum": 135,
+              "minimum": 111
+            },
+            {
+              "label": "Zone 3",
+              "maximum": 152,
+              "minimum": 136
+            },
+            {
+              "label": "Zone 4",
+              "maximum": 170,
+              "minimum": 153
+            },
+            {
+              "label": "Zone 5",
+              "maximum": 255,
+              "minimum": 171
+            }
+          ]
+        },
+        {
+          "zoneCalculatorId": null,
+          "threshold": 180,
+          "maximumHeartRate": 182,
+          "restingHeartRate": 45,
+          "calculationMethod": 31,
+          "workoutTypeId": 3,
+          "zones": [
+            {
+              "label": "Zone 1",
+              "maximum": 152,
+              "minimum": 117
+            },
+            {
+              "label": "Zone 2",
+              "maximum": 161,
+              "minimum": 153
+            },
+            {
+              "label": "Zone 3",
+              "maximum": 170,
+              "minimum": 162
+            },
+            {
+              "label": "Zone 4",
+              "maximum": 179,
+              "minimum": 171
+            },
+            {
+              "label": "Zone 5",
+              "maximum": 255,
+              "minimum": 180
+            }
+          ]
+        }
+      ],
+      "powerZones": [
+        {
+          "zoneCalculatorId": null,
+          "threshold": 0,
+          "calculationMethod": 9,
+          "workoutTypeId": 0,
+          "zones": [
+            {
+              "label": "Zone 1",
+              "maximum": 102,
+              "minimum": 0
+            },
+            {
+              "label": "Zone 2",
+              "maximum": 139,
+              "minimum": 103
+            },
+            {
+              "label": "Zone 3",
+              "maximum": 166,
+              "minimum": 140
+            },
+            {
+              "label": "Zone 4",
+              "maximum": 194,
+              "minimum": 167
+            },
+            {
+              "label": "Zone 5",
+              "maximum": 2000,
+              "minimum": 195
+            }
+          ]
+        },
+        {
+          "zoneCalculatorId": null,
+          "threshold": 230,
+          "calculationMethod": 9,
+          "workoutTypeId": 2,
+          "zones": [
+            {
+              "label": "Zone 1",
+              "maximum": 135,
+              "minimum": 0
+            },
+            {
+              "label": "Zone 2",
+              "maximum": 184,
+              "minimum": 136
+            },
+            {
+              "label": "Zone 3",
+              "maximum": 220,
+              "minimum": 185
+            },
+            {
+              "label": "Zone 4",
+              "maximum": 257,
+              "minimum": 221
+            },
+            {
+              "label": "Zone 5",
+              "maximum": 2000,
+              "minimum": 258
+            }
+          ]
+        }
+      ],
+      "speedZones": [
+        {
+          "zoneCalculatorId": null,
+          "threshold": 3.608395089946143,
+          "calculationMethod": 14,
+          "distance": 0,
+          "workoutTypeId": 0,
+          "zones": [
+            {
+              "label": "Zone 1",
+              "maximum": 2.5504662600887165,
+              "minimum": 2.3912989749123033
+            },
+            {
+              "label": "Zone 2",
+              "maximum": 2.86870625689123,
+              "minimum": 2.5504662600887165
+            },
+            {
+              "label": "Zone 3",
+              "maximum": 3.0250831017217665,
+              "minimum": 2.86870625689123
+            },
+            {
+              "label": "Zone 4",
+              "maximum": 3.1868202180514458,
+              "minimum": 3.0250831017217665
+            },
+            {
+              "label": "Zone 5",
+              "maximum": 31.555768825803533,
+              "minimum": 3.1868202180514458
+            }
+          ]
+        },
+        {
+          "zoneCalculatorId": null,
+          "threshold": 0.9625263143264335,
+          "calculationMethod": 13,
+          "distance": 0,
+          "workoutTypeId": 1,
+          "zones": [
+            {
+              "label": "Zone 1",
+              "maximum": 0.8388990812936807,
+              "minimum": 0.7434146330163511
+            },
+            {
+              "label": "Zone 2",
+              "maximum": 0.9143999986101121,
+              "minimum": 0.8388990812936807
+            },
+            {
+              "label": "Zone 3",
+              "maximum": 0.9426804109382598,
+              "minimum": 0.9143999986101121
+            },
+            {
+              "label": "Zone 4",
+              "maximum": 1.0048351633078154,
+              "minimum": 0.9426804109382598
+            },
+            {
+              "label": "Zone 5",
+              "maximum": 9.14399998610112,
+              "minimum": 1.0048351633078154
+            }
+          ]
+        },
+        {
+          "zoneCalculatorId": null,
+          "threshold": 3.699641862335586,
+          "calculationMethod": 14,
+          "distance": 0,
+          "workoutTypeId": 3,
+          "zones": [
+            {
+              "label": "Zone 1",
+              "maximum": 2.9583533274190805,
+              "minimum": 2.77473139675169
+            },
+            {
+              "label": "Zone 2",
+              "maximum": 3.3319755903022363,
+              "minimum": 2.9583533274190805
+            },
+            {
+              "label": "Zone 3",
+              "maximum": 3.5138519871527945,
+              "minimum": 3.3319755903022363
+            },
+            {
+              "label": "Zone 4",
+              "maximum": 3.699641862335586,
+              "minimum": 3.5138519871527945
+            },
+            {
+              "label": "Zone 5",
+              "maximum": 36.57600477536318,
+              "minimum": 3.699641862335586
+            }
+          ]
+        }
+      ],
+      "approvedConsent": [],
+      "iCalendarKeys": null,
+      "optedOutOfIcal": false,
+      "nutritionSettings": {
+        "athleteId": 3891122,
+        "plannedCalories": 0,
+        "substrateUtilizationCategory": 2
+      },
+      "personId": 3891122,
+      "accountSettingsId": 11972,
+      "userName": "athlete",
+      "email": "athlete@example.com",
+      "isEmailVerified": true,
+      "firstName": "Test",
+      "lastName": "Athlete",
+      "userType": 4,
+      "userIdentifierHash": "REDACTED",
+      "expireDate": "2027-04-03T23:59:00",
+      "premiumTrial": false,
+      "premiumTrialDaysRemaining": 0,
+      "lastLogon": "2026-01-01T00:00:00",
+      "numberOfVisits": 796,
+      "created": "2022-01-02T12:15:00",
+      "age": 19,
+      "birthday": "1990-01-01T00:00:00",
+      "gender": "m",
+      "dateFormat": "mdy",
+      "timeZone": "America/Chicago",
+      "units": 1,
+      "temperatureUnit": 1,
+      "windSpeedUnit": 1,
+      "allowMarketingEmails": false,
+      "address": null,
+      "address2": null,
+      "city": null,
+      "state": null,
+      "zipCode": null,
+      "country": null,
+      "phone": null,
+      "cellPhone": null,
+      "language": "en-us",
+      "latitude": null,
+      "longitude": null,
+      "personPhotoUrl": null,
+      "affiliateId": 847,
+      "isAthlete": true,
+      "fullName": "Test Athlete"
+    }
+  }
+}

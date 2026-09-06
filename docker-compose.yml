@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:16
+    container_name: tri-analyze-db
+    ports:
+      - "5435:5432"
+    environment:
+      POSTGRES_USER: tri_analyze
+      POSTGRES_PASSWORD: tri_analyze
+      POSTGRES_DB: tri_analyze
+    volumes:
+      - tri_analyze_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tri_analyze"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  tri_analyze_pgdata:

@@ -1,0 +1,18 @@
+{
+  "args": {
+    "date": "2026-09-06"
+  },
+  "result": {
+    "date": "2026-09-06",
+    "last_night_avg_hrv_ms": 66,
+    "last_night_5min_high_hrv_ms": 118,
+    "weekly_avg_hrv_ms": 78,
+    "baseline_balanced_low_ms": 66,
+    "baseline_balanced_upper_ms": 103,
+    "baseline_low_upper_ms": 59,
+    "status": "BALANCED",
+    "feedback": "HRV_BALANCED_2",
+    "sleep_start": "2026-09-05T20:00:24.0",
+    "sleep_end": "2026-09-06T04:16:24.0"
+  }
+}

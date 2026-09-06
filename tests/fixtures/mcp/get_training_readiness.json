@@ -1,0 +1,31 @@
+{
+  "args": {
+    "date": "2026-09-06"
+  },
+  "result": [
+    {
+      "date": "2026-09-06",
+      "timestamp": "2026-09-06T04:18:29.0",
+      "context": "AFTER_WAKEUP_RESET",
+      "level": "MODERATE",
+      "score": 56,
+      "feedback": "BALANCE_STRESS_AND_RECOVERY",
+      "sleep_score": 66,
+      "sleep_factor_percent": 49,
+      "sleep_factor_feedback": "MODERATE",
+      "recovery_time_hours": 0.0,
+      "recovery_factor_percent": 99,
+      "recovery_factor_feedback": "GOOD",
+      "training_load_factor_percent": 92,
+      "training_load_feedback": "GOOD",
+      "acute_load": 307,
+      "hrv_factor_percent": 100,
+      "hrv_factor_feedback": "VERY_GOOD",
+      "hrv_weekly_avg": 78,
+      "stress_history_factor_percent": 42,
+      "stress_history_feedback": "MODERATE",
+      "sleep_history_factor_percent": 54,
+      "sleep_history_feedback": "MODERATE"
+    }
+  ]
+}
