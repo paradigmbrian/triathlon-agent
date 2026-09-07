@@ -75,7 +75,7 @@ Responsibilities: `models.py` is the vocabulary every other module shares. `peri
 - Consumes: `tri_core.config.Settings` (Plan 1).
 - Produces: `tri_planning.config.PlanningSettings` with `tri_planning_horizon_weeks: int = 3` and `tri_planning_langsmith_project: str = "tri-planning"`; `tri_planning.config.get_planning_settings() -> PlanningSettings`; `tri_planning.cli.app`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `packages/tri-planning/tests/test_config.py`:
 ```python
@@ -95,12 +95,12 @@ def test_env_override(monkeypatch):
     assert PlanningSettings(_env_file=None).tri_planning_horizon_weeks == 2
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `uv run pytest packages/tri-planning -q`
 Expected: collection error, `ModuleNotFoundError: No module named 'tri_planning'`.
 
-- [ ] **Step 3: Create the package**
+- [x] **Step 3: Create the package**
 
 `packages/tri-planning/pyproject.toml`:
 ```toml
@@ -202,7 +202,7 @@ TRI_PLANNING_HORIZON_WEEKS=3
 TRI_PLANNING_LANGSMITH_PROJECT=tri-planning
 ```
 
-- [ ] **Step 4: Write the migration**
+- [x] **Step 4: Write the migration**
 
 `migrations/002_planning.sql`:
 ```sql
@@ -264,7 +264,7 @@ create table if not exists plan_changes (
 create index if not exists plan_changes_workout_idx on plan_changes (tp_workout_id);
 ```
 
-- [ ] **Step 5: Sync, run the test, apply the migration (Brian)**
+- [ ] **Step 5: Sync, run the test, apply the migration (Brian)** _(tests and --help done; migration apply is Brian's)_
 
 ```bash
 uv sync
@@ -279,7 +279,7 @@ docker compose exec -T db psql -U tri_analyze -d tri_analyze < migrations/002_pl
 docker compose exec -T db psql -U tri_analyze -d tri_analyze_test < migrations/002_planning.sql
 ```
 
-- [ ] **Step 6: Lint, type-check, commit (Brian)**
+- [ ] **Step 6: Lint, type-check, commit (Brian)** _(checks pass; commit is Brian's)_
 
 ```bash
 uv run ruff check . && uv run ruff format --check . && uv run mypy
@@ -306,7 +306,7 @@ git commit -m "feat(planning): package scaffold, settings, 002_planning migratio
   - Storage shapes: `StoredGoal(id: int, goal: TrainingGoal, status: str, tp_event_id: str | None)`, `StoredPlan(id, goal_id, source, tp_plan_id, start_date, end_date, skeleton: list[WeekTarget], status)`, `PlanWeekRow(plan_id, week_start, phase, target_tss, target_hours, designed: PlannedWeek | None, written_to_tp: bool)`.
   - `PlannedSession.hours` property (`duration_minutes / 60`), `PlannedWeek.total_tss` and `PlannedWeek.total_hours` properties.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `packages/tri-planning/tests/test_models.py`:
 ```python
@@ -387,12 +387,12 @@ def test_review_decision_defaults():
     assert d.note is None and d.changes is None
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `uv run pytest packages/tri-planning/tests/test_models.py -q`
 Expected: `ImportError` on `tri_planning.planning.models`.
 
-- [ ] **Step 3: Write the models**
+- [x] **Step 3: Write the models**
 
 `packages/tri-planning/src/tri_planning/planning/models.py`:
 ```python
@@ -533,12 +533,12 @@ class PlanWeekRow(BaseModel):
     written_to_tp: bool
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `uv run pytest packages/tri-planning/tests/test_models.py -q`
 Expected: 7 passed.
 
-- [ ] **Step 5: Lint, type-check, commit (Brian)**
+- [ ] **Step 5: Lint, type-check, commit (Brian)** _(checks pass; commit is Brian's)_
 
 ```bash
 uv run ruff check . && uv run ruff format --check . && uv run mypy
@@ -571,7 +571,7 @@ git commit -m "feat(planning): domain models"
   - `skeleton.build(goal, fitness, start: date) -> list[WeekTarget]` (raises `ValueError` if `start` is not a Monday or the goal has too few weeks).
   - `skeleton.infer_phases(weekly_tss: list[float]) -> list[Phase]`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `packages/tri-planning/tests/test_skeleton.py`:
 ```python
@@ -768,12 +768,12 @@ def test_infer_phases_from_load_curve():
     assert skeleton.infer_phases([]) == []
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `uv run pytest packages/tri-planning/tests/test_skeleton.py -q`
 Expected: `ImportError` for `periodization`.
 
-- [ ] **Step 3: Write `periodization.py`**
+- [x] **Step 3: Write `periodization.py`**
 
 ```python
 """Every periodization constant. Change numbers here; the tests in test_skeleton.py pin them."""
@@ -859,7 +859,7 @@ FLAG_HOURS_CAPPED = "hours_capped"
 PEAK_PLATEAU_FRACTION = 0.9
 ```
 
-- [ ] **Step 4: Write `skeleton.py`**
+- [x] **Step 4: Write `skeleton.py`**
 
 ```python
 """Goal + fitness -> week targets. Pure: no I/O, no model calls."""
@@ -1067,12 +1067,12 @@ def infer_phases(weekly_tss: list[float]) -> list[Phase]:
     return phases
 ```
 
-- [ ] **Step 5: Run the tests**
+- [x] **Step 5: Run the tests**
 
 Run: `uv run pytest packages/tri-planning/tests/test_skeleton.py -q`
 Expected: all pass. If `test_hours_floor_not_applied_to_recovery_taper_race` fails on the recovery week, check that the recovery week's TSS (about `0.6 * 408 = 245`, `3.4 h` at IF 0.75... at IF 0.70 base it is `5.0 h`) is below the 8 h floor; it is.
 
-- [ ] **Step 6: Lint, type-check, commit (Brian)**
+- [ ] **Step 6: Lint, type-check, commit (Brian)** _(checks pass; commit is Brian's)_
 
 ```bash
 uv run ruff check . && uv run ruff format --check . && uv run mypy
@@ -1096,7 +1096,7 @@ git commit -m "feat(planning): periodization constants and skeleton builder"
   - `validate.week(planned: PlannedWeek, target: WeekTarget, goal: TrainingGoal) -> list[str]` (empty list means valid).
   - Constants `TSS_TOLERANCE = 0.10`, `STRUCTURE_TOLERANCE_MIN = 5`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `packages/tri-planning/tests/test_validate.py`:
 ```python
@@ -1204,12 +1204,12 @@ def test_session_outside_week():
     assert any("outside" in v for v in out)
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `uv run pytest packages/tri-planning/tests/test_validate.py -q`
 Expected: `ImportError`.
 
-- [ ] **Step 3: Write `validate.py`**
+- [x] **Step 3: Write `validate.py`**
 
 ```python
 """Judge a designed week against its target and the athlete's constraints. Pure."""
@@ -1288,12 +1288,12 @@ def week(planned: PlannedWeek, target: WeekTarget, goal: TrainingGoal) -> list[s
     return out
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 Run: `uv run pytest packages/tri-planning/tests/test_validate.py -q`
 Expected: 10 passed.
 
-- [ ] **Step 5: Lint, type-check, commit (Brian)**
+- [ ] **Step 5: Lint, type-check, commit (Brian)** _(checks pass; commit is Brian's)_
 
 ```bash
 uv run ruff check . && uv run ruff format --check . && uv run mypy
@@ -1330,7 +1330,7 @@ git commit -m "feat(planning): week validator"
   - `fitness_snapshot(conn, as_of: date) -> FitnessSnapshot` (latest non-null `ctl` on or before `as_of`; mean weekly `tss_day` over the 28 days ending the day before `as_of`, `None` when no rows)
   - `athlete_thresholds(conn) -> dict[str, Any] | None` (the `athlete_profile` row's thresholds and zone tables)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `packages/tri-planning/tests/test_repo.py`:
 ```python
@@ -1459,12 +1459,12 @@ def test_fitness_snapshot_empty(pdb):
     assert snap.ctl is None and snap.recent_weekly_tss is None
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `uv run pytest packages/tri-planning/tests/test_repo.py -q`
 Expected: `ImportError` (or skip if Postgres is down; start it with `docker compose up -d` for this task).
 
-- [ ] **Step 3: Write `repo.py`**
+- [x] **Step 3: Write `repo.py`**
 
 ```python
 """Planning-table reads and writes. Every function takes an open connection; callers commit."""
@@ -1720,12 +1720,12 @@ def athlete_thresholds(conn: Conn) -> dict[str, Any] | None:
     ).fetchone()
 ```
 
-- [ ] **Step 4: Run the tests**
+- [ ] **Step 4: Run the tests** _(6 tests skip until 002 is applied)_
 
 Run: `uv run pytest packages/tri-planning/tests/test_repo.py -q`
 Expected: 6 passed (Postgres up, 002 applied). `test_fitness_snapshot` asserts `snap.ctl == 41`: the newest row on or before `as_of` is `as_of - 1 day` with `ctl = 40 + 1`.
 
-- [ ] **Step 5: Full suite, lint, type-check, commit (Brian)**
+- [ ] **Step 5: Full suite, lint, type-check, commit (Brian)** _(commit is Brian's)_
 
 ```bash
 uv run pytest -q
@@ -1741,7 +1741,7 @@ git commit -m "feat(planning): planning repository over goals, plans, weeks and 
 **Files:**
 - Modify: `packages/tri-planning/README.md`, root `README.md` (setup step 2 already loops over `migrations/*.sql`; add a line under Layout for `packages/tri-planning/`)
 
-- [ ] **Step 1: Extend the package README**
+- [x] **Step 1: Extend the package README**
 
 Append to `packages/tri-planning/README.md`:
 ```markdown
@@ -1768,7 +1768,7 @@ for w in build(g, FitnessSnapshot(ctl=45), next_monday(date.today())):
 ```
 ```
 
-- [ ] **Step 2: Copy docs to the vault and commit (Brian)**
+- [ ] **Step 2: Copy docs to the vault and commit (Brian)** _(vault synced; commit is Brian's)_
 
 ```bash
 V=/Users/brian/Documents/dev-vault/projects/paradigm/fitness_agents/triathlon_agent
@@ -1789,3 +1789,15 @@ git commit -m "docs(planning): package README"
 - Spec §7.1 every row of the phase table is a parametrized test case; compression and the minimum are tested. §7.2 each bullet has a test: week-1 chain, 8 % ramp, CTL cap, recovery 60 % with ramp resuming from the last real week, Ironman 3-week cadence, peak hold, taper 80/60/45, race 30 %, maintenance flat, recovery 50 %, hours clamp with TSS recompute and flag, sport hints per phase, bought-plan phase inference. §7.3 each rule has a test in Task 4.
 - Spec §10: `TRI_PLANNING_HORIZON_WEEKS` in `PlanningSettings`; the LangSmith project is a planning-specific env var so one `.env` can serve both agents (Plan 3 exports it as `LANGSMITH_PROJECT` before LangChain loads).
 - Type consistency: `validate.week` signature `(planned, target, goal)` and `skeleton.build(goal, fitness, start)` are the names Plan 3's design and skeleton nodes call; `repo` function names above are the ones Plan 3 imports.
+
+---
+
+## Execution notes (2026-09-07, for Plan 3 to pick up)
+
+- **Task 1:** the "run the test to see it fail" step fails one level earlier than written: uv refuses to sync while a `packages/*` directory lacks a `pyproject.toml` (`Workspace member ... is missing a pyproject.toml`). Same outcome, different error text. Also fixed the root README "Repo:" line to the renamed `triathlon-agent` remote.
+- **Task 3:** mypy strict rejected `["base"] * base + ["build"] * build + ...` as `list[str]` for a `list[Phase]` target; `allocate_phases` now builds from an explicitly typed `list[tuple[Phase, int]]`. Same shape for any future Literal-list construction.
+- **Task 3:** ruff reformatted the `PHASE_TABLE` rows (line length); no semantic change. Task 4 has 9 tests, not the 10 the plan says.
+- **Task 5:** `repo.py` and its tests are written and type-check; the 6 db tests skip until `002_planning.sql` is applied to `tri_analyze_test`. Re-run `uv run pytest packages/tri-planning/tests/test_repo.py -q` after applying.
+- **Smoke:** the README snippet (olympic, 14 weeks from 2026-09-07, CTL 45, no recent load -> week 1 = 7 x 45 = 315) yields base 315/340/367, recovery 220, build 397..500, peak 500 x3, taper 400, race 150. Peak weeks show fewer hours than the last build week (7.8 h vs 8.9 h) because peak IF is 0.80; that is the spec's intent (intensity, not volume) but worth watching in the first real plan.
+- **For Plan 3:** `PlanWeekRow.target_tss` is `float | None` (the column is nullable) while `WeekTarget.target_tss` is `float`; the design node should read targets from `StoredPlan.skeleton`, as Plan 3 already does, not from `plan_weeks`.
+

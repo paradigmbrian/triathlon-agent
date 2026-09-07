@@ -10,7 +10,7 @@ TrainingPeaks data, synced into a local Postgres store.
 | `packages/tri-planning` | `tri_planning` | `tri-planning chat` | Planning agent (in progress; see `docs/superpowers/specs/2026-09-07-tri-planning-design.md`). |
 
 `tri-analyze` and `tri-planning` depend on `tri-core`; neither depends on the other.
-Repo: github.com/paradigmbrian/tri-analyze-agent.
+Repo: github.com/paradigmbrian/triathlon-agent.
 
 ## How it fits together
 
@@ -119,9 +119,10 @@ uv run python scripts/spike_mcp.py   # re-record packages/tri-core/tests/fixture
 ```
 pyproject.toml          workspace root: members, shared ruff/mypy/pytest config
 conftest.py             pytest options and the shared `db` fixture plugin
-migrations/             001_initial.sql (sync tables)
+migrations/             001_initial.sql (sync tables), 002_planning.sql (planning tables)
 packages/tri-core/      src/tri_core/{config,cli,mcp,db,sync,testing}
 packages/tri-analyze/   src/tri_analyze/{cli,allowlist,agent}
+packages/tri-planning/  src/tri_planning/{config,cli,repo,planning}
 docs/superpowers/       specs and implementation plans
 ```
 
