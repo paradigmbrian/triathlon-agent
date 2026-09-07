@@ -1,3 +1,5 @@
+name: tri_analyze  # pinned: keeps the existing volume/network after the directory rename
+
 services:
   db:
     image: postgres:16

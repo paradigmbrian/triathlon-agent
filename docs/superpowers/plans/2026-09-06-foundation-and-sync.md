@@ -19,14 +19,14 @@
 - **Brian runs all DDL and all git commands.** The assistant writes migration files and prints commands. Every "Commit" step below is a command for Brian to run, not for the assistant to execute. Every integration test that needs a database must skip cleanly with a message when the database is unreachable.
 - All timestamps in Postgres are `timestamptz` except `workouts.start_time_local`, which is a naive local `timestamp` because Garmin reports local time without an offset.
 - Definition of done per task: `uv run pytest`, `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy src`.
-- Every markdown file created under this project is also copied to `/Users/brian/Documents/dev-vault/projects/paradigm/fitness_agents/tri_analyze/<same relative path>`.
+- Every markdown file created under this project is also copied to `/Users/brian/Documents/dev-vault/projects/paradigm/fitness_agents/tri-analyze-agent/<same relative path>`.
 
 ---
 
 ## File Structure
 
 ```
-tri_analyze/
+tri-analyze-agent/
   pyproject.toml
   docker-compose.yml
   .env.example
@@ -86,7 +86,7 @@ Responsibilities: `mcp/` knows how to talk to servers and nothing about training
 
 - [ ] **Step 1: Create the uv project and pyproject.toml**
 
-Run: `cd /Users/brian/Development/paradigm/fitness_agents/tri_analyze && uv init --python 3.12 --package --name tri-analyze --no-readme` then replace the generated `pyproject.toml` with:
+Run: `cd /Users/brian/Development/paradigm/fitness_agents/tri-analyze-agent && uv init --python 3.12 --package --name tri-analyze --no-readme` then replace the generated `pyproject.toml` with:
 
 ```toml
 [project]
@@ -423,7 +423,7 @@ Note: `daily_metrics.tss_day` was added relative to the spec's schema because `t
 Print these for Brian to run; do not run them:
 
 ```bash
-cd /Users/brian/Development/paradigm/fitness_agents/tri_analyze
+cd /Users/brian/Development/paradigm/fitness_agents/tri-analyze-agent
 docker compose up -d
 docker compose exec db pg_isready -U tri_analyze
 docker compose exec db psql -U tri_analyze -c "create database tri_analyze_test;"
@@ -2697,10 +2697,10 @@ See `docs/superpowers/specs/2026-09-06-tri-analyze-design.md`.
 
 Insert `  tss_day           numeric,` after the `tsb` line in the spec's `daily_metrics` block, then:
 ```bash
-mkdir -p /Users/brian/Documents/dev-vault/projects/paradigm/fitness_agents/tri_analyze/docs/superpowers/{specs,plans}
-cp README.md /Users/brian/Documents/dev-vault/projects/paradigm/fitness_agents/tri_analyze/readme.md
-cp docs/superpowers/specs/*.md /Users/brian/Documents/dev-vault/projects/paradigm/fitness_agents/tri_analyze/docs/superpowers/specs/
-cp docs/superpowers/plans/*.md /Users/brian/Documents/dev-vault/projects/paradigm/fitness_agents/tri_analyze/docs/superpowers/plans/
+mkdir -p /Users/brian/Documents/dev-vault/projects/paradigm/fitness_agents/tri-analyze-agent/docs/superpowers/{specs,plans}
+cp README.md /Users/brian/Documents/dev-vault/projects/paradigm/fitness_agents/tri-analyze-agent/readme.md
+cp docs/superpowers/specs/*.md /Users/brian/Documents/dev-vault/projects/paradigm/fitness_agents/tri-analyze-agent/docs/superpowers/specs/
+cp docs/superpowers/plans/*.md /Users/brian/Documents/dev-vault/projects/paradigm/fitness_agents/tri-analyze-agent/docs/superpowers/plans/
 ```
 
 - [ ] **Step 4: Commit (Brian runs)**

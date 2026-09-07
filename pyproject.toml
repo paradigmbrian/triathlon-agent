@@ -1,5 +1,5 @@
 [project]
-name = "tri-analyze"
+name = "tri-analyze-agent"
 version = "0.1.0"
 description = "Triathlon training analysis agent over Garmin + TrainingPeaks data"
 authors = [

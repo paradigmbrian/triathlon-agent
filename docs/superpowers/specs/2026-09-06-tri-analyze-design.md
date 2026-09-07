@@ -1,4 +1,4 @@
-# tri_analyze — Triathlon Training Analysis Agent
+# tri-analyze-agent — Triathlon Training Analysis Agent (package `tri_analyze`)
 
 **Date:** 2026-09-06
 **Status:** Approved design, pending implementation plan
@@ -41,7 +41,7 @@ Two entry points share one package:
 ## 3. Repository layout
 
 ```
-tri_analyze/
+tri-analyze-agent/
   pyproject.toml            # uv project, python = ">=3.12,<3.13"
   docker-compose.yml        # postgres:16 on host port 5435
   .env.example              # ANTHROPIC_API_KEY, DATABASE_URL, GARMIN_*, TP_AUTH_COOKIE, LANGSMITH_*
@@ -199,8 +199,9 @@ The sync uses the `mcp` Python SDK's stdio client to launch each server and call
 - `create_agent` from `langchain` 1.x with `ChatAnthropic(model="claude-opus-5")`. Adaptive thinking is the model's default; no `thinking` parameter is passed. `max_tokens` is set high enough for long analyses (16k) and responses are streamed.
 - Tools bound at startup, in this fixed order (stable order matters for prompt caching):
   1. `query_training_db(sql: str)` — local, read-only
-  2. `get_activity_detail(garmin_activity_id: str)` — live Garmin MCP, laps/splits/intervals
-  3. `get_today_readiness()` — live Garmin MCP, today's readiness/body battery/HRV
+  2. Garmin live via `langchain-mcp-adapters`: `get_activity`, `get_activity_splits`, `get_training_readiness`, `get_hrv_data`
+  3. TrainingPeaks live: `tp_get_workout`
+  The live tools are the MCP servers' own tools, allow-listed in `mcp/allowlist.py`, not hand-written wrappers (decided 2026-09-06 while planning milestone 4: less code, and it is the LangChain-plus-MCP lesson itself).
 - System prompt built by `prompt.py` from the DB at session start: athlete profile (zones, thresholds), last 7 days of load (CTL/ATL/TSB and TSS per day), and today's date. Rendered once per session so the cached prefix stays stable across turns.
 - Conversation memory: in-process message list for the life of the REPL session. Cross-session memory is out of scope for milestone 1 (LangGraph checkpointing is a natural milestone-5 addition).
 
@@ -232,6 +233,7 @@ For trend questions the agent is instructed to compute with SQL, not by mental a
 - `langchain-mcp-adapters` `MultiServerMCPClient` with both servers on stdio.
 - Garmin launch: `uvx --python 3.12 --from git+https://github.com/Taxuspt/garmin_mcp@<pinned-sha> garmin-mcp`, with `GARMIN_ENABLED_TOOLS` set so the server registers only the tools we use. Auth: existing tokens in `~/.garminconnect` (already present on this machine); `GARMIN_EMAIL`/`GARMIN_PASSWORD` in `.env` only needed for re-auth.
 - TrainingPeaks launch: `uvx --from git+https://github.com/JamsusMaximus/trainingpeaks-mcp@<pinned-sha> tp-mcp serve`. Auth: `uvx --from <same> tp-mcp auth --from-browser chrome` once (stores the cookie in macOS Keychain, shared across uvx environments) or `TP_AUTH_COOKIE` in `.env`. No vendored clone needed; changed from the first draft for symmetry with Garmin.
+- Sessions are opened once per chat with `MultiServerMCPClient.session` and stay open for the chat's lifetime; tools load with `load_mcp_tools`. A server that fails to start is logged and skipped.
 - The agent loads only the tools in `mcp/allowlist.py`, not all ~190. Rationale: prompt size, cache stability, and fewer wrong-tool choices. The allow-list is the place to grow the agent's live capabilities later.
 - Server start failures are reported clearly at REPL start (which server, what command, stderr tail) and the REPL still opens with the DB tool alone.
 

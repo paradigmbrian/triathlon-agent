@@ -1107,7 +1107,7 @@ wheels = [
 ]
 
 [[package]]
-name = "tri-analyze"
+name = "tri-analyze-agent"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
