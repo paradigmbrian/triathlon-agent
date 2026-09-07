@@ -129,7 +129,7 @@ uv run pytest -q
 
 Expected: the same pass count as before the move (db tests skip if Postgres is down). `uv` may re-link the venv because the project directory changed; that is fine.
 
-- [ ] **Step 5: Optional, later: rename the GitHub repository** to `triathlon-agent` in the GitHub UI and run `git remote set-url origin git@github.com:paradigmbrian/triathlon-agent.git`. Not required for anything in this series.
+- [x] **Step 5: Optional, later: rename the GitHub repository** to `triathlon-agent` in the GitHub UI and run `git remote set-url origin git@github.com:paradigmbrian/triathlon-agent.git`. Not required for anything in this series.
 
 ---
 
@@ -150,7 +150,7 @@ Expected: the same pass count as before the move (db tests skip if Postgres is d
 
 - Produces: `uv sync` from the root creates one `.venv` with `tri-analyze` installed editable; `uv run pytest` collects `packages/*/tests`; `uv run tri-analyze --help` works.
 
-- [ ] **Step 1: Move the package into** `packages/tri-analyze`
+- [x] **Step 1: Move the package into** `packages/tri-analyze`
 
 ```bash
 cd /Users/brian/Development/paradigm/fitness_agents/triathlon_agent
@@ -164,7 +164,7 @@ rm -rf .venv uv.lock .mypy_cache .ruff_cache .pytest_cache
 
 `uv.lock` is deleted on purpose: the root project changes name and shape, and uv regenerates it in Step 4 from the same pins.
 
-- [ ] **Step 2: Write the member** `pyproject.toml`
+- [x] **Step 2: Write the member** `pyproject.toml`
 
 Overwrite `packages/tri-analyze/pyproject.toml` with:
 
@@ -198,7 +198,7 @@ packages = ["src/tri_analyze"]
 
 (The `tri-core` dependency is added in Task 3 once the package exists.)
 
-- [ ] **Step 3: Write the root** `pyproject.toml`
+- [x] **Step 3: Write the root** `pyproject.toml`
 
 ```toml
 [project]
@@ -256,7 +256,7 @@ module = ["langchain_mcp_adapters.*", "mcp.*"]
 ignore_missing_imports = true
 ```
 
-- [ ] **Step 4: Write the root** `conftest.py`
+- [x] **Step 4: Write the root** `conftest.py`
 
 This is the old `tests/conftest.py` verbatim for now (Task 3 replaces the `db` fixture body with a plugin registration):
 
@@ -303,7 +303,7 @@ def db() -> Iterator[psycopg.Connection[dict[str, Any]]]:
 
 Then delete `packages/tri-analyze/tests/conftest.py`.
 
-- [ ] **Step 5: Fix the two cwd-relative fixture paths and the** `tests.fakes` **imports**
+- [x] **Step 5: Fix the two cwd-relative fixture paths and the** `tests.fakes` **imports**
 
 In `packages/tri-analyze/tests/test_sync_garmin.py` replace line 18 and in `packages/tri-analyze/tests/test_sync_trainingpeaks.py` replace line 15:
 
@@ -332,7 +332,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 ```
 
-- [ ] **Step 6: Sync and run everything**
+- [x] **Step 6: Sync and run everything**
 
 ```bash
 uv sync
@@ -345,7 +345,7 @@ Expected: `uv sync` prints `Installed N packages` including `tri-analyze` from `
 
 If `uv run tri-analyze` reports the command is not found, run `uv sync --all-packages` and note it in the README's setup section; this means the virtual-root dependency route did not install member scripts on this uv version.
 
-- [ ] **Step 7: Commit (Brian)**
+- [ ] **Step 7: Commit (Brian)** _(files ready; Brian to run)_
 
 ```bash
 git add -A
@@ -386,7 +386,7 @@ Expected: `git show --stat` lists the moved files as renames (`src/... => packag
   - `tri_core.cli.app` (typer) with command `sync`.
   - `tri_analyze.allowlist.GARMIN_LIVE_TOOLS`, `TP_LIVE_TOOLS`.
 
-- [ ] **Step 1: Move the modules**
+- [x] **Step 1: Move the modules**
 
 ```bash
 cd /Users/brian/Development/paradigm/fitness_agents/triathlon_agent
@@ -407,7 +407,7 @@ mv packages/tri-analyze/tests/fixtures packages/tri-core/tests/fixtures
 rm packages/tri-analyze/tests/conftest.py
 ```
 
-- [ ] **Step 2: Rewrite imports**
+- [x] **Step 2: Rewrite imports**
 
 ```bash
 cd /Users/brian/Development/paradigm/fitness_agents/triathlon_agent
@@ -434,7 +434,7 @@ with
 from tri_core.testing import ScriptedChatModel, tool_call
 ```
 
-- [ ] **Step 3: Write** `tri_core/testing/__init__.py` **and** `fixtures.py`
+- [x] **Step 3: Write** `tri_core/testing/__init__.py` **and** `fixtures.py`
 
 `packages/tri-core/src/tri_core/testing/__init__.py`:
 
@@ -499,7 +499,7 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             item.add_marker(skip_live)
 ```
 
-- [ ] **Step 4: Write** `tri_core/cli.py` **(**`tri sync`**)**
+- [x] **Step 4: Write** `tri_core/cli.py` **(**`tri sync`**)**
 
 ```python
 """Command-line entry point for tri-core: `tri sync`."""
@@ -556,7 +556,7 @@ if __name__ == "__main__":
     app()
 ```
 
-- [ ] **Step 5: Trim** `tri_analyze/cli.py`
+- [x] **Step 5: Trim** `tri_analyze/cli.py`
 
 Remove the `sync` command and its `date` import from `packages/tri-analyze/src/tri_analyze/cli.py`. The file keeps `main`, `chat`, `_chat`. `_chat` still imports `run_sync` (for `/sync`) and `connect`, now from `tri_core`. After the sed in Step 2 its imports are:
 
@@ -567,7 +567,7 @@ from tri_core.sync.runner import run_sync
 
 The `date` import is still used inside `_chat` (`load_athlete_context(conn, date.today())`), so keep `from datetime import date`. Change the help string to `"Triathlon training analysis agent (run` tri sync `to load data)"`.
 
-- [ ] **Step 6: Write** `packages/tri-core/pyproject.toml` **and update the other two**
+- [x] **Step 6: Write** `packages/tri-core/pyproject.toml` **and update the other two**
 
 
 
@@ -611,7 +611,7 @@ tri-core = { workspace = true }
 
 Root `pyproject.toml`: change `dependencies = ["tri-analyze"]` to `dependencies = ["tri-core", "tri-analyze"]`, add `tri-core = { workspace = true }` under `[tool.uv.sources]`, and change mypy `files` to `["packages/tri-core/src", "packages/tri-analyze/src"]`.
 
-- [ ] **Step 7: Move** `spike_mcp.py` **imports and check the README references**
+- [x] **Step 7: Move** `spike_mcp.py` **imports and check the README references**
 
 `scripts/spike_mcp.py` was rewritten by the Step 2 sed. Verify:
 
@@ -630,7 +630,7 @@ sed -i '' -e 's/tri_analyze\.config/tri_core.config/g' -e 's/tri_analyze\.mcp\.a
   packages/tri-core/src/tri_core/*/README.md packages/tri-analyze/src/tri_analyze/agent/README.md
 ```
 
-- [ ] **Step 8: Sync, test, lint, type-check, smoke the CLIs**
+- [x] **Step 8: Sync, test, lint, type-check, smoke the CLIs**
 
 ```bash
 uv sync
@@ -643,7 +643,7 @@ grep -rn "tri_analyze" packages/tri-core/src || echo "tri-core is clean"
 
 Expected: pytest pass count unchanged from Task 2; ruff clean (fix any import-order diffs with `uv run ruff check --fix .` then `uv run ruff format .`); mypy clean for both source trees; `tri --help` shows `sync`; `tri-analyze --help` shows only `chat`; the last line prints `tri-core is clean`.
 
-- [ ] **Step 9: Commit (Brian)**
+- [ ] **Step 9: Commit (Brian)** _(files ready; Brian to run)_
 
 ```bash
 git add -A
@@ -667,7 +667,7 @@ git commit -m "refactor: extract tri-core (config, mcp, db, sync, testing); tri 
 
 - Produces: nothing programmatic. Definition of done for milestone 1 from spec §4.1: `uv sync` at the root, all existing analyze tests green, `tri sync` and `tri-analyze chat` still work.
 
-- [ ] **Step 1: Run the database-backed tests and the live sync (Brian, needs Docker and auth)**
+- [ ] **Step 1: Run the database-backed tests and the live sync (Brian, needs Docker and auth)** _(db tests already ran green in Tasks 2–3; `tri sync` and `chat` smoke are Brian's)_
 
 ```bash
 docker compose up -d
@@ -678,7 +678,7 @@ uv run tri-analyze chat --no-live
 
 In chat type `/prompt`, then `How did my training go this week compared to plan?`, then `/quit`. Expected: db tests pass (not skipped); sync prints `trainingpeaks: ok` and `garmin: ok`; chat answers with a `→ query_training_db(...)` line.
 
-- [ ] **Step 2: Rewrite** `README.md` **for the workspace**
+- [x] **Step 2: Rewrite** `README.md` **for the workspace**
 
 Replace the top of the current README (title through "How it fits together") and the Setup, Run, Test sections with the following; keep the "First conversation" section as it is but change `tri-analyze sync` to `tri sync`:
 
@@ -753,7 +753,7 @@ Module-level READMEs: `packages/tri-core/src/tri_core/{mcp,db,sync}/README.md`,
 
 Update the "Status" section at the bottom: append `- Workspace (2026-09-07): monorepo with tri-core extracted; tri-planning milestones tracked in docs/superpowers/plans/2026-09-07-tri-planning-0*.md.`
 
-- [ ] **Step 3: Add the two package READMEs**
+- [x] **Step 3: Add the two package READMEs**
 
 `packages/tri-core/README.md`:
 ```markdown
@@ -774,7 +774,7 @@ The analyst agent: `tri-analyze chat`. Agent internals are documented in
 `src/tri_analyze/agent/README.md`; data comes from `tri sync` (package `tri-core`).
 ```
 
-- [ ] **Step 4: Sync the docs to the Obsidian vault**
+- [x] **Step 4: Sync the docs to the Obsidian vault**
 
 ```bash
 V=/Users/brian/Documents/dev-vault/projects/paradigm/fitness_agents/triathlon_agent
@@ -786,7 +786,7 @@ cp docs/superpowers/specs/*.md $V/docs/superpowers/specs/
 cp docs/superpowers/plans/*.md $V/docs/superpowers/plans/
 ```
 
-- [ ] **Step 5: Final check and commit (Brian)**
+- [ ] **Step 5: Final check and commit (Brian)** _(checks pass; commit and push are Brian's)_
 
 ```bash
 uv run pytest -q && uv run ruff check . && uv run ruff format --check . && uv run mypy
@@ -805,4 +805,20 @@ git push
 - Spec §4.1: history preserved (Task 1 moves the `.git`; content-based rename detection in Tasks 2 and 3), `tri-planning-agent` deleted (Task 1), Brian runs every git command (each commit step), definition of done covered by Task 4 Step 1.
 - Spec §11 `tri_core.testing` provides the `db` fixture and `ScriptedChatModel` (Task 3 Step 3).
 - Spec §15 open item "uv workspace behavior for `[project.scripts]` across members" is verified in Task 2 Step 6 with the `--all-packages` fallback written down.
+
+
+---
+
+## Execution notes (2026-09-07, for Plan 2 to pick up)
+
+- **Task 1:** the relocated `.venv` was unusable (`bad interpreter`: console-script shebangs carry the old absolute path). `rm -rf .venv && uv sync` fixed it; Step 4 now says so.
+- **Task 2:** the virtual root (`[tool.uv] package = false` + `dependencies = ["tri-analyze"]`) installs member console scripts with a plain `uv sync`; the `--all-packages` fallback was not needed. Plan 2 can rely on `uv run tri-planning` working the same way once `tri-planning` is added to the root `dependencies` and `[tool.uv.sources]`.
+- **Task 2:** ruff's isort flagged the temporary `from fakes import ...` shim as third-party ordering; `ruff check --fix` reordered it. Irrelevant after Task 3 removes the shim.
+- Baseline before restructure: 112 passed, 2 skipped (the two `--live` tests). Postgres was up, so the `db` tests ran.
+- **Task 3:** the plan's `sed` missed two `monkeypatch.setattr("tri_analyze.sync.runner.connect", ...)` string literals in `test_sync_runner.py` (the pattern only matched `from tri_analyze...` lines). Fixed by hand. Lesson for later moves: grep for the module path as a bare string too, not only in import statements.
+- **Task 3:** `tri_core/testing/fakes.py` is now under mypy strict (it used to live in `tests/`), which flagged an unused `# type: ignore[override]` on `ScriptedChatModel.bind_tools`. Removed. No other strict-mode complaints from the moved test helpers.
+- **Task 3:** `tri sync` and `tri-analyze chat` both resolve from the root venv. `uv sync` reports `tri-core==0.1.0 (from file:///.../packages/tri-core)`, i.e. editable.
+- **For Plan 2:** the planning package needs the same three additions to the root `pyproject.toml` that tri-core needed: an entry in `dependencies`, a `[tool.uv.sources]` line, and its `src` dir in mypy `files`. Plan 2 Task 1 Step 3 already lists them.
+- **Task 4:** the module README sed missed one prose reference (`tests/conftest.py` in `db/README.md`); fixed to point at `tri_core.testing.fixtures`. The root README's architecture diagram now says `tri sync` and links to the new package paths. `.env.example` needed no change in this plan (it already had `LANGSMITH_ENDPOINT`); Plan 2 appends the two `TRI_PLANNING_*` keys.
+- **Not run by the assistant (Brian's steps):** Task 4 Step 1 live `tri sync` + `tri-analyze chat --no-live` smoke, and every commit. All four definition-of-done checks pass at the end of Task 4: 112 passed / 2 skipped, ruff clean, format clean, mypy clean on 29 files.
 

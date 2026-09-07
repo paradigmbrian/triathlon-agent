@@ -14,9 +14,9 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
-from tri_analyze.config import get_settings
-from tri_analyze.mcp.client import McpToolClient, McpToolError
-from tri_analyze.mcp.servers import garmin_spec, trainingpeaks_spec
+from tri_core.config import get_settings
+from tri_core.mcp.client import McpToolClient, McpToolError
+from tri_core.mcp.servers import garmin_spec, trainingpeaks_spec
 
 OUT = Path("tests/fixtures/mcp")
 

@@ -1,19 +1,23 @@
-# tri-analyze-agent
+# triathlon_agent
 
-A triathlon training analysis agent built with LangChain. It syncs your Garmin Connect and
-TrainingPeaks data into a local Postgres store, then lets you chat with an analyst that
-reviews completed sessions and finds trends, pulling lap-level detail live from the servers
-when it needs to.
+A uv workspace of LangChain/LangGraph agents over one athlete's Garmin Connect and
+TrainingPeaks data, synced into a local Postgres store.
 
-Two commands: `tri-analyze sync` (deterministic ETL, no LLM) and `tri-analyze chat` (the
-agent REPL). One athlete, personal use. Repo: github.com/paradigmbrian/tri-analyze-agent. The Python package is `tri_analyze` and the CLI is `tri-analyze`.
+| Package | Module | Command | What it does |
+|---|---|---|---|
+| `packages/tri-core` | `tri_core` | `tri sync` | Settings, MCP client, Postgres store, the ETL, test helpers. No LLM code. |
+| `packages/tri-analyze` | `tri_analyze` | `tri-analyze chat` | Analyst agent: feedback on completed sessions, trends. |
+| `packages/tri-planning` | `tri_planning` | `tri-planning chat` | Planning agent (in progress; see `docs/superpowers/specs/2026-09-07-tri-planning-design.md`). |
+
+`tri-analyze` and `tri-planning` depend on `tri-core`; neither depends on the other.
+Repo: github.com/paradigmbrian/tri-analyze-agent.
 
 ## How it fits together
 
 ```
  Garmin MCP server ──┐                        ┌──► Postgres ◄── query_training_db (read-only)
-                     ├── tri-analyze sync ────┤                        │
- TrainingPeaks MCP ──┘   (MCP client, ETL)    └──► sync_state          │
+                     ├── tri sync ────────────┤                        │
+ TrainingPeaks MCP ──┘   (tri-core ETL)       └──► sync_state          │
                                                                        ▼
  Garmin MCP server ──┐                                        tri-analyze chat
  TrainingPeaks MCP ──┴── live tools (allow-listed) ─────────► LangChain agent on Claude
@@ -22,26 +26,29 @@ agent REPL). One athlete, personal use. Repo: github.com/paradigmbrian/tri-analy
 
 Deeper context lives next to the code:
 
-- [`src/tri_analyze/agent/README.md`](src/tri_analyze/agent/README.md): how the LangChain
-  agent works, module by module, one question traced end to end, and which knobs to turn.
-- [`src/tri_analyze/sync/README.md`](src/tri_analyze/sync/README.md): the ETL, what each
-  source provides, matching, windows and watermarks.
-- [`src/tri_analyze/db/README.md`](src/tri_analyze/db/README.md): the four tables, upsert
-  semantics, conventions, the read-only rule.
-- [`src/tri_analyze/mcp/README.md`](src/tri_analyze/mcp/README.md): the two MCP servers,
-  auth, result conventions, the allow-list.
-- [`docs/superpowers/specs/`](docs/superpowers/specs/): the approved design.
-  [`docs/superpowers/plans/`](docs/superpowers/plans/): the implementation plans that built it.
+- [`packages/tri-analyze/src/tri_analyze/agent/README.md`](packages/tri-analyze/src/tri_analyze/agent/README.md):
+  how the LangChain agent works, module by module, one question traced end to end.
+- [`packages/tri-core/src/tri_core/sync/README.md`](packages/tri-core/src/tri_core/sync/README.md):
+  the ETL, what each source provides, matching, windows and watermarks.
+- [`packages/tri-core/src/tri_core/db/README.md`](packages/tri-core/src/tri_core/db/README.md):
+  the tables, upsert semantics, conventions, the read-only rule.
+- [`packages/tri-core/src/tri_core/mcp/README.md`](packages/tri-core/src/tri_core/mcp/README.md):
+  the two MCP servers, auth, result conventions, the allow-list.
+- [`docs/superpowers/specs/`](docs/superpowers/specs/): the approved designs.
+  [`docs/superpowers/plans/`](docs/superpowers/plans/): the implementation plans that built them.
 
 ## Setup
 
-1. Python 3.12 via uv: `uv sync`
+1. Python 3.12 via uv, from the repository root: `uv sync` (installs every package editable
+   and their console scripts into one `.venv`).
 2. Postgres (Docker, host port 5435): `docker compose up -d`, then apply the migrations to
    both databases:
    ```bash
    docker compose exec db psql -U tri_analyze -c "create database tri_analyze_test;"
-   docker compose exec -T db psql -U tri_analyze -d tri_analyze < migrations/001_initial.sql
-   docker compose exec -T db psql -U tri_analyze -d tri_analyze_test < migrations/001_initial.sql
+   for f in migrations/*.sql; do
+     docker compose exec -T db psql -U tri_analyze -d tri_analyze < "$f"
+     docker compose exec -T db psql -U tri_analyze -d tri_analyze_test < "$f"
+   done
    ```
 3. `cp .env.example .env`, then fill in `ANTHROPIC_API_KEY` (from console.anthropic.com).
    Optional but recommended while learning: `LANGSMITH_TRACING=true` and
@@ -52,12 +59,12 @@ Deeper context lives next to the code:
    # log into app.trainingpeaks.com in Chrome first, then:
    uvx --from git+https://github.com/JamsusMaximus/trainingpeaks-mcp@<ref> tp-mcp auth --from-browser chrome
    ```
-5. First sync: `uv run tri-analyze sync --full` (a year of TrainingPeaks, 60 days of Garmin).
+5. First sync: `uv run tri sync --full` (a year of TrainingPeaks, 60 days of Garmin).
 
 ## Run
 
 ```bash
-uv run tri-analyze sync [--since YYYY-MM-DD] [--source trainingpeaks|garmin|all] [--full]
+uv run tri sync [--since YYYY-MM-DD] [--source trainingpeaks|garmin|all] [--full]
 uv run tri-analyze chat [--no-live]     # --no-live binds only the database tool
 ```
 
@@ -100,16 +107,31 @@ on the second turn is nonzero.
 ## Test and lint
 
 ```bash
-uv run pytest                 # unit + db tests; db tests skip if Postgres is down
+uv run pytest                 # all packages; db tests skip if Postgres is down
 uv run pytest --live          # also starts the real MCP servers
-uv run ruff check . && uv run ruff format --check . && uv run mypy src
-uv run python scripts/spike_mcp.py   # re-record tests/fixtures/mcp/ (scrub before committing)
+uv run pytest packages/tri-core   # one package
+uv run ruff check . && uv run ruff format --check . && uv run mypy
+uv run python scripts/spike_mcp.py   # re-record packages/tri-core/tests/fixtures/mcp/ (scrub before committing)
 ```
+
+## Layout
+
+```
+pyproject.toml          workspace root: members, shared ruff/mypy/pytest config
+conftest.py             pytest options and the shared `db` fixture plugin
+migrations/             001_initial.sql (sync tables)
+packages/tri-core/      src/tri_core/{config,cli,mcp,db,sync,testing}
+packages/tri-analyze/   src/tri_analyze/{cli,allowlist,agent}
+docs/superpowers/       specs and implementation plans
+```
+
+Module-level READMEs: `packages/tri-core/src/tri_core/{mcp,db,sync}/README.md`,
+`packages/tri-analyze/src/tri_analyze/agent/README.md`.
 
 ## Status
 
 - Milestones 1–2 (2026-09-06): scaffold, schema, MCP client, sync with watermarks.
 - Milestones 3–4 (2026-09-06): LangChain agent with the SQL tool, athlete-context prompt,
   streaming REPL, and live MCP tools.
-- Milestone 5 (planned, separate spec): LangGraph refactor with typed state, persistent
-  checkpointing, `weekly-review` command, charts.
+- Workspace (2026-09-07): monorepo with tri-core extracted; tri-planning milestones tracked in
+  `docs/superpowers/plans/2026-09-07-tri-planning-0*.md`.
