@@ -68,6 +68,35 @@ data and context without losing the conversation, `/quit` exits. Every tool call
 Incremental syncs resume from a per-source watermark with a 3-day overlap; rerunning is
 always safe.
 
+### First conversation
+
+Start with the database tool only, so the first thing you judge is the SQL the model writes:
+
+```
+uv run tri-analyze chat --no-live
+  /prompt
+  How did my training go this week compared to plan?
+  Show my weekly bike hours for the last 8 weeks.
+  Which day this month had the worst sleep, and what did I do the next day?
+  /quit
+```
+
+Then with live tools (startup takes 10 to 20 s while both MCP servers launch):
+
+```
+uv run tri-analyze chat
+  Give me feedback on my last completed ride. Pull the laps.
+  How ready am I to train today?
+  What does my coach have planned for the next 3 days, and does the load look reasonable given my TSB?
+  /quit
+```
+
+What to look for: wrong column names or units in the `→ query_training_db(...)` lines (fix in
+`SCHEMA_DOC`), whether the model queries for `garmin_activity_id` before calling
+`get_activity_splits`, and whether feedback follows the rules or drifts into generic
+encouragement (fix in `FEEDBACK_RULES`). With LangSmith on, check `cache_read_input_tokens`
+on the second turn is nonzero.
+
 ## Test and lint
 
 ```bash
