@@ -21,13 +21,17 @@
 - Definition of done per task: `uv run pytest`, `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy`.
 - Every markdown file created or edited under this project is also copied to `/Users/brian/Documents/dev-vault/projects/paradigm/fitness_agents/triathlon_agent/<same relative path>` with a kebab-case file name.
 
+
+
 ### Spec deviations decided in this plan
 
-- **Root `conftest.py` instead of per-package conftests.** pytest refuses `pytest_plugins` in non-top-level conftests, and the `db` fixture must be shared. The root conftest registers `tri_core.testing.fixtures` as a plugin and owns the `--live` option. Per-package `tests/` directories keep no `conftest.py` and no `__init__.py`; pytest runs with `--import-mode=importlib` so same-named test modules in different packages cannot collide.
-- **`python-dotenv`, `mcp` and `langchain-core` become explicit dependencies of tri-core.** Today they are transitive. tri-core imports them directly (`dotenv` in the CLI, `mcp` in the client, `langchain_core` in the test fake), so it must declare them.
-- **Fixture paths become `__file__`-relative.** `tests/test_sync_garmin.py` and `tests/test_sync_trainingpeaks.py` use `Path("tests/fixtures/mcp")`, which only works when pytest's cwd is the package. From the root that path does not exist.
+- **Root** `conftest.py` **instead of per-package conftests.** pytest refuses `pytest_plugins` in non-top-level conftests, and the `db` fixture must be shared. The root conftest registers `tri_core.testing.fixtures` as a plugin and owns the `--live` option. Per-package `tests/` directories keep no `conftest.py` and no `__init__.py`; pytest runs with `--import-mode=importlib` so same-named test modules in different packages cannot collide.
+- `python-dotenv`**,** `mcp` **and** `langchain-core` **become explicit dependencies of tri-core.** Today they are transitive. tri-core imports them directly (`dotenv` in the CLI, `mcp` in the client, `langchain_core` in the test fake), so it must declare them.
+- **Fixture paths become** `__file__`**-relative.** `tests/test_sync_garmin.py` and `tests/test_sync_trainingpeaks.py` use `Path("tests/fixtures/mcp")`, which only works when pytest's cwd is the package. From the root that path does not exist.
 
 ---
+
+
 
 ## File Structure
 
@@ -78,20 +82,23 @@ Responsibilities: `tri_core.config` owns all settings both agents share (the `Se
 
 ---
 
+
+
 ### Task 1: Relocate the repository (Brian)
 
 **What this does:** makes `triathlon_agent/` the git root with the analyze history, and removes the empty `tri-planning-agent/` repo. The design spec currently lives in an untracked `triathlon_agent/docs/` directory; it is moved into the analyze repo before the rename so nothing is lost.
 
 **Files:**
+
 - Move: the whole `tri-analyze-agent/` directory to `triathlon_agent/`
 - Delete: `tri-planning-agent/` (contains only an empty `.git`)
 
 **Interfaces:**
+
 - Produces: a git repository at `/Users/brian/Development/paradigm/fitness_agents/triathlon_agent` with two commits of history, remote `origin`, and the planning spec committed.
 
-- [ ] **Step 1: Close any Claude Code session whose working directory is `triathlon_agent/`.** The directory is about to be replaced. Restart the session in the new location after Step 4.
-
-- [ ] **Step 2: Brian runs the relocation**
+- [x] **Step 1: Close any Claude Code session whose working directory is** `triathlon_agent/`**.** The directory is about to be replaced. Restart the session in the new location after Step 4.
+- [x] **Step 2: Brian runs the relocation**
 
 ```bash
 cd /Users/brian/Development/paradigm/fitness_agents
@@ -106,14 +113,14 @@ git status --short
 
 Expected `git status --short` output: `M .env.example`, `M README.md`, `?? docs/superpowers/specs/2026-09-07-tri-planning-design.md`, `?? docs/superpowers/plans/2026-09-07-tri-planning-01-workspace.md` (and the other plan files in the series).
 
-- [ ] **Step 3: Brian commits the spec and the pending README/env touch-ups**
+- [x] **Step 3: Brian commits the spec and the pending README/env touch-ups**
 
 ```bash
 git add .env.example README.md docs/superpowers/specs/2026-09-07-tri-planning-design.md docs/superpowers/plans/2026-09-07-tri-planning-0*.md
 git commit -m "docs: tri-planning design spec and implementation plans; LANGSMITH_ENDPOINT in .env.example"
 ```
 
-- [ ] **Step 4: Verify the old venv still works from the new path**
+- [x] **Step 4: Verify the old venv still works from the new path**
 
 ```bash
 cd /Users/brian/Development/paradigm/fitness_agents/triathlon_agent
@@ -126,20 +133,24 @@ Expected: the same pass count as before the move (db tests skip if Postgres is d
 
 ---
 
+
+
 ### Task 2: Workspace root and `packages/tri-analyze`
 
 **What this teaches:** how a uv workspace is laid out. The root project is virtual (`package = false`): it is never built, it exists to pin the member set and hold shared tool config. Members are installed editable, so imports resolve to `packages/*/src` without reinstalling after edits.
 
 **Files:**
+
 - Create: `pyproject.toml` (root), `conftest.py` (root)
 - Move: `pyproject.toml` -> `packages/tri-analyze/pyproject.toml`; `src/` -> `packages/tri-analyze/src/`; `tests/` -> `packages/tri-analyze/tests/`
 - Delete: `packages/tri-analyze/tests/__init__.py`, `packages/tri-analyze/tests/conftest.py` (its content moves to the root conftest in this task; the `db` fixture moves again into `tri_core.testing.fixtures` in Task 3)
 - Modify: `packages/tri-analyze/tests/test_sync_garmin.py:18`, `packages/tri-analyze/tests/test_sync_trainingpeaks.py:15`
 
 **Interfaces:**
+
 - Produces: `uv sync` from the root creates one `.venv` with `tri-analyze` installed editable; `uv run pytest` collects `packages/*/tests`; `uv run tri-analyze --help` works.
 
-- [ ] **Step 1: Move the package into `packages/tri-analyze`**
+- [ ] **Step 1: Move the package into** `packages/tri-analyze`
 
 ```bash
 cd /Users/brian/Development/paradigm/fitness_agents/triathlon_agent
@@ -153,7 +164,7 @@ rm -rf .venv uv.lock .mypy_cache .ruff_cache .pytest_cache
 
 `uv.lock` is deleted on purpose: the root project changes name and shape, and uv regenerates it in Step 4 from the same pins.
 
-- [ ] **Step 2: Write the member `pyproject.toml`**
+- [ ] **Step 2: Write the member** `pyproject.toml`
 
 Overwrite `packages/tri-analyze/pyproject.toml` with:
 
@@ -187,7 +198,7 @@ packages = ["src/tri_analyze"]
 
 (The `tri-core` dependency is added in Task 3 once the package exists.)
 
-- [ ] **Step 3: Write the root `pyproject.toml`**
+- [ ] **Step 3: Write the root** `pyproject.toml`
 
 ```toml
 [project]
@@ -245,7 +256,7 @@ module = ["langchain_mcp_adapters.*", "mcp.*"]
 ignore_missing_imports = true
 ```
 
-- [ ] **Step 4: Write the root `conftest.py`**
+- [ ] **Step 4: Write the root** `conftest.py`
 
 This is the old `tests/conftest.py` verbatim for now (Task 3 replaces the `db` fixture body with a plugin registration):
 
@@ -292,14 +303,16 @@ def db() -> Iterator[psycopg.Connection[dict[str, Any]]]:
 
 Then delete `packages/tri-analyze/tests/conftest.py`.
 
-- [ ] **Step 5: Fix the two cwd-relative fixture paths and the `tests.fakes` imports**
+- [ ] **Step 5: Fix the two cwd-relative fixture paths and the** `tests.fakes` **imports**
 
 In `packages/tri-analyze/tests/test_sync_garmin.py` replace line 18 and in `packages/tri-analyze/tests/test_sync_trainingpeaks.py` replace line 15:
 
 ```python
 FIX = Path("tests/fixtures/mcp")
 ```
+
 with
+
 ```python
 FIX = Path(__file__).parent / "fixtures" / "mcp"
 ```
@@ -344,11 +357,14 @@ Expected: `git show --stat` lists the moved files as renames (`src/... => packag
 
 ---
 
+
+
 ### Task 3: Extract `packages/tri-core`
 
 **What this teaches:** the dependency boundary the orchestrator will rely on. Everything with no model in it (settings, MCP process management, the database, the ETL, test doubles) moves under `tri_core`; the analyst keeps only its agent, its allow-list and its CLI.
 
 **Files:**
+
 - Create: `packages/tri-core/pyproject.toml`, `packages/tri-core/src/tri_core/__init__.py`, `packages/tri-core/src/tri_core/cli.py`, `packages/tri-core/src/tri_core/testing/__init__.py`, `packages/tri-core/src/tri_core/testing/fixtures.py`
 - Move (from `packages/tri-analyze/src/tri_analyze/`): `config.py`, `mcp/` (minus `allowlist.py`), `db/`, `sync/` -> `packages/tri-core/src/tri_core/`
 - Move: `packages/tri-analyze/src/tri_analyze/mcp/allowlist.py` -> `packages/tri-analyze/src/tri_analyze/allowlist.py`
@@ -358,6 +374,7 @@ Expected: `git show --stat` lists the moved files as renames (`src/... => packag
 - Modify: every `from tri_analyze.(config|mcp|db|sync)` import in both packages and `scripts/spike_mcp.py`; root `pyproject.toml`; root `conftest.py`; `packages/tri-analyze/pyproject.toml`; `packages/tri-analyze/src/tri_analyze/cli.py`; `packages/tri-analyze/src/tri_analyze/agent/live_tools.py`
 
 **Interfaces:**
+
 - Produces:
   - `tri_core.config.Settings`, `tri_core.config.get_settings()` (unchanged class).
   - `tri_core.mcp.servers.ServerSpec`, `garmin_spec(settings)`, `trainingpeaks_spec(settings)`, `GARMIN_ENABLED_TOOLS`.
@@ -410,14 +427,17 @@ Also fix the two test-double imports by hand. In `packages/tri-analyze/tests/tes
 ```python
 from fakes import ScriptedChatModel, tool_call
 ```
+
 with
+
 ```python
 from tri_core.testing import ScriptedChatModel, tool_call
 ```
 
-- [ ] **Step 3: Write `tri_core/testing/__init__.py` and `fixtures.py`**
+- [ ] **Step 3: Write** `tri_core/testing/__init__.py` **and** `fixtures.py`
 
 `packages/tri-core/src/tri_core/testing/__init__.py`:
+
 ```python
 """Test doubles and fixtures shared by every package's tests."""
 
@@ -427,6 +447,7 @@ __all__ = ["ScriptedChatModel", "tool_call"]
 ```
 
 `packages/tri-core/src/tri_core/testing/fixtures.py`:
+
 ```python
 """pytest fixtures. Registered from the repository-root conftest via `pytest_plugins`."""
 
@@ -456,6 +477,7 @@ def db() -> Iterator[psycopg.Connection[dict[str, Any]]]:
 ```
 
 Root `conftest.py` becomes:
+
 ```python
 import pytest
 
@@ -477,7 +499,7 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             item.add_marker(skip_live)
 ```
 
-- [ ] **Step 4: Write `tri_core/cli.py` (`tri sync`)**
+- [ ] **Step 4: Write** `tri_core/cli.py` **(**`tri sync`**)**
 
 ```python
 """Command-line entry point for tri-core: `tri sync`."""
@@ -534,7 +556,7 @@ if __name__ == "__main__":
     app()
 ```
 
-- [ ] **Step 5: Trim `tri_analyze/cli.py`**
+- [ ] **Step 5: Trim** `tri_analyze/cli.py`
 
 Remove the `sync` command and its `date` import from `packages/tri-analyze/src/tri_analyze/cli.py`. The file keeps `main`, `chat`, `_chat`. `_chat` still imports `run_sync` (for `/sync`) and `connect`, now from `tri_core`. After the sed in Step 2 its imports are:
 
@@ -543,11 +565,14 @@ from tri_core.config import get_settings
 from tri_core.sync.runner import run_sync
 ```
 
-The `date` import is still used inside `_chat` (`load_athlete_context(conn, date.today())`), so keep `from datetime import date`. Change the help string to `"Triathlon training analysis agent (run `tri sync` to load data)"`.
+The `date` import is still used inside `_chat` (`load_athlete_context(conn, date.today())`), so keep `from datetime import date`. Change the help string to `"Triathlon training analysis agent (run` tri sync `to load data)"`.
 
-- [ ] **Step 6: Write `packages/tri-core/pyproject.toml` and update the other two**
+- [ ] **Step 6: Write** `packages/tri-core/pyproject.toml` **and update the other two**
+
+
 
 `packages/tri-core/pyproject.toml`:
+
 ```toml
 [project]
 name = "tri-core"
@@ -586,13 +611,14 @@ tri-core = { workspace = true }
 
 Root `pyproject.toml`: change `dependencies = ["tri-analyze"]` to `dependencies = ["tri-core", "tri-analyze"]`, add `tri-core = { workspace = true }` under `[tool.uv.sources]`, and change mypy `files` to `["packages/tri-core/src", "packages/tri-analyze/src"]`.
 
-- [ ] **Step 7: Move `spike_mcp.py` imports and check the README references**
+- [ ] **Step 7: Move** `spike_mcp.py` **imports and check the README references**
 
 `scripts/spike_mcp.py` was rewritten by the Step 2 sed. Verify:
 
 ```bash
 grep -n "^from tri_" scripts/spike_mcp.py
 ```
+
 Expected: three `from tri_core...` lines.
 
 Update the four module READMEs that moved. In `packages/tri-core/src/tri_core/{mcp,db,sync}/README.md` and `packages/tri-analyze/src/tri_analyze/agent/README.md` replace `tri_analyze.config`, `tri_analyze.mcp`, `tri_analyze.db`, `tri_analyze.sync` with the `tri_core` equivalents, `src/tri_analyze/mcp/allowlist.py` with `packages/tri-analyze/src/tri_analyze/allowlist.py`, `tri-analyze sync` with `tri sync`, and `tests/fakes.py` with `tri_core.testing`:
@@ -626,15 +652,19 @@ git commit -m "refactor: extract tri-core (config, mcp, db, sync, testing); tri 
 
 ---
 
+
+
 ### Task 4: Live verification and README
 
 **What this does:** proves the restructure against the real database and servers, then documents the workspace so the next plan's reader starts from an accurate README.
 
 **Files:**
+
 - Modify: `README.md`, `.env.example`
 - Create: `packages/tri-core/README.md`, `packages/tri-analyze/README.md` (short pointers)
 
 **Interfaces:**
+
 - Produces: nothing programmatic. Definition of done for milestone 1 from spec §4.1: `uv sync` at the root, all existing analyze tests green, `tri sync` and `tri-analyze chat` still work.
 
 - [ ] **Step 1: Run the database-backed tests and the live sync (Brian, needs Docker and auth)**
@@ -648,7 +678,7 @@ uv run tri-analyze chat --no-live
 
 In chat type `/prompt`, then `How did my training go this week compared to plan?`, then `/quit`. Expected: db tests pass (not skipped); sync prints `trainingpeaks: ok` and `garmin: ok`; chat answers with a `→ query_training_db(...)` line.
 
-- [ ] **Step 2: Rewrite `README.md` for the workspace**
+- [ ] **Step 2: Rewrite** `README.md` **for the workspace**
 
 Replace the top of the current README (title through "How it fits together") and the Setup, Run, Test sections with the following; keep the "First conversation" section as it is but change `tri-analyze sync` to `tri sync`:
 
@@ -678,15 +708,16 @@ TrainingPeaks data, synced into a local Postgres store.
      docker compose exec -T db psql -U tri_analyze -d tri_analyze < "$f"
      docker compose exec -T db psql -U tri_analyze -d tri_analyze_test < "$f"
    done
-   ```
-3. `cp .env.example .env`, then fill in `ANTHROPIC_API_KEY`. Optional: `LANGSMITH_TRACING=true`
-   and `LANGSMITH_API_KEY` to see every prompt and tool call.
-4. Authenticate the MCP servers once (`<ref>` values are in `.env.example`):
-   ```bash
+```
+
+1. `cp .env.example .env`, then fill in `ANTHROPIC_API_KEY`. Optional: `LANGSMITH_TRACING=true`
+  and `LANGSMITH_API_KEY` to see every prompt and tool call.
+2. Authenticate the MCP servers once (`<ref>` values are in `.env.example`):
+  ```bash
    uvx --python 3.12 --from git+https://github.com/Taxuspt/garmin_mcp@<ref> garmin-mcp-auth
    uvx --from git+https://github.com/JamsusMaximus/trainingpeaks-mcp@<ref> tp-mcp auth --from-browser chrome
-   ```
-5. First sync: `uv run tri sync --full`.
+  ```
+3. First sync: `uv run tri sync --full`.
 
 ## Run
 
@@ -717,6 +748,7 @@ docs/superpowers/       specs and implementation plans
 
 Module-level READMEs: `packages/tri-core/src/tri_core/{mcp,db,sync}/README.md`,
 `packages/tri-analyze/src/tri_analyze/agent/README.md`.
+
 ```
 
 Update the "Status" section at the bottom: append `- Workspace (2026-09-07): monorepo with tri-core extracted; tri-planning milestones tracked in docs/superpowers/plans/2026-09-07-tri-planning-0*.md.`
@@ -734,6 +766,7 @@ Shared, model-free code for the triathlon agents: `tri_core.config` (settings), 
 ```
 
 `packages/tri-analyze/README.md`:
+
 ```markdown
 # tri-analyze
 
@@ -764,9 +797,12 @@ git push
 
 ---
 
+
+
 ## Self-review notes
 
 - Spec §4 layout: every path in the tri-core and tri-analyze columns is produced by Tasks 2 and 3. `packages/tri-planning` is created in Plan 2.
 - Spec §4.1: history preserved (Task 1 moves the `.git`; content-based rename detection in Tasks 2 and 3), `tri-planning-agent` deleted (Task 1), Brian runs every git command (each commit step), definition of done covered by Task 4 Step 1.
 - Spec §11 `tri_core.testing` provides the `db` fixture and `ScriptedChatModel` (Task 3 Step 3).
 - Spec §15 open item "uv workspace behavior for `[project.scripts]` across members" is verified in Task 2 Step 6 with the `--all-packages` fallback written down.
+
