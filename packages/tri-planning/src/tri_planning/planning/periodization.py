@@ -1,4 +1,4 @@
-"""Every periodization constant. Change numbers here; the tests in test_skeleton.py pin them."""
+"""Every periodization constant. Change numbers here; the tests in test_targets.py pin them."""
 
 from __future__ import annotations
 

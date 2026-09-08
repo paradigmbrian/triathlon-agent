@@ -86,15 +86,15 @@ def set_goal_event(conn: Conn, goal_id: int, tp_event_id: str) -> None:
 
 
 def insert_plan(
-    conn: Conn, goal_id: int, source: str, tp_plan_id: str | None, skeleton: list[WeekTarget]
+    conn: Conn, goal_id: int, source: str, tp_plan_id: str | None, targets: list[WeekTarget]
 ) -> int:
-    if not skeleton:
-        raise ValueError("skeleton is empty")
-    start = skeleton[0].week_start
-    end = skeleton[-1].week_start + timedelta(days=6)
+    if not targets:
+        raise ValueError("targets is empty")
+    start = targets[0].week_start
+    end = targets[-1].week_start + timedelta(days=6)
     row = conn.execute(
         """
-        insert into training_plans (goal_id, source, tp_plan_id, start_date, end_date, skeleton)
+        insert into training_plans (goal_id, source, tp_plan_id, start_date, end_date, targets)
         values (%s, %s, %s, %s, %s, %s) returning id
         """,
         (
@@ -103,13 +103,13 @@ def insert_plan(
             tp_plan_id,
             start,
             end,
-            Jsonb([t.model_dump(mode="json") for t in skeleton]),
+            Jsonb([t.model_dump(mode="json") for t in targets]),
         ),
     ).fetchone()
     assert row is not None
     plan_id = int(row["id"])
     with conn.cursor() as cur:
-        for t in skeleton:
+        for t in targets:
             cur.execute(
                 "insert into plan_weeks (plan_id, week_start, phase, target_tss, target_hours) "
                 "values (%s, %s, %s, %s, %s)",
@@ -126,7 +126,7 @@ def _plan(row: dict[str, Any]) -> StoredPlan:
         tp_plan_id=row["tp_plan_id"],
         start_date=row["start_date"],
         end_date=row["end_date"],
-        skeleton=[WeekTarget.model_validate(t) for t in row["skeleton"]],
+        targets=[WeekTarget.model_validate(t) for t in row["targets"]],
         status=row["status"],
     )
 

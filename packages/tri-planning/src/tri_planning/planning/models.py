@@ -1,4 +1,4 @@
-"""Planning vocabulary shared by the skeleton builder, validator, repository and graph."""
+"""Planning vocabulary shared by the targets builder, validator, repository and graph."""
 
 from __future__ import annotations
 
@@ -123,7 +123,7 @@ class StoredPlan(BaseModel):
     tp_plan_id: str | None
     start_date: date
     end_date: date
-    skeleton: list[WeekTarget]
+    targets: list[WeekTarget]
     status: str
 
 

@@ -15,7 +15,7 @@ Companion spec: `tri-analyze` design (2026-09-06), which this spec assumes and e
 | Write safety | Propose, then the athlete approves. The graph pauses with `interrupt()` before any TrainingPeaks write. | Mistakes stay cheap while prompts are being tuned. Human-in-the-loop is a core LangGraph concept. |
 | Plan generation | Python owns periodization (phases, weekly targets); the LLM designs sessions within those bounds. | Deterministic load math is testable; the model does what it is good at. |
 | Architecture | Hand-built LangGraph `StateGraph`; `create_agent` sub-agents inside the two conversational nodes | Maximizes LangChain, LangGraph and LangSmith exposure; the result is a graph an orchestrator can embed as a subgraph. |
-| Horizon | Rolling window: whole skeleton in our DB, next `TRI_PLANNING_HORIZON_WEEKS` (default 3) of sessions written to TrainingPeaks | Adjustments stay cheap; the calendar never carries stale sessions. |
+| Horizon | Rolling window: all week targets in our DB, next `TRI_PLANNING_HORIZON_WEEKS` (default 3) of sessions written to TrainingPeaks | Adjustments stay cheap; the calendar never carries stale sessions. |
 | Adjustments | Manual via chat, plus a `check-in` command that runs the review non-interactively | Prepares for orchestrator and scheduled runs. |
 | Interface | Terminal REPL and CLI | Same as analyze; every node transition is visible. |
 | LLM | `claude-opus-5` via `langchain-anthropic`, same as analyze | Reliable tool calling and structured output. |
@@ -43,7 +43,7 @@ The pinned `trainingpeaks-mcp` commit (`a412a84e`, same as analyze) exposes writ
                  ┌──────────────────────┐        │            │
   garmin_mcp ───►│  tri-planning        │────────┘            │
   (readiness,    │  LangGraph StateGraph│─────────────────────┘
-   hrv, live)    │   intake ─► skeleton ─► design ─► review ─► apply
+   hrv, live)    │   intake ─► targets ─► design ─► review ─► apply
   tp_mcp ───────►│   adjust ───────────────────────┘    │
   (read live;    │                                       └── interrupt(): athlete approves
    write only    └──────────────────────┘
@@ -84,14 +84,14 @@ triathlon_agent/                      git root, uv workspace, one uv.lock
         planning/
           models.py                   TrainingGoal, PlannedSession, PlannedWeek, CalendarChange
           periodization.py            constants: phase tables, ramp caps, recovery cadence, taper
-          skeleton.py                 goal + fitness -> list of week targets (pure)
+          targets.py                 goal + fitness -> list of week targets (pure)
           validate.py                 PlannedWeek vs week target and constraints (pure)
         graph/
           state.py                    PlanningState TypedDict
           graph.py                    build_graph(model, tools, checkpointer) -> CompiledStateGraph
           nodes/
             intake.py                 create_agent sub-agent, exits on set_training_goal
-            skeleton.py               calls planning.skeleton, writes training_plans/plan_weeks
+            targets.py               calls planning.targets, writes training_plans/plan_weeks
             design.py                 structured-output call per week, validate, retry once
             review.py                 interrupt(); returns decision
             apply.py                  translates CalendarChange -> TP tool calls; audit rows
@@ -99,7 +99,7 @@ triathlon_agent/                      git root, uv workspace, one uv.lock
         tools/
           goal.py                     set_training_goal, list_tp_training_plans
           changes.py                  propose_calendar_changes
-          design_next_week.py         adjust-only: designs the next skeleton week via the design prompt
+          design_next_week.py         adjust-only: designs the next target week via the design prompt
         prompts/
           intake.py, design.py, adjust.py, checkin.py
         repl.py                       streaming loop, review table, /status /pending
@@ -143,7 +143,7 @@ create table training_plans (
   tp_plan_id    text,
   start_date    date not null,
   end_date      date not null,
-  skeleton      jsonb not null,         -- [{week_start, phase, target_tss, target_hours, is_recovery, flags, sport_hint}]
+  targets       jsonb not null,         -- [{week_start, phase, target_tss, target_hours, is_recovery, flags, sport_hint}]
   status        text not null default 'active',   -- active | superseded | completed
   created_at    timestamptz not null default now()
 );
@@ -176,7 +176,7 @@ create index on plan_changes (tp_workout_id);
 
 Notes:
 
-- The skeleton covers the whole block; `plan_weeks.designed` is filled only inside the rolling window.
+- The targets cover the whole block; `plan_weeks.designed` is filled only inside the rolling window.
 - `plan_changes` is both audit trail and ownership record. A calendar workout is agent-authored iff its `tp_workout_id` appears here. Adjust reads it before proposing update, move or delete.
 - LangGraph checkpoints live in the same database via `PostgresSaver`. Its `setup()` creates its own tables; Brian runs it once by hand (documented in the README) so the app never executes DDL.
 - Migrations are applied by Brian with `psql`, to both `tri_analyze` and `tri_analyze_test`, per the global read-only rule.
@@ -204,24 +204,24 @@ Persisted per thread by `PostgresSaver`. `chat`, `check-in` and `reset` all use 
 ```
 START -> route
 route: phase == intake   -> intake
-       phase == planning -> skeleton
+       phase == planning -> targets
        phase == active   -> adjust
-intake   -> skeleton  (when set_training_goal was called)  | END (turn ended without a goal)
-skeleton -> design    (source = generated)
-skeleton -> review    (source = tp_plan: a single apply_plan change)
+intake   -> targets  (when set_training_goal was called)  | END (turn ended without a goal)
+targets -> design    (source = generated)
+targets -> review    (source = tp_plan: a single apply_plan change)
 design   -> review
 adjust   -> review    (when propose_calendar_changes was called) | END
 review   -> apply     (approve or edit) | design or adjust (reject, with note as a HumanMessage)
-apply    -> skeleton  (after apply_plan: derive week targets from the applied workouts, then END)
+apply    -> targets  (after apply_plan: derive week targets from the applied workouts, then END)
 apply    -> END       (otherwise)
 ```
 
 - **intake**: a `create_agent` sub-agent with tools `query_training_db`, `list_tp_training_plans`, `set_training_goal`. Its system prompt lists the goal types, what it must establish (goal type, event and date, priority, weekly hour range, available days per sport, constraints, whether to activate a bought TP plan), and tells it to warn when the available weeks are below the minimum for the goal. `set_training_goal` validates a `TrainingGoal` Pydantic model, inserts the row, sets `goal_id` and `phase = planning`.
-- **skeleton**: pure Python, no model call. Reads goal, `athlete_profile`, and fitness from `daily_metrics`. For `source = generated` it calls `planning.skeleton.build`, writes `training_plans` and `plan_weeks`, and routes to design. For `source = tp_plan` it emits one `CalendarChange(op="apply_plan")` and routes to review; after apply, the graph re-enters skeleton, which reads the applied workouts with `tp_get_workouts`, records their ids in `plan_changes` for ownership, derives week targets by summing planned TSS per week, writes `training_plans` and `plan_weeks` with `written_to_tp = true`, and ends with `phase = active`. Bought plans skip design because their sessions already exist.
+- **targets**: pure Python, no model call. Reads goal, `athlete_profile`, and fitness from `daily_metrics`. For `source = generated` it calls `planning.targets.build`, writes `training_plans` and `plan_weeks`, and routes to design. For `source = tp_plan` it emits one `CalendarChange(op="apply_plan")` and routes to review; after apply, the graph re-enters targets, which reads the applied workouts with `tp_get_workouts`, records their ids in `plan_changes` for ownership, derives week targets by summing planned TSS per week, writes `training_plans` and `plan_weeks` with `written_to_tp = true`, and ends with `phase = active`. Bought plans skip design because their sessions already exist.
 - **design**: for each week in the window without `designed`, one `with_structured_output(PlannedWeek)` call with the week target, sport hint, availability, constraints, thresholds and zones, and the previous designed week. Runs `validate.week`; on violations, retries once with the violation list. Converts sessions to `CalendarChange(op="create")` and sets `pending_changes`. Traces are tagged `week_start` and `phase`.
 - **review**: `interrupt({"summary", "changes"})`. The REPL renders the change set and collects a `ReviewDecision`. Resume is `Command(resume=decision)`. Reject routes back to the node that produced the changes with the note appended as a `HumanMessage`.
 - **apply**: translates each `CalendarChange` to one TP call, checks ownership for update, move and delete against `plan_changes`, records payload and result per change, marks `plan_weeks.written_to_tp`, sets `phase = active`. A failed call stops the batch; the partial result is recorded and returned in `last_error`.
-- **adjust**: a `create_agent` sub-agent with tools `query_training_db`, Garmin live `get_training_readiness`, `get_hrv_data`, TP live `tp_get_workouts`, and `propose_calendar_changes`. Its prompt encodes the review checklist and the lever order (swap days, shorten, downgrade intensity, drop, re-plan the week). It also extends the window when fewer than two designed weeks remain by emitting `create` changes for the next skeleton week, using the same design prompt via a tool `design_next_week`.
+- **adjust**: a `create_agent` sub-agent with tools `query_training_db`, Garmin live `get_training_readiness`, `get_hrv_data`, TP live `tp_get_workouts`, and `propose_calendar_changes`. Its prompt encodes the review checklist and the lever order (swap days, shorten, downgrade intensity, drop, re-plan the week). It also extends the window when fewer than two designed weeks remain by emitting `create` changes for the next target week, using the same design prompt via a tool `design_next_week`.
 
 Write tools are never bound to a sub-agent. Only `apply` holds the write allow-list.
 
@@ -291,7 +291,7 @@ With fewer weeks than the minimum: drop base first, then shorten build; flag the
 - Maintenance: flat at week 1 load. Recovery goal: 50 % of week 1 load, flat.
 - Target hours derive from target TSS at an assumed intensity factor per phase (base 0.70, build 0.75, peak 0.80, taper 0.75, recovery 0.65), then clamp to the athlete's hour range. If the clamp binds, TSS is recomputed from the hours cap and the week is flagged `hours_capped`.
 - Sport hints per phase are strings passed to the design prompt: base = swim and run frequency, aerobic bike; build = bike volume and one brick; peak = race-specific bricks and race-pace work; taper = keep frequency, cut duration.
-- For `tp_plan` sources the skeleton is derived from the applied plan's weekly planned TSS, and phases are inferred from the load curve (rising = build, flat top = peak, falling into the event = taper).
+- For `tp_plan` sources the targets are derived from the applied plan's weekly planned TSS, and phases are inferred from the load curve (rising = build, flat top = peak, falling into the event = taper).
 
 All constants live in `periodization.py`.
 
@@ -332,13 +332,13 @@ A `PlannedWeek` is rejected when: total TSS is more than 10 % from target; any s
 
 ## 12. Observability
 
-LangSmith tracing by env, project `tri-planning`. Design calls carry `week_start` and `phase` tags. Milestone 4 adds a LangSmith dataset of skeleton weeks and a code evaluator that runs `validate.week` on the output, giving a pass rate per prompt version.
+LangSmith tracing by env, project `tri-planning`. Design calls carry `week_start` and `phase` tags. Milestone 4 adds a LangSmith dataset of target weeks and a code evaluator that runs `validate.week` on the output, giving a pass rate per prompt version.
 
 ## 13. Milestones
 
 1. **Workspace.** Restructure into `triathlon_agent/`, extract `tri-core`, both agents import from it, all existing tests green. No new behavior.
-2. **Skeleton and schema.** `002_planning.sql`, `periodization.py`, `skeleton.py`, `validate.py`, models, all unit-tested. No model calls.
-3. **Graph v1.** State, intake sub-agent, skeleton and design nodes, review interrupt, apply, Postgres checkpointer, `chat`. First plan on the calendar.
+2. **Targets and schema.** `002_planning.sql`, `periodization.py`, `targets.py`, `validate.py`, models, all unit-tested. No model calls.
+3. **Graph v1.** State, intake sub-agent, targets and design nodes, review interrupt, apply, Postgres checkpointer, `chat`. First plan on the calendar.
 4. **Adjust and check-in.** Adjust sub-agent, `check-in`, window extension, LangSmith evaluator dataset.
 5. **Later, separate spec.** Orchestrator composing analyze and planning as subgraphs.
 

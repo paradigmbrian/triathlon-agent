@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A `tri-planning chat` REPL in which a hand-built LangGraph `StateGraph` takes the athlete from intake (a `create_agent` sub-agent that establishes a `TrainingGoal`) through the pure skeleton, per-week session design by the model, a human-in-the-loop review pause, and an `apply` step that writes approved sessions to the TrainingPeaks calendar, with state persisted in Postgres so a review decision survives process exit. First plan on the calendar. This is spec milestone 3.
+**Goal:** A `tri-planning chat` REPL in which a hand-built LangGraph `StateGraph` takes the athlete from intake (a `create_agent` sub-agent that establishes a `TrainingGoal`) through the pure targets, per-week session design by the model, a human-in-the-loop review pause, and an `apply` step that writes approved sessions to the TrainingPeaks calendar, with state persisted in Postgres so a review decision survives process exit. First plan on the calendar. This is spec milestone 3.
 
-**Architecture:** `build_graph(deps, checkpointer)` compiles a `StateGraph[PlanningState]` with nodes `intake`, `skeleton`, `design`, `review`, `apply` and a placeholder `adjust` (Plan 4 replaces it). Nodes are closures over a `GraphDeps` dataclass (model, a connection factory, an optional TrainingPeaks `ToolCaller`, horizon, a `today` callable) so tests inject `ScriptedChatModel`, a rolled-back connection and a `FakeTp`. Only `apply` calls TrainingPeaks write tools; `review` calls `langgraph.types.interrupt` and the REPL resumes with `Command(resume=decision)`. `AsyncPostgresSaver` checkpoints every node transition in the shared database under thread `planning`.
+**Architecture:** `build_graph(deps, checkpointer)` compiles a `StateGraph[PlanningState]` with nodes `intake`, `targets`, `design`, `review`, `apply` and a placeholder `adjust` (Plan 4 replaces it). Nodes are closures over a `GraphDeps` dataclass (model, a connection factory, an optional TrainingPeaks `ToolCaller`, horizon, a `today` callable) so tests inject `ScriptedChatModel`, a rolled-back connection and a `FakeTp`. Only `apply` calls TrainingPeaks write tools; `review` calls `langgraph.types.interrupt` and the REPL resumes with `Command(resume=decision)`. `AsyncPostgresSaver` checkpoints every node transition in the shared database under thread `planning`.
 
 **Tech Stack:** langgraph 1.2 (`StateGraph`, `interrupt`, `Command`, `add_messages`), langchain 1.4 (`create_agent`, `with_structured_output`), langchain-anthropic 1.7, `langgraph-checkpoint-postgres` 3.1 (`AsyncPostgresSaver`), `tri_core.mcp.client.McpToolClient` for TrainingPeaks, pyyaml for the edit round trip, rich.
 
@@ -15,7 +15,7 @@
 - Python `>=3.12,<3.13`, uv-managed, commands run from the repository root as `uv run ...`.
 - Model: `claude-opus-5` via `ChatAnthropic`, `max_tokens=16000`, no `thinking` parameter. `TRI_MODEL` in `.env` overrides.
 - **Write tools are never bound to a sub-agent.** The intake sub-agent binds `query_training_db`, `list_tp_training_plans`, `set_training_goal` only. The five TrainingPeaks write tools (`tp_create_workout`, `tp_update_workout`, `tp_delete_workout`, `tp_create_event`, `tp_apply_training_plan`) are called only from `apply`, through `ToolCaller.call_json`, never as LangChain tools.
-- **The graph pauses with `interrupt()` before any TrainingPeaks write.** There is no path from `design` or `skeleton` to `apply` that skips `review`.
+- **The graph pauses with `interrupt()` before any TrainingPeaks write.** There is no path from `design` or `targets` to `apply` that skips `review`.
 - Thread id for the athlete's plan is the string `planning`. `reset` clears that thread's checkpoints and marks the goal abandoned and the plan superseded; it never touches TrainingPeaks.
 - `chat` refuses to start when the checkpoint tables are missing; there is no in-memory fallback.
 - TrainingPeaks facts verified from the pinned server source (`a412a84e`): `tp_create_workout` returns `{"success": true, "workout_id": ..., "title", "date", "sport"}`; `tp_update_workout` accepts `date` (a move) and returns `{"success": true, "workout_id"}`; `tp_delete_workout` returns `{"success": true, "message"}`; `tp_create_event` returns `{"success": true, "event_id", "name", "date"}`; `tp_apply_training_plan(plan_id, start_date)` returns only counts (`created`, `failed`, `skipped_periods`, `total`) and no ids, so ownership of applied workouts needs a follow-up `tp_get_workouts(start_date, end_date, workout_filter="planned")` whose rows carry `id`, `date`, `tss_planned`, `duration_planned`. TP sport names are `Swim`, `Bike`, `Run`, `Brick`, `Strength`, `DayOff`. Simplified structure: `{"primaryIntensityMetric": "percentOfFtp" | "percentOfThresholdHr" | "percentOfThresholdPace", "steps": [{"name", "duration_seconds", "intensity_min", "intensity_max", "intensityClass": "warmUp"|"active"|"rest"|"coolDown"|"other"} | {"type": "repetition", "reps", "steps": [...]}]}`.
@@ -25,11 +25,11 @@
 
 ### Spec deviations decided in this plan
 
-- **`PlanningState` gains `changes_from` and `tp_plan_applied`.** Reject must route back to the node that produced the change set, and the post-`apply_plan` re-entry into `skeleton` must be distinguishable from the first entry. Neither can be derived from the eight spec fields.
+- **`PlanningState` gains `changes_from` and `tp_plan_applied`.** Reject must route back to the node that produced the change set, and the post-`apply_plan` re-entry into `targets` must be distinguishable from the first entry. Neither can be derived from the eight spec fields.
 - **`START` routes to `review` when `pending_changes` is non-empty**, regardless of `phase`. This is how "re-running review re-proposes only the unapplied remainder" (spec §9) works after a mid-batch failure or a process exit.
 - **`reset` keeps thread id `planning` and deletes its checkpoints** (`AsyncPostgresSaver.adelete_thread`) instead of rotating ids. Every command can then hard-code the thread id; nothing has to remember the current one.
-- **The `create_event` change is emitted by `design` (generated plans) or `skeleton` (bought plans)**, first in the change set, when `goal.create_tp_event` is true and no `tp_event_id` is stored yet.
-- **Rejecting the `apply_plan` proposal ends the turn** with the note in messages; the next turn re-proposes. Routing back into `skeleton` would loop without new information.
+- **The `create_event` change is emitted by `design` (generated plans) or `targets` (bought plans)**, first in the change set, when `goal.create_tp_event` is true and no `tp_event_id` is stored yet.
+- **Rejecting the `apply_plan` proposal ends the turn** with the note in messages; the next turn re-proposes. Routing back into `targets` would loop without new information.
 - **Rest days are not written to TrainingPeaks.** `PlannedSession` with `sport == "rest"` stays in `plan_weeks.designed` for the record but produces no `CalendarChange`.
 - **The design node redesigns every window week that is not yet `written_to_tp`**, so a reject redesigns the same weeks with the note, and an already-designed but unwritten week (process exit before approval) is designed again rather than re-proposed from stale JSON.
 
@@ -49,7 +49,7 @@ packages/tri-planning/src/tri_planning/
   graph/graph.py              build_graph(deps, checkpointer), route functions
   graph/nodes/__init__.py
   graph/nodes/intake.py       make_intake_node(deps), goal_id_from_messages(messages)
-  graph/nodes/skeleton.py     make_skeleton_node(deps)
+  graph/nodes/targets.py     make_targets_node(deps)
   graph/nodes/design.py       make_design_node(deps), window_weeks(weeks, today, horizon)
   graph/nodes/review.py       review_node(state)
   graph/nodes/apply.py        make_apply_node(deps)
@@ -67,7 +67,7 @@ packages/tri-planning/tests/
   test_tp_calls.py
   test_goal_tools.py
   test_intake_node.py
-  test_skeleton_node.py       db
+  test_targets_node.py       db
   test_design_node.py         db
   test_apply_node.py          db
   test_graph.py               db (end to end with ScriptedChatModel + FakeTp + InMemorySaver)
@@ -326,7 +326,7 @@ git commit -m "feat(planning): TrainingPeaks call translation and allow-lists"
 
 **Interfaces:**
 - Produces:
-  - `state.PlanningState(TypedDict, total=False)` with `messages: Annotated[list[AnyMessage], add_messages]`, `phase: Literal["intake","planning","active"]`, `goal_id: int | None`, `plan_id: int | None`, `pending_changes: list[CalendarChange]`, `pending_summary: str | None`, `review_decision: ReviewDecision | None`, `last_error: str | None`, `changes_from: Literal["skeleton","design","adjust"] | None`, `tp_plan_applied: bool`.
+  - `state.PlanningState(TypedDict, total=False)` with `messages: Annotated[list[AnyMessage], add_messages]`, `phase: Literal["intake","planning","active"]`, `goal_id: int | None`, `plan_id: int | None`, `pending_changes: list[CalendarChange]`, `pending_summary: str | None`, `review_decision: ReviewDecision | None`, `last_error: str | None`, `changes_from: Literal["targets","design","adjust"] | None`, `tp_plan_applied: bool`.
   - `deps.ConnectFactory = Callable[[], AbstractContextManager[Conn]]`; `deps.GraphDeps(model: BaseChatModel, connect: ConnectFactory, db_url: str, tp: ToolCaller | None = None, garmin_tools: list[BaseTool] = [], horizon_weeks: int = 3, today: Callable[[], date] = date.today)`; `deps.make_deps(settings, model, tp) -> GraphDeps`.
   - `llm.make_model(settings) -> ChatAnthropic`; `llm.make_subagent(model, tools, system_prompt) -> CompiledStateGraph` (`create_agent` with `AnthropicPromptCachingMiddleware`, `checkpointer=False`).
   - `tri_planning.testing`: `MONDAY = date(2026, 9, 14)`, `ALL_DAYS`, `GOAL_ARGS` (a valid olympic goal 14 weeks out, JSON-safe), `week_json(week_start, target_tss, *, hard_on_consecutive_days=False)` (a `PlannedWeek` dict with three sessions summing to the target), `FakeTp`, `NoCommit`.
@@ -357,7 +357,7 @@ class PlanningState(TypedDict, total=False):
     pending_summary: str | None
     review_decision: ReviewDecision | None
     last_error: str | None
-    changes_from: Literal["skeleton", "design", "adjust"] | None
+    changes_from: Literal["targets", "design", "adjust"] | None
     tp_plan_applied: bool
 ```
 
@@ -614,7 +614,7 @@ git commit -m "feat(planning): graph state, deps, sub-agent factory, test double
 - Test: `tests/test_goal_tools.py`, `tests/test_intake_node.py`
 
 **Interfaces:**
-- Consumes: `repo.insert_goal`, `skeleton.next_monday`, `skeleton.count_weeks`, `skeleton.allocate_phases`, `periodization.PHASE_TABLE`, `make_subagent`, `tri_analyze`-free SQL tool (see note), `GraphDeps`.
+- Consumes: `repo.insert_goal`, `targets.next_monday`, `targets.count_weeks`, `targets.allocate_phases`, `periodization.PHASE_TABLE`, `make_subagent`, `tri_analyze`-free SQL tool (see note), `GraphDeps`.
 - Produces:
   - `tools.goal.make_goal_tools(connect: ConnectFactory, tp: ToolCaller | None, today: Callable[[], date]) -> list[BaseTool]` returning `[set_training_goal, list_tp_training_plans]`. `set_training_goal` takes the `TrainingGoal` fields as arguments, returns JSON text `{"goal_id": int, "weeks": int, "compressed": bool, "warning": str | null}` or `{"error": str}` (goal not saved). `list_tp_training_plans` returns the server's JSON or `{"error": "TrainingPeaks server unavailable"}`.
   - `prompts.intake.render_intake_prompt(today: date) -> str`.
@@ -636,7 +636,7 @@ Expected: all pass. Append to `SCHEMA_DOC` in `packages/tri-core/src/tri_core/db
 ```
 training_goals (planning agent): id, goal_type, event_name, event_date, duration_weeks, priority,
   weekly_hours_min, weekly_hours_max, available_days jsonb, constraints jsonb, status.
-training_plans: id, goal_id, source ('generated'|'tp_plan'), start_date, end_date, skeleton jsonb, status.
+training_plans: id, goal_id, source ('generated'|'tp_plan'), start_date, end_date, targets jsonb, status.
 plan_weeks: plan_id, week_start (Monday), phase, target_tss, target_hours, designed jsonb, written_to_tp.
 plan_changes: plan_id, thread_id, operation, tp_workout_id, workout_date, payload jsonb, result jsonb,
   reason, applied_at  (audit of every calendar write; a workout is agent-authored iff its id is here).
@@ -764,7 +764,7 @@ from tri_planning import repo
 from tri_planning.graph.deps import ConnectFactory
 from tri_planning.planning import periodization as P
 from tri_planning.planning.models import TrainingGoal
-from tri_planning.planning.skeleton import allocate_phases, count_weeks, next_monday
+from tri_planning.planning.targets import allocate_phases, count_weeks, next_monday
 
 SET_GOAL_DESCRIPTION = """\
 Commit the athlete's training goal once every field is established and confirmed. Fields:
@@ -862,7 +862,7 @@ the goal is not feasible and suggest a maintenance or build goal.
 
 When everything is established, summarize it in one short block, ask for confirmation, and only
 after the athlete confirms call set_training_goal exactly once. If it returns an error, fix the
-inputs and call again. After it succeeds reply with exactly: Goal saved. Building the skeleton.
+inputs and call again. After it succeeds reply with exactly: Goal saved. Building the week targets.
 Be brief. One or two questions per turn."""
 ```
 
@@ -932,24 +932,24 @@ git commit -m "feat(planning): goal tools and intake node; sql tool moves to tri
 
 ---
 
-### Task 4: Skeleton node
+### Task 4: Targets node
 
 **Files:**
-- Create: `graph/nodes/skeleton.py`
-- Test: `tests/test_skeleton_node.py`
+- Create: `graph/nodes/targets.py`
+- Test: `tests/test_targets_node.py`
 
 **Interfaces:**
-- Consumes: `repo.get_goal/insert_plan/fitness_snapshot/insert_change/mark_weeks_written`, `skeleton.build/next_monday/week_monday/infer_phases`, `tp_calls.event_change`, `GraphDeps`.
-- Produces: `nodes.skeleton.make_skeleton_node(deps) -> async node`. Return values:
+- Consumes: `repo.get_goal/insert_plan/fitness_snapshot/insert_change/mark_weeks_written`, `targets.build/next_monday/week_monday/infer_phases`, `tp_calls.event_change`, `GraphDeps`.
+- Produces: `nodes.targets.make_targets_node(deps) -> async node`. Return values:
   - generated goal, no plan yet: `{"plan_id": int, "messages": [AIMessage(summary)]}`.
   - generated goal, `plan_id` already set: `{}` (fall through to design).
-  - bought plan, not yet applied: `{"pending_changes": [event?, apply_plan], "pending_summary": str, "changes_from": "skeleton"}`.
+  - bought plan, not yet applied: `{"pending_changes": [event?, apply_plan], "pending_summary": str, "changes_from": "targets"}`.
   - bought plan, `tp_plan_applied` true: `{"plan_id": int, "phase": "active", "tp_plan_applied": False, "messages": [AIMessage(summary)]}` after reading the calendar with `tp_get_workouts` and recording ownership rows (`operation = "apply_plan"`).
-  - Also `nodes.skeleton.weekly_targets_from_workouts(workouts: list[dict], start: date) -> list[WeekTarget]` (pure; `tss_planned` summed per Monday; `duration_planned` is hours; phases from `infer_phases`).
+  - Also `nodes.targets.weekly_targets_from_workouts(workouts: list[dict], start: date) -> list[WeekTarget]` (pure; `tss_planned` summed per Monday; `duration_planned` is hours; phases from `infer_phases`).
 
 - [ ] **Step 1: Write the failing tests**
 
-`packages/tri-planning/tests/test_skeleton_node.py`:
+`packages/tri-planning/tests/test_targets_node.py`:
 ```python
 from datetime import timedelta
 
@@ -958,7 +958,7 @@ from langchain_core.messages import AIMessage
 
 from tri_core.testing import ScriptedChatModel
 from tri_planning import repo
-from tri_planning.graph.nodes.skeleton import make_skeleton_node, weekly_targets_from_workouts
+from tri_planning.graph.nodes.targets import make_targets_node, weekly_targets_from_workouts
 from tri_planning.planning.models import TrainingGoal
 from tri_planning.testing import GOAL_ARGS, MONDAY, FakeTp
 
@@ -972,17 +972,17 @@ def stored_goal(conn, **over):
 
 async def test_generated_goal_builds_plan_and_summarizes(nocommit, make_deps):
     gid = stored_goal(nocommit)
-    node = make_skeleton_node(make_deps(ScriptedChatModel(script=[])))
+    node = make_targets_node(make_deps(ScriptedChatModel(script=[])))
     out = await node({"goal_id": gid, "phase": "planning"}, CFG)
     plan = repo.get_plan(nocommit, out["plan_id"])
-    assert plan.source == "generated" and len(plan.skeleton) == 14 and plan.start_date == MONDAY
+    assert plan.source == "generated" and len(plan.targets) == 14 and plan.start_date == MONDAY
     assert isinstance(out["messages"][0], AIMessage) and "14 weeks" in out["messages"][0].content
     assert len(repo.list_weeks(nocommit, plan.id)) == 14
 
 
 async def test_existing_plan_is_not_rebuilt(nocommit, make_deps):
     gid = stored_goal(nocommit)
-    node = make_skeleton_node(make_deps(ScriptedChatModel(script=[])))
+    node = make_targets_node(make_deps(ScriptedChatModel(script=[])))
     first = await node({"goal_id": gid, "phase": "planning"}, CFG)
     again = await node({"goal_id": gid, "phase": "planning", "plan_id": first["plan_id"]}, CFG)
     assert again == {}
@@ -990,14 +990,14 @@ async def test_existing_plan_is_not_rebuilt(nocommit, make_deps):
 
 async def test_bought_plan_proposes_apply_plan(nocommit, make_deps):
     gid = stored_goal(nocommit, tp_plan_id="p1", create_tp_event=True)
-    node = make_skeleton_node(make_deps(ScriptedChatModel(script=[]), tp=FakeTp()))
+    node = make_targets_node(make_deps(ScriptedChatModel(script=[]), tp=FakeTp()))
     out = await node({"goal_id": gid, "phase": "planning"}, CFG)
     ops = [c.op for c in out["pending_changes"]]
-    assert ops == ["create_event", "apply_plan"] and out["changes_from"] == "skeleton"
+    assert ops == ["create_event", "apply_plan"] and out["changes_from"] == "targets"
     assert out["pending_changes"][1].payload == {"plan_id": "p1", "start_date": MONDAY.isoformat()}
 
 
-async def test_bought_plan_after_apply_derives_skeleton_and_ownership(nocommit, make_deps):
+async def test_bought_plan_after_apply_derives_targets_and_ownership(nocommit, make_deps):
     gid = stored_goal(nocommit, tp_plan_id="p1")
     workouts = [
         {"id": "w1", "date": MONDAY.isoformat(), "tss_planned": 60, "duration_planned": 1.0},
@@ -1006,12 +1006,12 @@ async def test_bought_plan_after_apply_derives_skeleton_and_ownership(nocommit, 
         {"id": "w4", "date": (MONDAY + timedelta(weeks=2)).isoformat(), "tss_planned": 40, "duration_planned": 1.0},
     ]
     tp = FakeTp(responses={"tp_get_workouts": {"workouts": workouts, "count": 4}})
-    node = make_skeleton_node(make_deps(ScriptedChatModel(script=[]), tp=tp))
+    node = make_targets_node(make_deps(ScriptedChatModel(script=[]), tp=tp))
     out = await node({"goal_id": gid, "phase": "planning", "tp_plan_applied": True}, CFG)
     assert out["phase"] == "active" and out["tp_plan_applied"] is False
     plan = repo.get_plan(nocommit, out["plan_id"])
-    assert plan.source == "tp_plan" and [t.target_tss for t in plan.skeleton] == [140, 100, 40]
-    assert [t.phase for t in plan.skeleton] == ["peak", "taper", "race"]
+    assert plan.source == "tp_plan" and [t.target_tss for t in plan.targets] == [140, 100, 40]
+    assert [t.phase for t in plan.targets] == ["peak", "taper", "race"]
     assert all(w.written_to_tp for w in repo.list_weeks(nocommit, plan.id))
     assert repo.owned_workout_ids(nocommit, plan.id) == {"w1", "w2", "w3", "w4"}
     assert tp.calls[0][0] == "tp_get_workouts"
@@ -1031,13 +1031,13 @@ def test_weekly_targets_from_workouts_groups_by_monday():
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `uv run pytest packages/tri-planning/tests/test_skeleton_node.py -q`
+Run: `uv run pytest packages/tri-planning/tests/test_targets_node.py -q`
 Expected: `ImportError`.
 
-- [ ] **Step 3: Write `graph/nodes/skeleton.py`**
+- [ ] **Step 3: Write `graph/nodes/targets.py`**
 
 ```python
-"""Skeleton node: goal + fitness -> week targets in the database. No model call."""
+"""Targets node: goal + fitness -> week targets in the database. No model call."""
 
 from __future__ import annotations
 
@@ -1053,7 +1053,7 @@ from tri_planning.graph.deps import GraphDeps
 from tri_planning.graph.state import PlanningState
 from tri_planning.planning import periodization as P
 from tri_planning.planning.models import CalendarChange, StoredGoal, WeekTarget
-from tri_planning.planning.skeleton import build, infer_phases, next_monday, week_monday
+from tri_planning.planning.targets import build, infer_phases, next_monday, week_monday
 from tri_planning.planning.tp_calls import event_change
 
 
@@ -1086,7 +1086,7 @@ def _summary(targets: list[WeekTarget], source: str) -> str:
     first, last = targets[0], targets[-1]
     flags = sorted({f for t in targets for f in t.flags})
     lines = [
-        f"Skeleton ({source}): {len(targets)} weeks from {first.week_start} to "
+        f"Targets ({source}): {len(targets)} weeks from {first.week_start} to "
         f"{last.week_start + timedelta(days=6)}; phases: {phases}.",
         f"Week 1 target {first.target_tss:.0f} TSS / {first.target_hours:.1f} h; peak "
         f"{max(t.target_tss for t in targets):.0f} TSS.",
@@ -1096,7 +1096,7 @@ def _summary(targets: list[WeekTarget], source: str) -> str:
     return "\n".join(lines)
 
 
-def make_skeleton_node(deps: GraphDeps) -> Any:
+def make_targets_node(deps: GraphDeps) -> Any:
     async def _adopt_tp_plan(stored: StoredGoal, thread_id: str) -> dict[str, Any]:
         assert deps.tp is not None and stored.goal.event_date is not None
         start = next_monday(deps.today())
@@ -1124,9 +1124,9 @@ def make_skeleton_node(deps: GraphDeps) -> Any:
                 "pending_changes": [], "pending_summary": None,
                 "messages": [AIMessage(_summary(targets, "TrainingPeaks plan"))]}
 
-    async def skeleton(state: PlanningState, config: RunnableConfig) -> dict[str, Any]:
+    async def targets_node(state: PlanningState, config: RunnableConfig) -> dict[str, Any]:
         goal_id = state.get("goal_id")
-        assert goal_id is not None, "skeleton needs goal_id"
+        assert goal_id is not None, "targets node needs goal_id"
         thread_id = str(config["configurable"]["thread_id"])
         with deps.connect() as conn:
             stored = repo.get_goal(conn, goal_id)
@@ -1146,7 +1146,7 @@ def make_skeleton_node(deps: GraphDeps) -> Any:
                 payload={"plan_id": goal.tp_plan_id, "start_date": start.isoformat()},
                 reason=f"activate TrainingPeaks plan {goal.tp_plan_id} from {start}",
             ))
-            return {"pending_changes": changes, "changes_from": "skeleton",
+            return {"pending_changes": changes, "changes_from": "targets",
                     "pending_summary": f"Apply bought plan {goal.tp_plan_id} starting {start}."}
 
         if state.get("plan_id") is not None:
@@ -1157,12 +1157,12 @@ def make_skeleton_node(deps: GraphDeps) -> Any:
             conn.commit()
         return {"plan_id": plan_id, "messages": [AIMessage(_summary(targets, "generated"))]}
 
-    return skeleton
+    return targets_node
 ```
 
 - [ ] **Step 4: Run the tests**
 
-Run: `uv run pytest packages/tri-planning/tests/test_skeleton_node.py -q`
+Run: `uv run pytest packages/tri-planning/tests/test_targets_node.py -q`
 Expected: 5 passed. The summary test checks the literal `14 weeks`, which `_summary` prints as `{len(targets)} weeks`.
 
 - [ ] **Step 5: Lint, type-check, commit (Brian)**
@@ -1170,7 +1170,7 @@ Expected: 5 passed. The summary test checks the literal `14 weeks`, which `_summ
 ```bash
 uv run ruff check . && uv run ruff format --check . && uv run mypy
 git add -A
-git commit -m "feat(planning): skeleton node (generated and bought plans)"
+git commit -m "feat(planning): targets node (generated and bought plans)"
 ```
 
 ---
@@ -1204,7 +1204,7 @@ from tri_core.testing import ScriptedChatModel, tool_call
 from tri_planning import repo
 from tri_planning.graph.nodes.design import make_design_node, window_weeks
 from tri_planning.planning.models import FitnessSnapshot, PlannedWeek, ReviewDecision, TrainingGoal
-from tri_planning.planning.skeleton import build
+from tri_planning.planning.targets import build
 from tri_planning.prompts.design import render_design_prompt
 from tri_planning.testing import GOAL_ARGS, MONDAY, week_json
 
@@ -1413,7 +1413,7 @@ from tri_planning.graph.deps import GraphDeps
 from tri_planning.graph.state import PlanningState
 from tri_planning.planning import validate
 from tri_planning.planning.models import CalendarChange, PlannedWeek, PlanWeekRow
-from tri_planning.planning.skeleton import week_monday
+from tri_planning.planning.targets import week_monday
 from tri_planning.planning.tp_calls import event_change
 from tri_planning.prompts.design import DESIGN_SYSTEM, render_design_prompt
 
@@ -1453,7 +1453,7 @@ def make_design_node(deps: GraphDeps) -> Any:
         changes: list[CalendarChange] = []
         notes: list[str] = []
         for row in todo:
-            target = next(t for t in plan.skeleton if t.week_start == row.week_start)
+            target = next(t for t in plan.targets if t.week_start == row.week_start)
             cfg = merge_configs(config, {"tags": [f"week_start:{row.week_start}", f"phase:{target.phase}"]})
             week = await design_one(
                 render_design_prompt(goal, target, thresholds, previous, note, None, None), cfg
@@ -1679,7 +1679,7 @@ from tri_planning import repo
 from tri_planning.graph.deps import GraphDeps
 from tri_planning.graph.state import PlanningState
 from tri_planning.planning.models import CalendarChange
-from tri_planning.planning.skeleton import week_monday
+from tri_planning.planning.targets import week_monday
 from tri_planning.planning.tp_calls import result_workout_id, to_tp_call
 
 OWNED_OPS = ("update", "move", "delete")
@@ -1790,7 +1790,7 @@ git commit -m "feat(planning): review interrupt and apply node"
 - Consumes: every node factory above, `PlanningState`, `GraphDeps`.
 - Produces:
   - `graph.graph.build_graph(deps: GraphDeps, checkpointer: BaseCheckpointSaver[Any]) -> CompiledStateGraph`.
-  - Route functions (module level, testable): `route_start(state) -> "review" | "intake" | "skeleton" | "adjust"`, `after_intake(state) -> "skeleton" | END`, `after_skeleton(state) -> "review" | "design" | END`, `after_review(state) -> "apply" | "design" | "adjust" | END`, `after_apply(state) -> "skeleton" | END`.
+  - Route functions (module level, testable): `route_start(state) -> "review" | "intake" | "targets" | "adjust"`, `after_intake(state) -> "targets" | END`, `after_targets(state) -> "review" | "design" | END`, `after_review(state) -> "apply" | "design" | "adjust" | END`, `after_apply(state) -> "targets" | END`.
   - `nodes.adjust.adjust_node(state) -> {"messages": [AIMessage("The plan is active. Adjustments and check-in arrive in milestone 4.")]}`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -1815,7 +1815,7 @@ APPROVE = Command(resume={"action": "approve"})
 
 
 def intake_script():
-    return [tool_call("set_training_goal", GOAL_ARGS), AIMessage(content="Goal saved. Building the skeleton.")]
+    return [tool_call("set_training_goal", GOAL_ARGS), AIMessage(content="Goal saved. Building the week targets.")]
 
 
 def week_call(target_tss, week_start=MONDAY, **k):
@@ -1823,11 +1823,11 @@ def week_call(target_tss, week_start=MONDAY, **k):
 
 
 async def first_target(nocommit):
-    return repo.get_active_plan(nocommit, repo.get_active_goal(nocommit).id).skeleton[0].target_tss
+    return repo.get_active_plan(nocommit, repo.get_active_goal(nocommit).id).targets[0].target_tss
 
 
 async def test_intake_to_review_pauses_before_any_write(nocommit, make_deps, fake_tp):
-    # the design call needs the skeleton's week-1 target, which only exists after skeleton runs;
+    # the design call needs the week-1 target, which only exists after the targets node runs;
     # week_json is tolerant: the validator allows ±10 %, so script a plausible number and
     # correct it below if the test DB's fitness rows change the target.
     model = ScriptedChatModel(script=[*intake_script(), week_call(300)])
@@ -1909,12 +1909,12 @@ async def test_bought_plan_path(nocommit, make_deps):
 def test_route_functions():
     assert route_start({"pending_changes": [1]}) == "review"
     assert route_start({}) == "intake"
-    assert route_start({"phase": "planning"}) == "skeleton"
+    assert route_start({"phase": "planning"}) == "targets"
     assert route_start({"phase": "active"}) == "adjust"
     from tri_planning.planning.models import ReviewDecision
     assert after_review({"review_decision": ReviewDecision(action="approve")}) == "apply"
     assert after_review({"review_decision": ReviewDecision(action="reject"), "changes_from": "design"}) == "design"
-    assert after_review({"review_decision": ReviewDecision(action="reject"), "changes_from": "skeleton"}) == "__end__"
+    assert after_review({"review_decision": ReviewDecision(action="reject"), "changes_from": "targets"}) == "__end__"
     assert after_review({"review_decision": None}) == "__end__"
 ```
 
@@ -1944,13 +1944,13 @@ def adjust_node(state: PlanningState) -> dict[str, Any]:
 ```python
 """The planning graph. Nodes are closures over GraphDeps; routing is pure functions over state.
 
-  START -> route_start: pending changes -> review; intake | skeleton | adjust by phase
-  intake   -> skeleton (goal saved) | END
-  skeleton -> review (bought plan) | design (generated) | END (bought plan adopted)
+  START -> route_start: pending changes -> review; intake | targets | adjust by phase
+  intake   -> targets (goal saved) | END
+  targets -> review (bought plan) | design (generated) | END (bought plan adopted)
   design   -> review
   review   -> apply (approve/edit) | design or adjust (reject) | END (nothing to review, or
               rejected apply_plan)
-  apply    -> skeleton (after apply_plan) | END
+  apply    -> targets (after apply_plan) | END
   adjust   -> END (Plan 4: -> review when changes are proposed)
 """
 
@@ -1967,7 +1967,7 @@ from tri_planning.graph.nodes.apply import make_apply_node
 from tri_planning.graph.nodes.design import make_design_node
 from tri_planning.graph.nodes.intake import make_intake_node
 from tri_planning.graph.nodes.review import review_node
-from tri_planning.graph.nodes.skeleton import make_skeleton_node
+from tri_planning.graph.nodes.targets import make_targets_node
 from tri_planning.graph.state import PlanningState
 
 
@@ -1975,14 +1975,14 @@ def route_start(state: PlanningState) -> str:
     if state.get("pending_changes"):
         return "review"
     phase = state.get("phase") or "intake"
-    return {"intake": "intake", "planning": "skeleton", "active": "adjust"}[phase]
+    return {"intake": "intake", "planning": "targets", "active": "adjust"}[phase]
 
 
 def after_intake(state: PlanningState) -> str:
-    return "skeleton" if state.get("phase") == "planning" and state.get("goal_id") else END
+    return "targets" if state.get("phase") == "planning" and state.get("goal_id") else END
 
 
-def after_skeleton(state: PlanningState) -> str:
+def after_targets(state: PlanningState) -> str:
     if state.get("pending_changes"):
         return "review"
     if state.get("phase") == "active":
@@ -2001,24 +2001,24 @@ def after_review(state: PlanningState) -> str:
 
 
 def after_apply(state: PlanningState) -> str:
-    return "skeleton" if state.get("tp_plan_applied") else END
+    return "targets" if state.get("tp_plan_applied") else END
 
 
 def build_graph(deps: GraphDeps, checkpointer: BaseCheckpointSaver[Any]) -> Any:
     g: StateGraph[PlanningState] = StateGraph(PlanningState)
     g.add_node("intake", make_intake_node(deps))
-    g.add_node("skeleton", make_skeleton_node(deps))
+    g.add_node("targets", make_targets_node(deps))
     g.add_node("design", make_design_node(deps))
     g.add_node("review", review_node)
     g.add_node("apply", make_apply_node(deps))
     g.add_node("adjust", adjust_node)
 
-    g.add_conditional_edges(START, route_start, ["review", "intake", "skeleton", "adjust"])
-    g.add_conditional_edges("intake", after_intake, ["skeleton", END])
-    g.add_conditional_edges("skeleton", after_skeleton, ["review", "design", END])
+    g.add_conditional_edges(START, route_start, ["review", "intake", "targets", "adjust"])
+    g.add_conditional_edges("intake", after_intake, ["targets", END])
+    g.add_conditional_edges("targets", after_targets, ["review", "design", END])
     g.add_edge("design", "review")
     g.add_conditional_edges("review", after_review, ["apply", "design", "adjust", END])
-    g.add_conditional_edges("apply", after_apply, ["skeleton", END])
+    g.add_conditional_edges("apply", after_apply, ["targets", END])
     g.add_edge("adjust", END)
     return g.compile(checkpointer=checkpointer, name="tri-planning")
 ```
@@ -2027,7 +2027,7 @@ def build_graph(deps: GraphDeps, checkpointer: BaseCheckpointSaver[Any]) -> Any:
 
 Run: `uv run pytest packages/tri-planning/tests/test_graph.py -q`
 Expected: 7 passed. Two things to check if not:
-- The scripted `week_call(300)` must be within 10 % of the skeleton's week-1 target for the test database's fitness rows. The test database has no `daily_metrics` rows outside a transaction, so week 1 falls to the olympic floor `300`. If a test asserts a `VIOLATIONS` summary unexpectedly, print `await first_target(nocommit)` and script that number.
+- The scripted `week_call(300)` must be within 10 % of the week-1 target for the test database's fitness rows. The test database has no `daily_metrics` rows outside a transaction, so week 1 falls to the olympic floor `300`. If a test asserts a `VIOLATIONS` summary unexpectedly, print `await first_target(nocommit)` and script that number.
 - `Command(resume=...)` with a compiled graph and `ainvoke` returns the final state; `__interrupt__` is present in the returned dict only when the run paused.
 
 - [ ] **Step 5: Lint, type-check, commit (Brian)**
@@ -2256,10 +2256,10 @@ def test_turn_printer_handles_subgraph_events_and_interrupt():
     p.on_event(("intake:abc",), "messages", (AIMessageChunk(content="Hel"), {"langgraph_node": "model"}))
     p.on_event(("intake:abc",), "messages", (AIMessageChunk(content="lo"), {"langgraph_node": "model"}))
     p.on_event(("intake:abc",), "updates", {"tools": {"messages": [ToolMessage(content="{}", name="set_training_goal", tool_call_id="1")]}})
-    p.on_event((), "updates", {"skeleton": {"messages": [AIMessage(content="Skeleton: 14 weeks")]}})
+    p.on_event((), "updates", {"targets": {"messages": [AIMessage(content="Targets: 14 weeks")]}})
     p.on_event((), "updates", {"__interrupt__": (Interrupt(value={"summary": "s", "changes": []}),)})
     text = "".join(buf)
-    assert "Hello" in text and "← set_training_goal" in text and "Skeleton: 14 weeks" in text
+    assert "Hello" in text and "← set_training_goal" in text and "Targets: 14 weeks" in text
     assert p.interrupt == {"summary": "s", "changes": []}
 
 
@@ -2341,7 +2341,7 @@ from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, Huma
 from langgraph.types import Command
 
 from tri_planning.planning.models import CalendarChange, ReviewDecision
-from tri_planning.planning.skeleton import week_monday
+from tri_planning.planning.targets import week_monday
 
 Out = Callable[[str], None]
 CommandFn = Callable[[], Awaitable[str]]
@@ -2627,7 +2627,7 @@ async def _chat(*, no_live: bool) -> None:
     from tri_planning.graph.graph import build_graph
     from tri_planning.graph.llm import make_model
     from tri_planning.planning.models import CalendarChange
-    from tri_planning.planning.skeleton import week_monday
+    from tri_planning.planning.targets import week_monday
     from tri_planning.repl import changes_from_yaml, changes_to_yaml, chat_loop
 
     settings = get_planning_settings()
@@ -2750,7 +2750,7 @@ In chat: `/status`, then `/quit`. Expected: `--help` lists `chat` and `reset`; `
 docker compose up -d && uv run tri sync
 uv run tri-planning chat
 ```
-Suggested flow: describe a race 12+ weeks out, answer the intake questions, confirm. Watch for `→ set_training_goal(...)`, the `[skeleton] Skeleton (generated): N weeks ...` line, the design summary per week, then the change table. Type `reject` with a note once to see the redesign, then `approve`. Check the TrainingPeaks calendar. If anything is wrong, `uv run tri-planning reset --yes` and delete the workouts in TrainingPeaks by hand (this milestone has no bulk undo; Plan 4's adjust can delete agent-authored workouts).
+Suggested flow: describe a race 12+ weeks out, answer the intake questions, confirm. Watch for `→ set_training_goal(...)`, the `[targets] Targets (generated): N weeks ...` line, the design summary per week, then the change table. Type `reject` with a note once to see the redesign, then `approve`. Check the TrainingPeaks calendar. If anything is wrong, `uv run tri-planning reset --yes` and delete the workouts in TrainingPeaks by hand (this milestone has no bulk undo; Plan 4's adjust can delete agent-authored workouts).
 
 Things to judge, as in analyze's README: whether intake asks one or two questions per turn and grounds them in CTL; whether the designed weeks respect availability without validator retries (LangSmith shows a second design call per week when they don't; tune `DESIGN_SYSTEM`); whether reasons in the change table are useful.
 
@@ -2761,7 +2761,7 @@ Things to judge, as in analyze's README: whether intake asks one or two question
 ## Commands
 
 ```bash
-uv run tri-planning chat [--no-live]   # intake -> skeleton -> design -> review -> apply
+uv run tri-planning chat [--no-live]   # intake -> targets -> design -> review -> apply
 uv run tri-planning reset [--yes]      # abandon goal and plan, clear the thread; TrainingPeaks untouched
 ```
 
@@ -2776,14 +2776,14 @@ for both databases (creates LangGraph's checkpoint tables).
 
 ```
 you> ...            intake sub-agent (create_agent) asks, queries the DB, finally calls set_training_goal
-[skeleton] ...      pure Python: goal + fitness -> week targets (training_plans, plan_weeks)
+[targets] ...      pure Python: goal + fitness -> week targets (training_plans, plan_weeks)
 [design]            one with_structured_output(PlannedWeek) call per window week, validated, retried once
 <change table>      review node: interrupt(); the run is checkpointed in Postgres until you answer
 approve             apply: one TrainingPeaks call per change, each recorded in plan_changes
 ```
 
 Layout: `graph/` (state, deps, nodes, wiring, checkpointer), `planning/` (models, periodization,
-skeleton, validate, tp_calls), `tools/` (intake tools), `prompts/`, `repl.py`, `repo.py`.
+targets, validate, tp_calls), `tools/` (intake tools), `prompts/`, `repl.py`, `repo.py`.
 ```
 
 Root `README.md`: in the package table change the tri-planning row's description to `Planning agent: goal intake, periodized plan, approved writes to the TrainingPeaks calendar.`; under Setup add step `6. Checkpoint tables (once per database): uv run python scripts/setup_checkpointer.py <url>`; under Run add `uv run tri-planning chat [--no-live]` and `uv run tri-planning reset`.
@@ -2804,7 +2804,7 @@ git push
 
 ## Self-review notes
 
-- Spec §6.1 state: eight fields plus two routing fields (deviation listed). §6.2 every edge is a route function in Task 7 with a test. Intake (Task 3), skeleton including the bought-plan re-entry (Task 4), design with tags and one retry (Task 5), review interrupt with approve/reject/edit and reject-note-as-HumanMessage (Tasks 6 and 7), apply with ownership, per-call audit rows, mid-batch stop and `written_to_tp` (Task 6). Adjust is a placeholder by design (milestone 4).
+- Spec §6.1 state: eight fields plus two routing fields (deviation listed). §6.2 every edge is a route function in Task 7 with a test. Intake (Task 3), targets including the bought-plan re-entry (Task 4), design with tags and one retry (Task 5), review interrupt with approve/reject/edit and reject-note-as-HumanMessage (Tasks 6 and 7), apply with ownership, per-call audit rows, mid-batch stop and `written_to_tp` (Task 6). Adjust is a placeholder by design (milestone 4).
 - Spec §8 `chat` (streaming, `→`/`←` lines, change table grouped by week with reasons, `approve / reject <note> / edit`, YAML in `$EDITOR`, `/status`, `/pending`, `/sync`, `/quit`) and `reset` in Tasks 9 and 10.
 - Spec §9: MCP server down (warning, apply refuses: Task 6 test), mid-batch failure (Task 6 and Task 7 tests), design fails twice (VIOLATIONS in the summary: Task 5 test), ownership (Task 6 test), API errors caught per turn (Task 9 `run_turn`), checkpointer unavailable (`chat` exits with `SETUP_HINT`).
 - Spec §11 graph tests: intake ends on `set_training_goal`, review pauses and approve reaches apply, reject routes back with the note, second process resumes from Postgres, fake TP ownership refusal and mid-batch failure, one `plan_changes` row per call, YAML round trip. The live create/update/delete test is deferred to Plan 4 where `update` and `delete` first get exercised by the agent.

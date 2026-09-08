@@ -69,7 +69,7 @@ def test_plan_and_weeks(pdb):
     pid = repo.insert_plan(pdb, gid, "generated", None, targets())
     plan = repo.get_plan(pdb, pid)
     assert plan.start_date == MON and plan.end_date == MON + timedelta(weeks=2, days=6)
-    assert [t.target_tss for t in plan.skeleton] == [300, 301, 302]
+    assert [t.target_tss for t in plan.targets] == [300, 301, 302]
     assert repo.get_active_plan(pdb, gid).id == pid
     weeks = repo.list_weeks(pdb, pid)
     assert [w.week_start for w in weeks] == [

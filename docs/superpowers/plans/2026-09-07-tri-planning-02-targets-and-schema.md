@@ -1,10 +1,10 @@
-# tri-planning Plan 2 of 4: Skeleton and Schema Implementation Plan
+# tri-planning Plan 2 of 4: Targets and Schema Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Create the `tri-planning` package with the planning domain models, the periodization constants, the pure skeleton builder (goal + fitness -> week targets), the pure week validator, the planning tables migration and the repository over them. Every rule is unit-tested; nothing calls a model. This is spec milestone 2.
+**Goal:** Create the `tri-planning` package with the planning domain models, the periodization constants, the pure targets builder (goal + fitness -> week targets), the pure week validator, the planning tables migration and the repository over them. Every rule is unit-tested; nothing calls a model. This is spec milestone 2.
 
-**Architecture:** `tri_planning.planning` is a pure layer: Pydantic models, a constants module, and two functions (`skeleton.build`, `validate.week`) with no I/O. `tri_planning.repo` is the only module that touches the four new tables and follows the tri-core repository convention (functions take an open connection, callers commit). The graph in Plan 3 composes these; nothing here imports LangChain.
+**Architecture:** `tri_planning.planning` is a pure layer: Pydantic models, a constants module, and two functions (`targets.build`, `validate.week`) with no I/O. `tri_planning.repo` is the only module that touches the four new tables and follows the tri-core repository convention (functions take an open connection, callers commit). The graph in Plan 3 composes these; nothing here imports LangChain.
 
 **Tech Stack:** pydantic 2 models, psycopg 3 with `Jsonb`, pytest. Depends on Plan 1 (workspace, `tri_core.testing.fixtures.db`).
 
@@ -23,11 +23,11 @@
 
 ### Spec deviations decided in this plan
 
-- **`training_goals` gains three columns: `duration_weeks int`, `tp_plan_id text`, `create_tp_event boolean not null default false`.** Goals without a race (`build`, `maintenance`, `recovery`) need a length, and the spec's `TrainingGoal` model carries `tp_plan_id` and `create_tp_event` that the skeleton node reads in a later turn, possibly a later process. They must be persisted with the goal.
+- **`training_goals` gains three columns: `duration_weeks int`, `tp_plan_id text`, `create_tp_event boolean not null default false`.** Goals without a race (`build`, `maintenance`, `recovery`) need a length, and the spec's `TrainingGoal` model carries `tp_plan_id` and `create_tp_event` that the targets node reads in a later turn, possibly a later process. They must be persisted with the goal.
 - **Race week uses intensity factor `0.75`** (the taper value). The spec table has no race-week IF.
 - **The weekly-hours lower bound is only enforced on non-recovery base, build and peak weeks.** Forcing a recovery, taper or race week up to `weekly_hours_min` would defeat those weeks. The upper bound applies to every week.
 - **`CalendarChange` gains `athlete_requested: bool = False`.** Spec §9 lets an ownership failure through when "the reason field contains an explicit athlete instruction". A typed flag set by the proposing tool is testable; sniffing prose is not. Plan 3 uses it.
-- **Phase inference for bought plans (`infer_phases`) lives in `skeleton.py`** and is written now because it is pure and belongs with the other periodization logic.
+- **Phase inference for bought plans (`infer_phases`) lives in `targets.py`** and is written now because it is pure and belongs with the other periodization logic.
 
 ---
 
@@ -48,19 +48,19 @@ packages/tri-planning/
                               PlannedSession, PlannedWeek, CalendarChange, ReviewDecision,
                               FitnessSnapshot, StoredGoal, StoredPlan, PlanWeekRow
       periodization.py        constants only
-      skeleton.py             next_monday, count_weeks, allocate_phases, recovery_flags, week1_tss,
+      targets.py             next_monday, count_weeks, allocate_phases, recovery_flags, week1_tss,
                               ctl_after_week, max_tss_for_ctl_rise, hours_for, tss_for, build, infer_phases
       validate.py             week(), structure_seconds(), sport_allowed()
   tests/
     test_config.py
     test_models.py
-    test_skeleton.py
+    test_targets.py
     test_validate.py
     test_repo.py              db-marked
 migrations/002_planning.sql
 ```
 
-Responsibilities: `models.py` is the vocabulary every other module shares. `periodization.py` is the tuning surface (change a number, rerun the tests). `skeleton.py` turns a goal into week targets and never looks at sessions. `validate.py` judges a designed week against its target and the goal and never changes it. `repo.py` is the only SQL.
+Responsibilities: `models.py` is the vocabulary every other module shares. `periodization.py` is the tuning surface (change a number, rerun the tests). `targets.py` turns a goal into week targets and never looks at sessions. `validate.py` judges a designed week against its target and the goal and never changes it. `repo.py` is the only SQL.
 
 ---
 
@@ -233,7 +233,7 @@ create table if not exists training_plans (
   tp_plan_id    text,
   start_date    date not null,
   end_date      date not null,
-  skeleton      jsonb not null,         -- [WeekTarget as JSON]
+  targets       jsonb not null,         -- [WeekTarget as JSON]
   status        text not null default 'active',   -- active | superseded | completed
   created_at    timestamptz not null default now()
 );
@@ -303,7 +303,7 @@ git commit -m "feat(planning): package scaffold, settings, 002_planning migratio
   - `PlannedSession`, `PlannedWeek`, `CalendarChange` per spec, plus `CalendarChange.athlete_requested: bool = False`.
   - `ReviewDecision(action: Literal["approve","reject","edit"], note: str | None = None, changes: list[CalendarChange] | None = None)`.
   - `FitnessSnapshot(ctl: float | None = None, recent_weekly_tss: float | None = None)`.
-  - Storage shapes: `StoredGoal(id: int, goal: TrainingGoal, status: str, tp_event_id: str | None)`, `StoredPlan(id, goal_id, source, tp_plan_id, start_date, end_date, skeleton: list[WeekTarget], status)`, `PlanWeekRow(plan_id, week_start, phase, target_tss, target_hours, designed: PlannedWeek | None, written_to_tp: bool)`.
+  - Storage shapes: `StoredGoal(id: int, goal: TrainingGoal, status: str, tp_event_id: str | None)`, `StoredPlan(id, goal_id, source, tp_plan_id, start_date, end_date, targets: list[WeekTarget], status)`, `PlanWeekRow(plan_id, week_start, phase, target_tss, target_hours, designed: PlannedWeek | None, written_to_tp: bool)`.
   - `PlannedSession.hours` property (`duration_minutes / 60`), `PlannedWeek.total_tss` and `PlannedWeek.total_hours` properties.
 
 - [x] **Step 1: Write the failing tests**
@@ -396,7 +396,7 @@ Expected: `ImportError` on `tri_planning.planning.models`.
 
 `packages/tri-planning/src/tri_planning/planning/models.py`:
 ```python
-"""Planning vocabulary shared by the skeleton builder, validator, repository and graph."""
+"""Planning vocabulary shared by the targets builder, validator, repository and graph."""
 
 from __future__ import annotations
 
@@ -519,7 +519,7 @@ class StoredPlan(BaseModel):
     tp_plan_id: str | None
     start_date: date
     end_date: date
-    skeleton: list[WeekTarget]
+    targets: list[WeekTarget]
     status: str
 
 
@@ -548,39 +548,39 @@ git commit -m "feat(planning): domain models"
 
 ---
 
-### Task 3: Periodization constants and the skeleton builder
+### Task 3: Periodization constants and the targets builder
 
 **What this teaches:** the deterministic half of "Python owns periodization; the LLM designs sessions within those bounds." Every number an athlete might want to tune is in one file, and the builder is a pure function you can test row by row against the spec table.
 
 **Files:**
-- Create: `packages/tri-planning/src/tri_planning/planning/periodization.py`, `packages/tri-planning/src/tri_planning/planning/skeleton.py`
-- Test: `packages/tri-planning/tests/test_skeleton.py`
+- Create: `packages/tri-planning/src/tri_planning/planning/periodization.py`, `packages/tri-planning/src/tri_planning/planning/targets.py`
+- Test: `packages/tri-planning/tests/test_targets.py`
 
 **Interfaces:**
 - Consumes: `TrainingGoal`, `FitnessSnapshot`, `WeekTarget`, `GoalType`, `Phase` from Task 2.
 - Produces:
   - `periodization.PhaseSpec(race, taper, peak, build, minimum_weeks, shape)` and `PHASE_TABLE: dict[GoalType, PhaseSpec]`; all constants named in Global Constraints; `SPORT_HINTS: dict[Phase, str]`; `FLAG_COMPRESSED = "compressed"`, `FLAG_HOURS_CAPPED = "hours_capped"`; `PEAK_PLATEAU_FRACTION = 0.9`.
-  - `skeleton.next_monday(today: date) -> date` (today if Monday).
-  - `skeleton.week_monday(d: date) -> date`.
-  - `skeleton.count_weeks(goal, start) -> int`.
-  - `skeleton.allocate_phases(goal_type, total_weeks) -> tuple[list[Phase], bool]` (phases in chronological order, `compressed`).
-  - `skeleton.recovery_flags(goal_type, phases) -> list[bool]`.
-  - `skeleton.week1_tss(goal_type, fitness) -> float`.
-  - `skeleton.ctl_after_week(ctl, weekly_tss) -> float`, `skeleton.max_tss_for_ctl_rise(ctl) -> float`.
-  - `skeleton.hours_for(tss, phase) -> float`, `skeleton.tss_for(hours, phase) -> float`.
-  - `skeleton.build(goal, fitness, start: date) -> list[WeekTarget]` (raises `ValueError` if `start` is not a Monday or the goal has too few weeks).
-  - `skeleton.infer_phases(weekly_tss: list[float]) -> list[Phase]`.
+  - `targets.next_monday(today: date) -> date` (today if Monday).
+  - `targets.week_monday(d: date) -> date`.
+  - `targets.count_weeks(goal, start) -> int`.
+  - `targets.allocate_phases(goal_type, total_weeks) -> tuple[list[Phase], bool]` (phases in chronological order, `compressed`).
+  - `targets.recovery_flags(goal_type, phases) -> list[bool]`.
+  - `targets.week1_tss(goal_type, fitness) -> float`.
+  - `targets.ctl_after_week(ctl, weekly_tss) -> float`, `targets.max_tss_for_ctl_rise(ctl) -> float`.
+  - `targets.hours_for(tss, phase) -> float`, `targets.tss_for(hours, phase) -> float`.
+  - `targets.build(goal, fitness, start: date) -> list[WeekTarget]` (raises `ValueError` if `start` is not a Monday or the goal has too few weeks).
+  - `targets.infer_phases(weekly_tss: list[float]) -> list[Phase]`.
 
 - [x] **Step 1: Write the failing tests**
 
-`packages/tri-planning/tests/test_skeleton.py`:
+`packages/tri-planning/tests/test_targets.py`:
 ```python
 from datetime import date, timedelta
 
 import pytest
 
 from tri_planning.planning import periodization as P
-from tri_planning.planning import skeleton
+from tri_planning.planning import targets
 from tri_planning.planning.models import FitnessSnapshot, TrainingGoal
 
 MONDAY = date(2026, 9, 14)
@@ -617,14 +617,14 @@ FIT = FitnessSnapshot(ctl=50, recent_weekly_tss=350)
 
 
 def test_next_monday():
-    assert skeleton.next_monday(date(2026, 9, 14)) == date(2026, 9, 14)  # a Monday
-    assert skeleton.next_monday(date(2026, 9, 16)) == date(2026, 9, 21)
-    assert skeleton.next_monday(date(2026, 9, 20)) == date(2026, 9, 21)
+    assert targets.next_monday(date(2026, 9, 14)) == date(2026, 9, 14)  # a Monday
+    assert targets.next_monday(date(2026, 9, 16)) == date(2026, 9, 21)
+    assert targets.next_monday(date(2026, 9, 20)) == date(2026, 9, 21)
 
 
 def test_count_weeks_inclusive_of_race_week():
-    assert skeleton.count_weeks(race_goal("sprint", 10), MONDAY) == 10
-    assert skeleton.count_weeks(flat_goal("build", 6), MONDAY) == 6
+    assert targets.count_weeks(race_goal("sprint", 10), MONDAY) == 10
+    assert targets.count_weeks(flat_goal("build", 6), MONDAY) == 6
 
 
 @pytest.mark.parametrize(
@@ -640,7 +640,7 @@ def test_count_weeks_inclusive_of_race_week():
     ],
 )
 def test_phase_table_rows(goal_type, total, expected):
-    phases, compressed = skeleton.allocate_phases(goal_type, total)
+    phases, compressed = targets.allocate_phases(goal_type, total)
     counts = {p: phases.count(p) for p in set(phases)}
     assert counts == expected
     assert compressed is False
@@ -650,7 +650,7 @@ def test_phase_table_rows(goal_type, total, expected):
 
 
 def test_compression_drops_base_then_build():
-    phases, compressed = skeleton.allocate_phases("sprint", 7)  # minimum is 8
+    phases, compressed = targets.allocate_phases("sprint", 7)  # minimum is 8
     assert compressed is True
     assert phases.count("base") == 0
     assert phases.count("build") == 3
@@ -659,30 +659,30 @@ def test_compression_drops_base_then_build():
 
 def test_too_few_weeks_raises():
     with pytest.raises(ValueError, match="at least 4 weeks"):
-        skeleton.allocate_phases("sprint", 3)  # peak 2 + taper 1 + race 1
+        targets.allocate_phases("sprint", 3)  # peak 2 + taper 1 + race 1
 
 
 def test_recovery_every_fourth_week_in_base_and_build_only():
-    phases, _ = skeleton.allocate_phases("olympic", 14)  # 4 base, 5 build, 3 peak, 1 taper, 1 race
-    flags = skeleton.recovery_flags("olympic", phases)
+    phases, _ = targets.allocate_phases("olympic", 14)  # 4 base, 5 build, 3 peak, 1 taper, 1 race
+    flags = targets.recovery_flags("olympic", phases)
     assert [i for i, f in enumerate(flags) if f] == [3, 7]
     assert not any(flags[9:])
 
 
 def test_ironman_build_recovers_every_third_week():
-    phases, _ = skeleton.allocate_phases("ironman", 24)  # 8 base, 8 build
-    flags = skeleton.recovery_flags("ironman", phases)
+    phases, _ = targets.allocate_phases("ironman", 24)  # 8 base, 8 build
+    flags = targets.recovery_flags("ironman", phases)
     assert [i for i, f in enumerate(flags) if f] == [3, 7, 10, 13]
 
 
 def test_week1_fallback_chain():
-    assert skeleton.week1_tss("sprint", FitnessSnapshot(ctl=50, recent_weekly_tss=350)) == 350
-    assert skeleton.week1_tss("sprint", FitnessSnapshot(ctl=50)) == 350
-    assert skeleton.week1_tss("ironman", FitnessSnapshot()) == P.GOAL_FLOOR_TSS["ironman"]
+    assert targets.week1_tss("sprint", FitnessSnapshot(ctl=50, recent_weekly_tss=350)) == 350
+    assert targets.week1_tss("sprint", FitnessSnapshot(ctl=50)) == 350
+    assert targets.week1_tss("ironman", FitnessSnapshot()) == P.GOAL_FLOOR_TSS["ironman"]
 
 
 def test_ramp_is_capped_at_eight_percent():
-    weeks = skeleton.build(race_goal("sprint", 10), FIT, MONDAY)
+    weeks = targets.build(race_goal("sprint", 10), FIT, MONDAY)
     assert [w.phase for w in weeks[:2]] == ["base", "base"]
     assert weeks[0].target_tss == 350
     assert weeks[1].target_tss == pytest.approx(350 * 1.08, abs=1)
@@ -691,22 +691,22 @@ def test_ramp_is_capped_at_eight_percent():
 
 def test_ctl_cap_binds_before_ramp_when_ctl_is_low():
     fit = FitnessSnapshot(ctl=10, recent_weekly_tss=350)
-    weeks = skeleton.build(race_goal("sprint", 10), fit, MONDAY)
+    weeks = targets.build(race_goal("sprint", 10), fit, MONDAY)
     assert weeks[1].target_tss < 350 * 1.08
     # the cap for week 2 uses the CTL modeled after week 1's load, not the starting CTL
-    ctl_after_w1 = skeleton.ctl_after_week(10, 350)
-    assert weeks[1].target_tss == pytest.approx(skeleton.max_tss_for_ctl_rise(ctl_after_w1), abs=1)
+    ctl_after_w1 = targets.ctl_after_week(10, 350)
+    assert weeks[1].target_tss == pytest.approx(targets.max_tss_for_ctl_rise(ctl_after_w1), abs=1)
 
 
 def test_recovery_week_is_sixty_percent_and_ramp_resumes_from_last_load():
-    weeks = skeleton.build(race_goal("olympic", 14), FIT, MONDAY)
+    weeks = targets.build(race_goal("olympic", 14), FIT, MONDAY)
     assert weeks[3].is_recovery
     assert weeks[3].target_tss == pytest.approx(weeks[2].target_tss * 0.6, abs=1)
     assert weeks[4].target_tss == pytest.approx(weeks[2].target_tss * 1.08, abs=1)
 
 
 def test_peak_taper_race_factors():
-    weeks = skeleton.build(race_goal("ironman", 24), FIT, MONDAY)
+    weeks = targets.build(race_goal("ironman", 24), FIT, MONDAY)
     by_phase = {}
     for w in weeks:
         by_phase.setdefault(w.phase, []).append(w)
@@ -720,16 +720,16 @@ def test_peak_taper_race_factors():
 
 
 def test_maintenance_flat_and_recovery_goal_half():
-    m = skeleton.build(flat_goal("maintenance", 4), FIT, MONDAY)
+    m = targets.build(flat_goal("maintenance", 4), FIT, MONDAY)
     assert {w.target_tss for w in m} == {350}
-    r = skeleton.build(flat_goal("recovery", 2), FIT, MONDAY)
+    r = targets.build(flat_goal("recovery", 2), FIT, MONDAY)
     assert {w.target_tss for w in r} == {175}
     assert {w.phase for w in r} == {"recovery"}
 
 
 def test_hours_cap_recomputes_tss_and_flags():
     g = race_goal("sprint", 10, weekly_hours_max=5)
-    w = skeleton.build(g, FIT, MONDAY)[0]  # base, IF 0.70: 350 TSS would be 7.1 h
+    w = targets.build(g, FIT, MONDAY)[0]  # base, IF 0.70: 350 TSS would be 7.1 h
     assert w.target_hours == 5
     assert w.target_tss == pytest.approx(5 * 0.70**2 * 100, abs=1)
     assert P.FLAG_HOURS_CAPPED in w.flags
@@ -737,7 +737,7 @@ def test_hours_cap_recomputes_tss_and_flags():
 
 def test_hours_floor_not_applied_to_recovery_taper_race():
     g = race_goal("olympic", 14, weekly_hours_min=8, weekly_hours_max=30)
-    weeks = skeleton.build(g, FIT, MONDAY)
+    weeks = targets.build(g, FIT, MONDAY)
     assert weeks[0].target_hours == 8 and P.FLAG_HOURS_CAPPED in weeks[0].flags
     rec = weeks[3]
     assert rec.is_recovery and rec.target_hours < 8
@@ -745,38 +745,38 @@ def test_hours_floor_not_applied_to_recovery_taper_race():
 
 
 def test_compressed_flag_on_every_week():
-    weeks = skeleton.build(race_goal("sprint", 7), FIT, MONDAY)
+    weeks = targets.build(race_goal("sprint", 7), FIT, MONDAY)
     assert all(P.FLAG_COMPRESSED in w.flags for w in weeks)
 
 
 def test_build_requires_monday():
     with pytest.raises(ValueError, match="Monday"):
-        skeleton.build(race_goal("sprint", 10), FIT, MONDAY + timedelta(days=1))
+        targets.build(race_goal("sprint", 10), FIT, MONDAY + timedelta(days=1))
 
 
 def test_week_dates_are_consecutive_mondays():
-    weeks = skeleton.build(race_goal("sprint", 10), FIT, MONDAY)
+    weeks = targets.build(race_goal("sprint", 10), FIT, MONDAY)
     assert [w.week_start for w in weeks] == [MONDAY + timedelta(weeks=i) for i in range(10)]
 
 
 def test_infer_phases_from_load_curve():
     curve = [300, 320, 340, 360, 380, 390, 400, 320, 250, 120]
-    assert skeleton.infer_phases(curve) == [
+    assert targets.infer_phases(curve) == [
         "build", "build", "build", "peak", "peak", "peak", "peak", "taper", "taper", "race"
     ]
-    assert skeleton.infer_phases([200]) == ["race"]
-    assert skeleton.infer_phases([]) == []
+    assert targets.infer_phases([200]) == ["race"]
+    assert targets.infer_phases([]) == []
 ```
 
 - [x] **Step 2: Run to verify failure**
 
-Run: `uv run pytest packages/tri-planning/tests/test_skeleton.py -q`
+Run: `uv run pytest packages/tri-planning/tests/test_targets.py -q`
 Expected: `ImportError` for `periodization`.
 
 - [x] **Step 3: Write `periodization.py`**
 
 ```python
-"""Every periodization constant. Change numbers here; the tests in test_skeleton.py pin them."""
+"""Every periodization constant. Change numbers here; the tests in test_targets.py pin them."""
 
 from __future__ import annotations
 
@@ -859,7 +859,7 @@ FLAG_HOURS_CAPPED = "hours_capped"
 PEAK_PLATEAU_FRACTION = 0.9
 ```
 
-- [x] **Step 4: Write `skeleton.py`**
+- [x] **Step 4: Write `targets.py`**
 
 ```python
 """Goal + fitness -> week targets. Pure: no I/O, no model calls."""
@@ -1069,7 +1069,7 @@ def infer_phases(weekly_tss: list[float]) -> list[Phase]:
 
 - [x] **Step 5: Run the tests**
 
-Run: `uv run pytest packages/tri-planning/tests/test_skeleton.py -q`
+Run: `uv run pytest packages/tri-planning/tests/test_targets.py -q`
 Expected: all pass. If `test_hours_floor_not_applied_to_recovery_taper_race` fails on the recovery week, check that the recovery week's TSS (about `0.6 * 408 = 245`, `3.4 h` at IF 0.75... at IF 0.70 base it is `5.0 h`) is below the 8 h floor; it is.
 
 - [ ] **Step 6: Lint, type-check, commit (Brian)** _(checks pass; commit is Brian's)_
@@ -1077,7 +1077,7 @@ Expected: all pass. If `test_hours_floor_not_applied_to_recovery_taper_race` fai
 ```bash
 uv run ruff check . && uv run ruff format --check . && uv run mypy
 git add -A
-git commit -m "feat(planning): periodization constants and skeleton builder"
+git commit -m "feat(planning): periodization constants and targets builder"
 ```
 
 ---
@@ -1318,7 +1318,7 @@ git commit -m "feat(planning): week validator"
   - `get_goal(conn, goal_id: int) -> StoredGoal | None`
   - `get_active_goal(conn) -> StoredGoal | None` (newest active)
   - `set_goal_event(conn, goal_id: int, tp_event_id: str) -> None`
-  - `insert_plan(conn, goal_id: int, source: str, tp_plan_id: str | None, skeleton: list[WeekTarget]) -> int` (also inserts one `plan_weeks` row per target)
+  - `insert_plan(conn, goal_id: int, source: str, tp_plan_id: str | None, targets: list[WeekTarget]) -> int` (also inserts one `plan_weeks` row per target)
   - `get_plan(conn, plan_id: int) -> StoredPlan | None`
   - `get_active_plan(conn, goal_id: int) -> StoredPlan | None`
   - `list_weeks(conn, plan_id: int) -> list[PlanWeekRow]` ordered by `week_start`
@@ -1400,7 +1400,7 @@ def test_plan_and_weeks(pdb):
     pid = repo.insert_plan(pdb, gid, "generated", None, targets())
     plan = repo.get_plan(pdb, pid)
     assert plan.start_date == MON and plan.end_date == MON + timedelta(weeks=2, days=6)
-    assert [t.target_tss for t in plan.skeleton] == [300, 301, 302]
+    assert [t.target_tss for t in plan.targets] == [300, 301, 302]
     assert repo.get_active_plan(pdb, gid).id == pid
     weeks = repo.list_weeks(pdb, pid)
     assert [w.week_start for w in weeks] == [MON, MON + timedelta(weeks=1), MON + timedelta(weeks=2)]
@@ -1557,23 +1557,23 @@ def set_goal_event(conn: Conn, goal_id: int, tp_event_id: str) -> None:
 
 
 def insert_plan(
-    conn: Conn, goal_id: int, source: str, tp_plan_id: str | None, skeleton: list[WeekTarget]
+    conn: Conn, goal_id: int, source: str, tp_plan_id: str | None, targets: list[WeekTarget]
 ) -> int:
-    if not skeleton:
-        raise ValueError("skeleton is empty")
-    start = skeleton[0].week_start
-    end = skeleton[-1].week_start + timedelta(days=6)
+    if not targets:
+        raise ValueError("targets is empty")
+    start = targets[0].week_start
+    end = targets[-1].week_start + timedelta(days=6)
     row = conn.execute(
         """
-        insert into training_plans (goal_id, source, tp_plan_id, start_date, end_date, skeleton)
+        insert into training_plans (goal_id, source, tp_plan_id, start_date, end_date, targets)
         values (%s, %s, %s, %s, %s, %s) returning id
         """,
-        (goal_id, source, tp_plan_id, start, end, Jsonb([t.model_dump(mode="json") for t in skeleton])),
+        (goal_id, source, tp_plan_id, start, end, Jsonb([t.model_dump(mode="json") for t in targets])),
     ).fetchone()
     assert row is not None
     plan_id = int(row["id"])
     with conn.cursor() as cur:
-        for t in skeleton:
+        for t in targets:
             cur.execute(
                 "insert into plan_weeks (plan_id, week_start, phase, target_tss, target_hours) "
                 "values (%s, %s, %s, %s, %s)",
@@ -1590,7 +1590,7 @@ def _plan(row: dict[str, Any]) -> StoredPlan:
         tp_plan_id=row["tp_plan_id"],
         start_date=row["start_date"],
         end_date=row["end_date"],
-        skeleton=[WeekTarget.model_validate(t) for t in row["skeleton"]],
+        targets=[WeekTarget.model_validate(t) for t in row["targets"]],
         status=row["status"],
     )
 
@@ -1749,17 +1749,17 @@ Append to `packages/tri-planning/README.md`:
 
 - `planning/models.py`: goal, week target, session, week, calendar change.
 - `planning/periodization.py`: every tunable number (phase table, ramp, recovery, taper, IF).
-- `planning/skeleton.py`: `build(goal, fitness, start)` -> week targets. Pure.
+- `planning/targets.py`: `build(goal, fitness, start)` -> week targets. Pure.
 - `planning/validate.py`: `week(planned, target, goal)` -> violations. Pure.
 - `repo.py`: the four planning tables (`migrations/002_planning.sql`).
 
-Try the skeleton without a database:
+Try the targets builder without a database:
 
 ```bash
 uv run python -c "
 from datetime import date
 from tri_planning.planning.models import TrainingGoal, FitnessSnapshot
-from tri_planning.planning.skeleton import build, next_monday
+from tri_planning.planning.targets import build, next_monday
 g = TrainingGoal(goal_type='olympic', event_date=date(2026,12,13), weekly_hours_min=6,
                  weekly_hours_max=10, available_days={d:'any' for d in ('mon','tue','wed','thu','fri','sat','sun')})
 for w in build(g, FitnessSnapshot(ctl=45), next_monday(date.today())):
@@ -1788,7 +1788,7 @@ git commit -m "docs(planning): package README"
 - Spec §6.3 models: all four plus `ReviewDecision` (needed by §6.1 state) in Task 2.
 - Spec §7.1 every row of the phase table is a parametrized test case; compression and the minimum are tested. §7.2 each bullet has a test: week-1 chain, 8 % ramp, CTL cap, recovery 60 % with ramp resuming from the last real week, Ironman 3-week cadence, peak hold, taper 80/60/45, race 30 %, maintenance flat, recovery 50 %, hours clamp with TSS recompute and flag, sport hints per phase, bought-plan phase inference. §7.3 each rule has a test in Task 4.
 - Spec §10: `TRI_PLANNING_HORIZON_WEEKS` in `PlanningSettings`; the LangSmith project is a planning-specific env var so one `.env` can serve both agents (Plan 3 exports it as `LANGSMITH_PROJECT` before LangChain loads).
-- Type consistency: `validate.week` signature `(planned, target, goal)` and `skeleton.build(goal, fitness, start)` are the names Plan 3's design and skeleton nodes call; `repo` function names above are the ones Plan 3 imports.
+- Type consistency: `validate.week` signature `(planned, target, goal)` and `targets.build(goal, fitness, start)` are the names Plan 3's design and targets nodes call; `repo` function names above are the ones Plan 3 imports.
 
 ---
 
@@ -1799,5 +1799,6 @@ git commit -m "docs(planning): package README"
 - **Task 3:** ruff reformatted the `PHASE_TABLE` rows (line length); no semantic change. Task 4 has 9 tests, not the 10 the plan says.
 - **Task 5:** `repo.py` and its tests are written and type-check; the 6 db tests skip until `002_planning.sql` is applied to `tri_analyze_test`. Re-run `uv run pytest packages/tri-planning/tests/test_repo.py -q` after applying.
 - **Smoke:** the README snippet (olympic, 14 weeks from 2026-09-07, CTL 45, no recent load -> week 1 = 7 x 45 = 315) yields base 315/340/367, recovery 220, build 397..500, peak 500 x3, taper 400, race 150. Peak weeks show fewer hours than the last build week (7.8 h vs 8.9 h) because peak IF is 0.80; that is the spec's intent (intensity, not volume) but worth watching in the first real plan.
-- **For Plan 3:** `PlanWeekRow.target_tss` is `float | None` (the column is nullable) while `WeekTarget.target_tss` is `float`; the design node should read targets from `StoredPlan.skeleton`, as Plan 3 already does, not from `plan_weeks`.
+- **For Plan 3:** `PlanWeekRow.target_tss` is `float | None` (the column is nullable) while `WeekTarget.target_tss` is `float`; the design node should read targets from `StoredPlan.targets`, as Plan 3 already does, not from `plan_weeks`.
+- **Rename (after Plan 2):** Brian chose `targets` over `skeleton` for the module, the graph node, and the `training_plans` column. Applied everywhere: `planning/targets.py`, `tests/test_targets.py`, `StoredPlan.targets`, `repo.insert_plan(..., targets)`, this plan's filename, the spec, and Plans 3 and 4 (`nodes/targets.py`, `make_targets_node`, `after_targets`, `changes_from: "targets"`). The node's inner coroutine is `targets_node`, not `targets`, so it cannot shadow the local `targets = build(...)` list. Because 002 was already applied to both databases, the column rename is `migrations/003_rename_skeleton_to_targets.sql` (one `alter table ... rename column`), which Brian applies; until then the four repo tests that touch `training_plans` fail with `UndefinedColumn`.
 

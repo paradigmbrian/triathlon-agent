@@ -1,5 +1,4 @@
 import json
-from datetime import date
 
 import pytest
 
@@ -56,10 +55,12 @@ def url(db):
 
 @pytest.mark.db
 def test_run_query_returns_columns_and_rows(url):
-    out = run_readonly_query(url, "select 1 as one, 'a' as letter, current_date as today")
+    # a fixed date, not current_date: the container runs on UTC and disagrees with local
+    # time in the evening
+    out = run_readonly_query(url, "select 1 as one, 'a' as letter, date '2026-01-02' as today")
     assert out["columns"] == ["one", "letter", "today"]
     assert out["rows"][0][:2] == [1, "a"]
-    assert out["rows"][0][2] == date.today().isoformat()  # JSON-safe
+    assert out["rows"][0][2] == "2026-01-02"  # JSON-safe
     assert out["row_count"] == 1 and out["truncated"] is False
 
 

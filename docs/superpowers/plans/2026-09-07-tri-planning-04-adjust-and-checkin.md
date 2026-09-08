@@ -357,7 +357,7 @@ from typing import Any
 from tri_core.db.repo import Conn
 from tri_planning import repo
 from tri_planning.planning.models import PlanWeekRow, TrainingGoal
-from tri_planning.planning.skeleton import week_monday
+from tri_planning.planning.targets import week_monday
 
 MIN_DESIGNED_WEEKS = 2
 
@@ -660,7 +660,7 @@ The node's loop becomes `week, violations = await design_week(deps, goal, target
 
 `tools/design_next_week.py`:
 ```python
-"""Window extension for the adjust sub-agent: design the next skeleton week with the design prompt."""
+"""Window extension for the adjust sub-agent: design the next target week with the design prompt."""
 
 from __future__ import annotations
 
@@ -674,7 +674,7 @@ from langchain_core.tools import BaseTool, StructuredTool, InjectedToolArg
 from tri_planning import repo
 from tri_planning.graph.deps import GraphDeps
 from tri_planning.graph.nodes.design import design_week, session_changes
-from tri_planning.planning.skeleton import week_monday
+from tri_planning.planning.targets import week_monday
 
 
 def make_design_next_week_tool(deps: GraphDeps, plan_id_getter: Callable[[], int | None]) -> BaseTool:
@@ -695,7 +695,7 @@ def make_design_next_week_tool(deps: GraphDeps, plan_id_getter: Callable[[], int
         row = next((w for w in weeks if w.week_start >= monday and w.designed is None), None)
         if row is None:
             return json.dumps({"error": "every remaining week is already designed"})
-        target = next(t for t in plan.skeleton if t.week_start == row.week_start)
+        target = next(t for t in plan.targets if t.week_start == row.week_start)
         previous = next((w.designed for w in reversed(weeks) if w.designed and w.week_start < row.week_start), None)
         week, violations = await design_week(deps, stored.goal, target, thresholds, previous, None, config)
         with deps.connect() as conn:
@@ -750,7 +750,7 @@ from tri_core.testing import ScriptedChatModel, tool_call
 from tri_planning import repo
 from tri_planning.graph.nodes.adjust import changes_from_messages, make_adjust_node
 from tri_planning.planning.models import CalendarChange, FitnessSnapshot, PlannedSession, TrainingGoal
-from tri_planning.planning.skeleton import build
+from tri_planning.planning.targets import build
 from tri_planning.testing import GOAL_ARGS, MONDAY, FakeTp, week_json
 
 pytestmark = pytest.mark.db
@@ -1190,7 +1190,7 @@ git commit -m "feat(planning): check-in command; Garmin live tools in chat"
 
 ### Task 6: LangSmith design evaluator
 
-**What this teaches:** a LangSmith dataset of inputs (skeleton weeks) and a code evaluator (`validate.week`) that scores each output, giving a pass rate per prompt version without a judge model.
+**What this teaches:** a LangSmith dataset of inputs (target weeks) and a code evaluator (`validate.week`) that scores each output, giving a pass rate per prompt version without a judge model.
 
 **Files:**
 - Create: `packages/tri-planning/src/tri_planning/evals/__init__.py`, `packages/tri-planning/src/tri_planning/evals/design_eval.py`, `scripts/design_eval.py`
@@ -1244,7 +1244,7 @@ Expected: `ImportError`.
 
 `evals/design_eval.py`:
 ```python
-"""Dataset of skeleton weeks and a code evaluator for the design prompt."""
+"""Dataset of target weeks and a code evaluator for the design prompt."""
 
 from __future__ import annotations
 
@@ -1256,7 +1256,7 @@ from tri_planning.graph.deps import GraphDeps
 from tri_planning.graph.nodes.design import design_week
 from tri_planning.planning import validate
 from tri_planning.planning.models import FitnessSnapshot, PlannedWeek, TrainingGoal, WeekTarget
-from tri_planning.planning.skeleton import build, next_monday
+from tri_planning.planning.targets import build, next_monday
 
 ANY = {d: "any" for d in ("mon", "tue", "wed", "thu", "fri", "sat", "sun")}
 RESTRICTED = {"mon": [], "tue": ["swim", "run"], "wed": ["bike"], "thu": ["run"], "fri": ["swim"], "sat": "any", "sun": ["bike", "run", "brick"]}
@@ -1312,7 +1312,7 @@ def design_target(deps: GraphDeps) -> Callable[[dict[str, Any]], Awaitable[dict[
 
 `scripts/design_eval.py`:
 ```python
-"""Create/refresh the LangSmith dataset of skeleton weeks and score the design prompt.
+"""Create/refresh the LangSmith dataset of target weeks and score the design prompt.
 
     uv run python scripts/design_eval.py --prompt-version v1
 
@@ -1340,7 +1340,7 @@ def ensure_dataset(client: Client, name: str) -> None:
     examples = build_examples(date.today())
     if client.has_dataset(dataset_name=name):
         return
-    ds = client.create_dataset(dataset_name=name, description="Skeleton weeks for the tri-planning design prompt")
+    ds = client.create_dataset(dataset_name=name, description="Target weeks for the tri-planning design prompt")
     client.create_examples(dataset_id=ds.id, inputs=[e["inputs"] for e in examples], metadata=[e["metadata"] for e in examples])
 
 
@@ -1453,7 +1453,7 @@ For a cron job: `uv run tri-planning check-in --yes` applies without asking; lea
 to review in the next `chat`.
 ```
 
-Root `README.md` Run section: add the `check-in` line. Status: add `- tri-planning milestones 2-4 (2026-09): skeleton, graph with review interrupt, adjust and check-in; design-prompt validator pass rate: the `validator_pass` mean printed by `scripts/design_eval.py`.`
+Root `README.md` Run section: add the `check-in` line. Status: add `- tri-planning milestones 2-4 (2026-09): targets, graph with review interrupt, adjust and check-in; design-prompt validator pass rate: the `validator_pass` mean printed by `scripts/design_eval.py`.`
 
 - [ ] **Step 3: Record §15 findings in the spec**
 
@@ -1478,5 +1478,5 @@ git push
 - Spec §6.2 adjust: tools (`query_training_db`, Garmin readiness and HRV, `tp_get_workouts`, `propose_calendar_changes`, `design_next_week`) in Tasks 3 and 4; the checklist and lever order verbatim in `ADJUST_RULES` (Task 2, tested); window extension when fewer than two designed weeks remain (`MIN_DESIGNED_WEEKS`, tested in Tasks 2 and 4); ownership read from `plan_changes` before proposing (`owned_workouts` in the prompt, `athlete_requested` rule).
 - Spec §8 `check-in`: sync first, fixed prompt with every listed item, prints the change set, exits paused, `--yes` approves (Task 5).
 - Spec §11: adjust ends on `propose_calendar_changes` (Task 4), live create/update/delete (Task 7).
-- Spec §12: dataset of skeleton weeks and a code evaluator running `validate.week` with a pass rate per prompt version (Task 6).
+- Spec §12: dataset of target weeks and a code evaluator running `validate.week` with a pass rate per prompt version (Task 6).
 - Type consistency: `design_week(deps, goal, target, thresholds, previous, note, config)` is the one signature used by the design node, `design_next_week` and the evaluator; `changes_from_messages` consumes the JSON shapes that `propose_calendar_changes` and `design_next_week` return; `run_checkin` uses `run_turn`, `render_changes` and `TurnPrinter.interrupt` from Plan 3.

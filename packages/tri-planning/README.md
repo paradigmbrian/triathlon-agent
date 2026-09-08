@@ -9,17 +9,17 @@ Design: `docs/superpowers/specs/2026-09-07-tri-planning-design.md`. Plans:
 
 - `planning/models.py`: goal, week target, session, week, calendar change.
 - `planning/periodization.py`: every tunable number (phase table, ramp, recovery, taper, IF).
-- `planning/skeleton.py`: `build(goal, fitness, start)` -> week targets. Pure.
+- `planning/targets.py`: `build(goal, fitness, start)` -> week targets. Pure.
 - `planning/validate.py`: `week(planned, target, goal)` -> violations. Pure.
 - `repo.py`: the four planning tables (`migrations/002_planning.sql`).
 
-Try the skeleton without a database:
+Try the targets without a database:
 
 ```bash
 uv run python -c "
 from datetime import date
 from tri_planning.planning.models import TrainingGoal, FitnessSnapshot
-from tri_planning.planning.skeleton import build, next_monday
+from tri_planning.planning.targets import build, next_monday
 g = TrainingGoal(goal_type='olympic', event_date=date(2026,12,13), weekly_hours_min=6,
                  weekly_hours_max=10, available_days={d:'any' for d in ('mon','tue','wed','thu','fri','sat','sun')})
 for w in build(g, FitnessSnapshot(ctl=45), next_monday(date.today())):

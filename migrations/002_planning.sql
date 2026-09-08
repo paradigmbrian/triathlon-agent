@@ -25,7 +25,7 @@ create table if not exists training_plans (
   tp_plan_id    text,
   start_date    date not null,
   end_date      date not null,
-  skeleton      jsonb not null,         -- [WeekTarget as JSON]
+  skeleton      jsonb not null,         -- [WeekTarget as JSON]; renamed to targets in 003
   status        text not null default 'active',   -- active | superseded | completed
   created_at    timestamptz not null default now()
 );
