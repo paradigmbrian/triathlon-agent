@@ -97,7 +97,7 @@ Responsibilities: `tp_calls.py` is the only place that knows TrainingPeaks tool 
   - `tp_calls.result_workout_id(change: CalendarChange, result: Any) -> str | None`.
   - `tp_calls.event_change(goal: TrainingGoal) -> CalendarChange`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `packages/tri-planning/tests/test_tp_calls.py`:
 ```python
@@ -188,12 +188,12 @@ def test_allowlists_are_disjoint_and_named_as_expected():
     assert all(t.startswith("tp_") for t in TP_WRITE_TOOLS + TP_READ_TOOLS)
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `uv run pytest packages/tri-planning/tests/test_tp_calls.py -q`
 Expected: `ImportError`.
 
-- [ ] **Step 3: Write `allowlist.py` and `tp_calls.py`**
+- [x] **Step 3: Write `allowlist.py` and `tp_calls.py`**
 
 `packages/tri-planning/src/tri_planning/allowlist.py`:
 ```python
@@ -301,12 +301,12 @@ def event_change(goal: TrainingGoal) -> CalendarChange:
     )
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 Run: `uv run pytest packages/tri-planning/tests/test_tp_calls.py -q`
 Expected: 9 passed (the parametrized test counts as 4).
 
-- [ ] **Step 5: Lint, type-check, commit (Brian)**
+- [x] **Step 5: Lint, type-check, commit (Brian)**
 
 ```bash
 uv run ruff check . && uv run ruff format --check . && uv run mypy
