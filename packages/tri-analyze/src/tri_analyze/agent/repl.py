@@ -1,6 +1,6 @@
 """Terminal REPL: stream a turn, show tool calls, loop.
 
-LangChain lesson: LangGraph streaming. `stream_mode=["messages", "updates"]` yields
+LangGraph streaming: `stream_mode=["messages", "updates"]` yields
 ("messages", (chunk, meta)) for token-level output and ("updates", {node: {...}}) when a node
 finishes. Tool calls are visible in the model node's update; tool results arrive as
 ToolMessages from the tools node.

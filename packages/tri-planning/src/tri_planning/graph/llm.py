@@ -25,7 +25,7 @@ def make_model(settings: Settings) -> ChatAnthropic:
 def make_subagent(model: BaseChatModel, tools: Sequence[BaseTool], system_prompt: str) -> Any:
     """A tool-calling loop with no checkpointer of its own: the parent graph owns the messages.
 
-    LangGraph lesson: a compiled graph invoked inside a node is a subgraph. `checkpointer=False`
+    A compiled graph invoked inside a node is a subgraph. `checkpointer=False`
     stops it from writing its own checkpoints under the parent's namespace; the parent state
     already carries the conversation.
     """

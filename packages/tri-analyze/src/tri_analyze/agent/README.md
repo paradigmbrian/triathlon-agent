@@ -21,7 +21,7 @@ around that loop.
 
 ```
 agent/
-  sql_tool.py     query_training_db: the agent's main tool, read-only by construction
+  (sql_tool.py)   query_training_db lives in tri_core/db/sql_tool.py; shared with tri-planning
   prompt.py       Athlete context + system prompt rendering + feedback rules
   agent.py        make_model (ChatAnthropic) + build_agent (create_agent graph)
   live_tools.py   MCP server tools bound as LangChain tools over persistent sessions
@@ -30,7 +30,7 @@ agent/
 
 `cli.py` (one level up) wires these together for `tri-analyze chat`.
 
-### `sql_tool.py`: the tool is a function plus a docstring
+### `tri_core/db/sql_tool.py`: the tool is a function plus a docstring
 
 A LangChain tool is a typed Python function wrapped with `@tool`. LangChain turns the
 signature into a JSON schema and sends the docstring to the model as the tool's description.
@@ -143,7 +143,7 @@ and token counts (look for `cache_read_input_tokens` on the second turn).
 
 ## Knobs you will actually turn
 
-- **The model writes bad SQL:** edit `SCHEMA_DOC` in `sql_tool.py`. Add a column note or an
+- **The model writes bad SQL:** edit `SCHEMA_DOC` in `tri_core/db/sql_tool.py`. Add a column note or an
   example query shaped like the question that failed.
 - **Feedback is vague or misses something:** edit `FEEDBACK_RULES` in `prompt.py`.
 - **The model ignores a live tool or picks the wrong one:** edit `_tools_block` in

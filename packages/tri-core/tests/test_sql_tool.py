@@ -2,13 +2,13 @@ import json
 
 import pytest
 
-from tri_analyze.agent.sql_tool import (
+from tri_core.config import Settings
+from tri_core.db.sql_tool import (
     SCHEMA_DOC,
     make_query_tool,
     run_readonly_query,
     validate_select,
 )
-from tri_core.config import Settings
 
 
 @pytest.mark.parametrize(

@@ -1,6 +1,6 @@
 """Read-only SQL access for the agent.
 
-LangChain lesson: a tool is a typed function plus a docstring. The docstring and the
+A tool is a typed function plus a docstring. The docstring and the
 description are the only API the model sees, so the schema lives here, not in code the
 model can't read.
 """
@@ -40,6 +40,16 @@ daily_metrics (one row per day):
 
 sync_state: source, last_synced_date, last_run_at, last_status, last_error.
 
+training_goals (planning agent): id, goal_type, event_name, event_date, duration_weeks,
+  priority, weekly_hours_min, weekly_hours_max, available_days jsonb, constraints jsonb, status.
+training_plans: id, goal_id, source ('generated'|'tp_plan'), start_date, end_date,
+  targets jsonb, status.
+plan_weeks: plan_id, week_start (Monday), phase, target_tss, target_hours, designed jsonb,
+  written_to_tp.
+plan_changes: plan_id, thread_id, operation, tp_workout_id, workout_date, payload jsonb,
+  result jsonb, reason, applied_at  (audit of every calendar write; a workout is
+  agent-authored iff its id is here).
+
 Examples:
   -- yesterday's completed sessions
   select workout_date, sport, title, actual_duration_sec, actual_tss, avg_hr, garmin_activity_id
@@ -56,6 +66,8 @@ Examples:
   -- load and recovery, last 14 days
   select metric_date, tss_day, ctl, atl, tsb, sleep_score, hrv_overnight_avg, training_readiness
   from daily_metrics where metric_date >= current_date - 14 order by 1;
+  -- the active plan's week targets
+  select week_start, phase, target_tss from plan_weeks order by 1;
 """
 
 _ALLOWED_HEADS = ("select", "with")

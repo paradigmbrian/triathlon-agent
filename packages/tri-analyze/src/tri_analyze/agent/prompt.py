@@ -1,6 +1,6 @@
 """Athlete context loading and system prompt rendering.
 
-LangChain lesson: the system prompt is where domain judgment lives. It is rendered once
+The system prompt is where domain judgment lives. It is rendered once
 per session from data so it stays byte-stable across turns (prompt caching), and it tells
 the model *how* to give feedback, not just what the tables are.
 """

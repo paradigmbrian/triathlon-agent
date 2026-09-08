@@ -623,7 +623,7 @@ git commit -m "feat(planning): graph state, deps, sub-agent factory, test double
 
 Note on the SQL tool: `tri_analyze.agent.sql_tool.make_query_tool` cannot be imported (dependency direction). Move it to tri-core in this task: `mv packages/tri-analyze/src/tri_analyze/agent/sql_tool.py packages/tri-core/src/tri_core/db/sql_tool.py`, move its test `packages/tri-analyze/tests/test_sql_tool.py` to `packages/tri-core/tests/test_sql_tool.py`, and rewrite the two imports (`tri_analyze/cli.py`, the test) to `from tri_core.db.sql_tool import make_query_tool`. `sql_tool.py` imports only psycopg and `langchain_core.tools`, both tri-core dependencies already. Its `SCHEMA_DOC` gains a paragraph for the four planning tables (`training_goals`, `training_plans`, `plan_weeks`, `plan_changes`) with one example (`select week_start, phase, target_tss from plan_weeks order by 1`).
 
-- [ ] **Step 1: Move the SQL tool into tri-core**
+- [x] **Step 1: Move the SQL tool into tri-core**
 
 ```bash
 mv packages/tri-analyze/src/tri_analyze/agent/sql_tool.py packages/tri-core/src/tri_core/db/sql_tool.py
@@ -642,7 +642,7 @@ plan_changes: plan_id, thread_id, operation, tp_workout_id, workout_date, payloa
   reason, applied_at  (audit of every calendar write; a workout is agent-authored iff its id is here).
 ```
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 `packages/tri-planning/tests/test_goal_tools.py`:
 ```python
@@ -738,12 +738,12 @@ async def test_intake_sets_goal_and_phase(make_deps):
     assert [type(m).__name__ for m in out["messages"]] == ["AIMessage", "ToolMessage", "AIMessage"]
 ```
 
-- [ ] **Step 3: Run to verify failure**
+- [x] **Step 3: Run to verify failure**
 
 Run: `uv run pytest packages/tri-planning/tests/test_goal_tools.py packages/tri-planning/tests/test_intake_node.py -q`
 Expected: `ImportError`.
 
-- [ ] **Step 4: Write `tools/goal.py`**
+- [x] **Step 4: Write `tools/goal.py`**
 
 `packages/tri-planning/src/tri_planning/tools/goal.py`:
 ```python
@@ -821,7 +821,7 @@ def make_goal_tools(connect: ConnectFactory, tp: ToolCaller | None, today: Calla
     return [set_goal_tool, list_tool]
 ```
 
-- [ ] **Step 5: Write `prompts/intake.py` and `graph/nodes/intake.py`**
+- [x] **Step 5: Write `prompts/intake.py` and `graph/nodes/intake.py`**
 
 `prompts/intake.py`:
 ```python
@@ -917,12 +917,12 @@ def make_intake_node(deps: GraphDeps) -> Any:
     return intake
 ```
 
-- [ ] **Step 6: Run the tests**
+- [x] **Step 6: Run the tests**
 
 Run: `uv run pytest packages/tri-planning/tests/test_goal_tools.py packages/tri-planning/tests/test_intake_node.py -q`
 Expected: 8 passed. If `StructuredTool.from_function` rejects `**kwargs` with `args_schema`, replace `set_training_goal(**kwargs)` with an explicit signature listing the eleven `TrainingGoal` fields with the same defaults, and keep `args_schema=TrainingGoal`.
 
-- [ ] **Step 7: Full suite, lint, type-check, commit (Brian)**
+- [x] **Step 7: Full suite, lint, type-check, commit (Brian)**
 
 ```bash
 uv run pytest -q && uv run ruff check . && uv run ruff format --check . && uv run mypy

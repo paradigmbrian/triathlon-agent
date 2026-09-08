@@ -1,6 +1,6 @@
 """Model and agent graph construction.
 
-LangChain lesson: `create_agent` builds a LangGraph with two nodes, `model` and `tools`,
+`create_agent` builds a LangGraph with two nodes, `model` and `tools`,
 and loops until the model stops calling tools. The checkpointer is what turns single calls
 into a conversation. Middleware wraps the model call; here it adds Anthropic `cache_control`
 markers so the stable prefix (system prompt + tool schemas) is served from cache.

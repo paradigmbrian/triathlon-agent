@@ -46,8 +46,8 @@ async def _chat(*, no_live: bool) -> None:
     from tri_analyze.agent.live_tools import open_live_tools
     from tri_analyze.agent.prompt import load_athlete_context, render_system_prompt
     from tri_analyze.agent.repl import chat_loop
-    from tri_analyze.agent.sql_tool import make_query_tool
     from tri_core.db.connection import connect
+    from tri_core.db.sql_tool import make_query_tool
 
     settings = get_settings()
     if not settings.anthropic_api_key:

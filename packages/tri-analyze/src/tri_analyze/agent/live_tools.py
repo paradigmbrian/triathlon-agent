@@ -1,6 +1,6 @@
 """Bind allow-listed MCP server tools as LangChain tools over persistent sessions.
 
-LangChain lesson: MCP tools become ordinary LangChain BaseTools. The adapter converts each
+MCP tools become ordinary LangChain BaseTools. The adapter converts each
 server tool's JSON schema into a tool the model can call, and the session stays open so
 calls are fast. The allow-list keeps the bound tool count small on purpose.
 """
