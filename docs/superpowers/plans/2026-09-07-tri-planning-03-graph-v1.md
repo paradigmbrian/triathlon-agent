@@ -2052,7 +2052,7 @@ git commit -m "feat(planning): graph wiring with review interrupt, end-to-end te
   - `checkpointer.checkpointer_ready(url: str) -> bool` (sync; true when the `checkpoints` table exists).
   - `checkpointer.SETUP_HINT: str` (the command to run).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `packages/tri-planning/tests/test_checkpointer.py`:
 ```python
@@ -2098,12 +2098,12 @@ async def test_second_process_resumes_from_postgres(nocommit, make_deps):
 
 Note: the graph's own rows (goal, plan) go through `nocommit` and roll back; only checkpoint rows persist, and the `finally` deletes them.
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `uv run pytest packages/tri-planning/tests/test_checkpointer.py -q`
 Expected: `ImportError`.
 
-- [ ] **Step 3: Write `graph/checkpointer.py` and the setup script**
+- [x] **Step 3: Write `graph/checkpointer.py` and the setup script**
 
 `graph/checkpointer.py`:
 ```python
@@ -2177,7 +2177,7 @@ uv run pytest packages/tri-planning/tests/test_checkpointer.py -q
 ```
 Expected: `checkpoint tables ready in tri_analyze` and `... tri_analyze_test`; 1 passed. If `from_conn_string` complains about pipeline mode or `autocommit`, pass the connection explicitly: `AsyncPostgresSaver(await psycopg.AsyncConnection.connect(url, autocommit=True, prepare_threshold=0, row_factory=dict_row))` in `open_checkpointer` and close it on exit. Verify this against the installed package's `from_conn_string` source and note the finding in spec §15.
 
-- [ ] **Step 5: Lint, type-check, commit (Brian)**
+- [x] **Step 5: Lint, type-check, commit (Brian)**
 
 ```bash
 uv run ruff check . && uv run ruff format --check . && uv run mypy
