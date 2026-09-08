@@ -1793,7 +1793,7 @@ git commit -m "feat(planning): review interrupt and apply node"
   - Route functions (module level, testable): `route_start(state) -> "review" | "intake" | "targets" | "adjust"`, `after_intake(state) -> "targets" | END`, `after_targets(state) -> "review" | "design" | END`, `after_review(state) -> "apply" | "design" | "adjust" | END`, `after_apply(state) -> "targets" | END`.
   - `nodes.adjust.adjust_node(state) -> {"messages": [AIMessage("The plan is active. Adjustments and check-in arrive in milestone 4.")]}`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `packages/tri-planning/tests/test_graph.py`:
 ```python
@@ -1918,12 +1918,12 @@ def test_route_functions():
     assert after_review({"review_decision": None}) == "__end__"
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `uv run pytest packages/tri-planning/tests/test_graph.py -q`
 Expected: `ImportError`.
 
-- [ ] **Step 3: Write `graph/nodes/adjust.py` and `graph/graph.py`**
+- [x] **Step 3: Write `graph/nodes/adjust.py` and `graph/graph.py`**
 
 `graph/nodes/adjust.py`:
 ```python
@@ -2023,14 +2023,14 @@ def build_graph(deps: GraphDeps, checkpointer: BaseCheckpointSaver[Any]) -> Any:
     return g.compile(checkpointer=checkpointer, name="tri-planning")
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 Run: `uv run pytest packages/tri-planning/tests/test_graph.py -q`
 Expected: 7 passed. Two things to check if not:
 - The scripted `week_call(300)` must be within 10 % of the week-1 target for the test database's fitness rows. The test database has no `daily_metrics` rows outside a transaction, so week 1 falls to the olympic floor `300`. If a test asserts a `VIOLATIONS` summary unexpectedly, print `await first_target(nocommit)` and script that number.
 - `Command(resume=...)` with a compiled graph and `ainvoke` returns the final state; `__interrupt__` is present in the returned dict only when the run paused.
 
-- [ ] **Step 5: Lint, type-check, commit (Brian)**
+- [x] **Step 5: Lint, type-check, commit (Brian)**
 
 ```bash
 uv run ruff check . && uv run ruff format --check . && uv run mypy
