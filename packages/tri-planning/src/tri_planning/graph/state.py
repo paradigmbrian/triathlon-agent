@@ -1,0 +1,23 @@
+"""Graph state. One reducer: messages accumulate; every other key is last-write-wins."""
+
+from __future__ import annotations
+
+from typing import Annotated, Literal, TypedDict
+
+from langchain_core.messages import AnyMessage
+from langgraph.graph.message import add_messages
+
+from tri_planning.planning.models import CalendarChange, ReviewDecision
+
+
+class PlanningState(TypedDict, total=False):
+    messages: Annotated[list[AnyMessage], add_messages]
+    phase: Literal["intake", "planning", "active"]
+    goal_id: int | None
+    plan_id: int | None
+    pending_changes: list[CalendarChange]
+    pending_summary: str | None
+    review_decision: ReviewDecision | None
+    last_error: str | None
+    changes_from: Literal["targets", "design", "adjust"] | None
+    tp_plan_applied: bool

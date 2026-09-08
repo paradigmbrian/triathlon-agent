@@ -332,7 +332,7 @@ git commit -m "feat(planning): TrainingPeaks call translation and allow-lists"
   - `tri_planning.testing`: `MONDAY = date(2026, 9, 14)`, `ALL_DAYS`, `GOAL_ARGS` (a valid olympic goal 14 weeks out, JSON-safe), `week_json(week_start, target_tss, *, hard_on_consecutive_days=False)` (a `PlannedWeek` dict with three sessions summing to the target), `FakeTp`, `NoCommit`.
   - conftest fixtures: `fake_tp` (`FakeTp`), `nocommit` (`db` wrapped so `commit()` and `close()` are no-ops), `make_deps` (factory `(model, *, tp=None, horizon=1, today=MONDAY, garmin_tools=None) -> GraphDeps`).
 
-- [ ] **Step 1: Write the modules**
+- [x] **Step 1: Write the modules**
 
 `graph/state.py`:
 ```python
@@ -447,7 +447,7 @@ def make_subagent(model: BaseChatModel, tools: Sequence[BaseTool], system_prompt
 
 Empty `__init__.py` files for `graph/`, `graph/nodes/`, `tools/`, `prompts/`.
 
-- [ ] **Step 2: Write the test doubles module and the test conftest**
+- [x] **Step 2: Write the test doubles module and the test conftest**
 
 The doubles live in the package (`tri_planning.testing`) rather than under `tests/` because
 `--import-mode=importlib` gives test directories no importable package name.
@@ -593,7 +593,7 @@ def make_deps(nocommit):
     return _make
 ```
 
-- [ ] **Step 3: Verify import, lint, type-check, commit (Brian)**
+- [x] **Step 3: Verify import, lint, type-check, commit (Brian)**
 
 ```bash
 uv run python -c "import tri_planning.graph.state, tri_planning.graph.deps, tri_planning.graph.llm; print('ok')"
