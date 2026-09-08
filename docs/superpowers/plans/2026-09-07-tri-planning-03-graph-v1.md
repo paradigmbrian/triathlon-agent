@@ -2168,7 +2168,7 @@ if __name__ == "__main__":
     asyncio.run(main(sys.argv[1]))
 ```
 
-- [ ] **Step 4: Brian creates the tables, then run the test**
+- [x] **Step 4: Brian creates the tables, then run the test**
 
 ```bash
 uv run python scripts/setup_checkpointer.py postgresql://tri_analyze:tri_analyze@localhost:5435/tri_analyze
@@ -2206,7 +2206,7 @@ git commit -m "feat(planning): Postgres checkpointer and setup script"
   - `EditFn = Callable[[list[CalendarChange]], Awaitable[list[CalendarChange] | None]]`.
   - `chat_loop(graph, *, read, out, thread_id="planning", commands=None, edit=None) -> None`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `packages/tri-planning/tests/test_repl.py`:
 ```python
@@ -2314,12 +2314,12 @@ async def test_chat_loop_edit_uses_editor_callback():
     assert resume["action"] == "edit" and resume["changes"][0]["reason"] == "edited"
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `uv run pytest packages/tri-planning/tests/test_repl.py -q`
 Expected: `ImportError`.
 
-- [ ] **Step 3: Write `repl.py`**
+- [x] **Step 3: Write `repl.py`**
 
 ```python
 """Terminal REPL for the planning graph: stream a turn, show node activity, run the review dialogue.
@@ -2544,12 +2544,12 @@ async def chat_loop(
         pending = printer.interrupt
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 Run: `uv run pytest packages/tri-planning/tests/test_repl.py -q`
 Expected: 6 passed. `/pending` from a paused state re-enters the review dialogue by re-reading `pending_changes` from the checkpoint and resuming with the athlete's decision, which is exactly what a second process does.
 
-- [ ] **Step 5: Lint, type-check, commit (Brian)**
+- [x] **Step 5: Lint, type-check, commit (Brian)**
 
 ```bash
 uv run ruff check . && uv run ruff format --check . && uv run mypy
