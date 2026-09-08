@@ -947,7 +947,7 @@ git commit -m "feat(planning): goal tools and intake node; sql tool moves to tri
   - bought plan, `tp_plan_applied` true: `{"plan_id": int, "phase": "active", "tp_plan_applied": False, "messages": [AIMessage(summary)]}` after reading the calendar with `tp_get_workouts` and recording ownership rows (`operation = "apply_plan"`).
   - Also `nodes.targets.weekly_targets_from_workouts(workouts: list[dict], start: date) -> list[WeekTarget]` (pure; `tss_planned` summed per Monday; `duration_planned` is hours; phases from `infer_phases`).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `packages/tri-planning/tests/test_targets_node.py`:
 ```python
@@ -1029,12 +1029,12 @@ def test_weekly_targets_from_workouts_groups_by_monday():
     ]
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `uv run pytest packages/tri-planning/tests/test_targets_node.py -q`
 Expected: `ImportError`.
 
-- [ ] **Step 3: Write `graph/nodes/targets.py`**
+- [x] **Step 3: Write `graph/nodes/targets.py`**
 
 ```python
 """Targets node: goal + fitness -> week targets in the database. No model call."""
@@ -1160,12 +1160,12 @@ def make_targets_node(deps: GraphDeps) -> Any:
     return targets_node
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 Run: `uv run pytest packages/tri-planning/tests/test_targets_node.py -q`
 Expected: 5 passed. The summary test checks the literal `14 weeks`, which `_summary` prints as `{len(targets)} weeks`.
 
-- [ ] **Step 5: Lint, type-check, commit (Brian)**
+- [x] **Step 5: Lint, type-check, commit (Brian)**
 
 ```bash
 uv run ruff check . && uv run ruff format --check . && uv run mypy
