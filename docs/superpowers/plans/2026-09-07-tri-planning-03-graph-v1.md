@@ -1191,7 +1191,7 @@ git commit -m "feat(planning): targets node (generated and bought plans)"
   - `nodes.design.window_weeks(weeks: list[PlanWeekRow], today: date, horizon: int) -> list[PlanWeekRow]` (weeks with `week_monday(today) <= week_start <= week_monday(today) + (horizon - 1) weeks` and `not written_to_tp`).
   - `nodes.design.make_design_node(deps) -> async node` returning `{"pending_changes", "pending_summary", "changes_from": "design", "review_decision": None}`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `packages/tri-planning/tests/test_design_node.py`:
 ```python
@@ -1303,12 +1303,12 @@ def test_prompt_mentions_target_availability_and_rules():
     assert "250" in text and "consecutive" in text and "percentOfFtp" in text
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `uv run pytest packages/tri-planning/tests/test_design_node.py -q`
 Expected: `ImportError`.
 
-- [ ] **Step 3: Write `prompts/design.py`**
+- [x] **Step 3: Write `prompts/design.py`**
 
 ```python
 """Design prompt: the model plans one week's sessions inside Python-set bounds."""
@@ -1394,7 +1394,7 @@ def render_design_prompt(
     return "\n\n".join(parts)
 ```
 
-- [ ] **Step 4: Write `graph/nodes/design.py`**
+- [x] **Step 4: Write `graph/nodes/design.py`**
 
 ```python
 """Design node: one structured-output call per window week, validated, retried once."""
@@ -1490,12 +1490,12 @@ def make_design_node(deps: GraphDeps) -> Any:
     return design
 ```
 
-- [ ] **Step 5: Run the tests**
+- [x] **Step 5: Run the tests**
 
 Run: `uv run pytest packages/tri-planning/tests/test_design_node.py -q`
 Expected: 6 passed. `ScriptedChatModel.with_structured_output` is `BaseChatModel`'s default: it binds the `PlannedWeek` schema as a tool and parses the scripted tool call named `PlannedWeek`. If the parser complains about the name, name the scripted tool call exactly `PlannedWeek`.
 
-- [ ] **Step 6: Lint, type-check, commit (Brian)**
+- [x] **Step 6: Lint, type-check, commit (Brian)**
 
 ```bash
 uv run ruff check . && uv run ruff format --check . && uv run mypy
@@ -1519,7 +1519,7 @@ git commit -m "feat(planning): design prompt and node with validator retry"
   - `nodes.review.review_node(state) -> dict`: with empty `pending_changes` returns `{"review_decision": None, "messages": [AIMessage("No calendar changes to review.")]}`; otherwise calls `interrupt({"summary": str, "changes": [json dicts]})` and returns `{"review_decision": ReviewDecision}`, plus `{"messages": [HumanMessage("Plan review rejected: <note>")]}` on reject, plus `{"pending_changes": decision.changes}` on edit.
   - `nodes.apply.make_apply_node(deps) -> async node` returning `{"pending_changes": remaining, "pending_summary", "last_error", "review_decision": None, "messages": [AIMessage(report)], "tp_plan_applied": bool}` and `"phase": "active"` when everything applied and no `apply_plan` was among them.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `packages/tri-planning/tests/test_apply_node.py`:
 ```python
@@ -1617,12 +1617,12 @@ async def test_refuses_without_tp_server(nocommit, make_deps):
     assert len(out["pending_changes"]) == 1 and "unavailable" in out["last_error"]
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `uv run pytest packages/tri-planning/tests/test_apply_node.py -q`
 Expected: `ImportError`.
 
-- [ ] **Step 3: Write `graph/nodes/review.py`**
+- [x] **Step 3: Write `graph/nodes/review.py`**
 
 ```python
 """Review node: pause the graph until the athlete decides.
@@ -1662,7 +1662,7 @@ def review_node(state: PlanningState) -> dict[str, Any]:
     return update
 ```
 
-- [ ] **Step 4: Write `graph/nodes/apply.py`**
+- [x] **Step 4: Write `graph/nodes/apply.py`**
 
 ```python
 """Apply node: the only place TrainingPeaks is written. One call per change, recorded as it goes."""
@@ -1763,12 +1763,12 @@ def make_apply_node(deps: GraphDeps) -> Any:
     return apply
 ```
 
-- [ ] **Step 5: Run the tests**
+- [x] **Step 5: Run the tests**
 
 Run: `uv run pytest packages/tri-planning/tests/test_apply_node.py -q`
 Expected: 6 passed.
 
-- [ ] **Step 6: Lint, type-check, commit (Brian)**
+- [x] **Step 6: Lint, type-check, commit (Brian)**
 
 ```bash
 uv run ruff check . && uv run ruff format --check . && uv run mypy

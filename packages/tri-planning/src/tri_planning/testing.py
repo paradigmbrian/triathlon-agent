@@ -31,7 +31,7 @@ def week_json(
     a = round(target_tss * 0.4)
     b = round(target_tss * 0.3)
     c = target_tss - a - b
-    d2 = 1 if hard_on_consecutive_days else 2
+    d2 = 3 if hard_on_consecutive_days else 2  # Thu run + Fri swim are consecutive hard days
     return {
         "week_start": week_start.isoformat(),
         "coach_note": "steady aerobic week",
