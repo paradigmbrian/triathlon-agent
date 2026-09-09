@@ -7,7 +7,7 @@ from tri_core.config import Settings
 
 class PlanningSettings(Settings):
     tri_planning_horizon_weeks: int = 3
-    tri_planning_langsmith_project: str = "tri-planning"
+    tri_planning_langsmith_project: str = "tri_planning"
 
 
 @lru_cache(maxsize=1)

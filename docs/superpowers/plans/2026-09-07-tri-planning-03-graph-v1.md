@@ -2568,7 +2568,7 @@ git commit -m "feat(planning): streaming REPL with review dialogue and YAML edit
 **Interfaces:**
 - Produces: `tri-planning chat [--no-live]`, `tri-planning reset [--yes]`, `/status`, `/pending`, `/sync`, `/quit`.
 
-- [ ] **Step 1: Write the commands**
+- [x] **Step 1: Write the commands**
 
 Replace `packages/tri-planning/src/tri_planning/cli.py` with:
 ```python
@@ -2736,7 +2736,7 @@ if __name__ == "__main__":
     app()
 ```
 
-- [ ] **Step 2: Smoke the commands**
+- [x] **Step 2: Smoke the commands**
 
 ```bash
 uv run tri-planning --help
@@ -2754,7 +2754,7 @@ Suggested flow: describe a race 12+ weeks out, answer the intake questions, conf
 
 Things to judge, as in analyze's README: whether intake asks one or two questions per turn and grounds them in CTL; whether the designed weeks respect availability without validator retries (LangSmith shows a second design call per week when they don't; tune `DESIGN_SYSTEM`); whether reasons in the change table are useful.
 
-- [ ] **Step 4: README updates**
+- [x] **Step 4: README updates**
 
 `packages/tri-planning/README.md`: replace "Layout so far" with:
 ```markdown

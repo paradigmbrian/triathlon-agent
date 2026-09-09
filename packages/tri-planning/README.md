@@ -53,16 +53,41 @@ flowchart TD
 Two invariants hold by construction: no TrainingPeaks write tool is ever bound to a model, and
 there is no edge into `apply` except from `review`.
 
-## Layout so far
+## Commands
 
-- `planning/models.py`: goal, week target, session, week, calendar change.
-- `planning/periodization.py`: every tunable number (phase table, ramp, recovery, taper, IF).
-- `planning/targets.py`: `build(goal, fitness, start)` -> week targets. Pure.
-- `planning/validate.py`: `week(planned, target, goal)` -> violations. Pure.
-- `repo.py`: the four planning tables (`migrations/002_planning.sql`).
-- `planning/tp_calls.py`: `CalendarChange` -> TrainingPeaks tool name and arguments. Pure.
-- `graph/`: `state.py`, `deps.py`, `llm.py`, `nodes/` (one file per node), `graph.py` (wiring, Task 7).
+```bash
+uv run tri-planning chat [--no-live]   # intake -> targets -> design -> review -> apply
+uv run tri-planning reset [--yes]      # abandon goal and plan, clear the thread; TrainingPeaks untouched
+```
+
+In chat: `/status` (goal, phase, this week's target vs actual, designed weeks left), `/pending`
+(re-show a paused change set), `/sync`, `/quit`. At review: `approve`, `reject <note>`, or
+`edit` (opens the change set as YAML in `$EDITOR`).
+
+One-time setup after the migrations: `uv run python scripts/setup_checkpointer.py <DATABASE_URL>`
+for both databases (creates LangGraph's checkpoint tables).
+
+## How a turn flows
+
+```
+you> ...            intake sub-agent (create_agent) asks, queries the DB, finally calls set_training_goal
+[targets] ...       pure Python: goal + fitness -> week targets (training_plans, plan_weeks)
+[design]            one with_structured_output(PlannedWeek) call per window week, validated, retried once
+<change table>      review node: interrupt(); the run is checkpointed in Postgres until you answer
+approve             apply: one TrainingPeaks call per change, each recorded in plan_changes
+```
+
+## Layout
+
+- `graph/`: `state.py` (PlanningState), `deps.py` (GraphDeps), `llm.py` (model, sub-agent
+  factory), `nodes/` (one file per node), `graph.py` (wiring and route functions),
+  `checkpointer.py` (AsyncPostgresSaver).
+- `planning/`: `models.py`, `periodization.py` (every tunable number), `targets.py` (goal +
+  fitness -> week targets, pure), `validate.py` (week rules, pure), `tp_calls.py`
+  (`CalendarChange` -> TrainingPeaks tool call, pure).
 - `tools/goal.py`, `prompts/`: what the intake and design nodes give the model.
+- `repl.py`: terminal I/O, event rendering, the review dialogue, YAML edit round trip.
+- `repo.py`: the four planning tables (`migrations/002_planning.sql`, `003_*.sql`).
 - `testing.py`: `FakeTp`, `NoCommit`, canned goal and week payloads for tests.
 
 Try the targets without a database:

@@ -23,7 +23,7 @@ class Settings(BaseSettings):
 
     langsmith_tracing: bool = False
     langsmith_api_key: str | None = None
-    langsmith_project: str = "tri-analyze"
+    langsmith_project: str = "tri_analyze"
 
 
 @lru_cache(maxsize=1)

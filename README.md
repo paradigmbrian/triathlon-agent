@@ -7,7 +7,7 @@ TrainingPeaks data, synced into a local Postgres store.
 |---|---|---|---|
 | `packages/tri-core` | `tri_core` | `tri sync` | Settings, MCP client, Postgres store, the ETL, test helpers. No LLM code. |
 | `packages/tri-analyze` | `tri_analyze` | `tri-analyze chat` | Analyst agent: feedback on completed sessions, trends. |
-| `packages/tri-planning` | `tri_planning` | `tri-planning chat` | Planning agent (in progress; see `docs/superpowers/specs/2026-09-07-tri-planning-design.md`). |
+| `packages/tri-planning` | `tri_planning` | `tri-planning chat` | Planning agent: goal intake, periodized plan, approved writes to the TrainingPeaks calendar. |
 
 `tri-analyze` and `tri-planning` depend on `tri-core`; neither depends on the other.
 Repo: github.com/paradigmbrian/triathlon-agent.
@@ -60,12 +60,16 @@ Deeper context lives next to the code:
    uvx --from git+https://github.com/JamsusMaximus/trainingpeaks-mcp@<ref> tp-mcp auth --from-browser chrome
    ```
 5. First sync: `uv run tri sync --full` (a year of TrainingPeaks, 60 days of Garmin).
+6. Checkpoint tables (once per database): `uv run python scripts/setup_checkpointer.py <url>`
+   for both `tri_analyze` and `tri_analyze_test`.
 
 ## Run
 
 ```bash
 uv run tri sync [--since YYYY-MM-DD] [--source trainingpeaks|garmin|all] [--full]
 uv run tri-analyze chat [--no-live]     # --no-live binds only the database tool
+uv run tri-planning chat [--no-live]    # plan; every TrainingPeaks write is approved first
+uv run tri-planning reset [--yes]       # abandon goal and plan, clear the thread
 ```
 
 In chat: `/tools` lists bound tools, `/prompt` prints the system prompt, `/sync` refreshes
@@ -122,7 +126,7 @@ conftest.py             pytest options and the shared `db` fixture plugin
 migrations/             001_initial.sql (sync tables), 002_planning.sql (planning tables)
 packages/tri-core/      src/tri_core/{config,cli,mcp,db,sync,testing}
 packages/tri-analyze/   src/tri_analyze/{cli,allowlist,agent}
-packages/tri-planning/  src/tri_planning/{config,cli,repo,planning}
+packages/tri-planning/  src/tri_planning/{config,cli,repo,repl,testing,planning,graph,tools,prompts}
 docs/superpowers/       specs and implementation plans
 ```
 
