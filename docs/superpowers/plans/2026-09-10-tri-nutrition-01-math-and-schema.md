@@ -2453,6 +2453,13 @@ git commit -m "docs(nutrition): package README, root README, plan 1"
 - Spec §15: items 1 and 2 are Task 8; items 3 to 5 (TP note visibility, `tp_create_note` return payload, `get_store()` inside `create_agent` tools) are Plan 2 and Plan 3 work and are noted there.
 - Type consistency: `targets.build(profile, sessions, ctx, today, horizon_days)`, `bounds.validate_targets(targets, profile)`, `bounds.validate_fuel(fuel, profile, library, fuel_log, other_caffeine_mg_today=0)`, `bounds.validate_race(plan, profile, library, fuel_log)` and the `repo` names above are the signatures Plan 2's `targets`, `fuel` and `apply` nodes call. `energy.week_monday` is the phase lookup key; Plan 2 builds `PlanContext.phases` from `plan_weeks.week_start`.
 
-## Execution notes
+## Execution notes (2026-09-10, for Plan 2 to pick up)
 
-(Filled in during execution; Plan 2 reads these first.)
+- Executed inline on branch `feat/tri-nutrition-01`, one commit per task. Brian granted git commits for this session; the database rule still holds, so `004_nutrition.sql` is Brian's to apply and Task 7's five db tests skip until it lands on `tri_analyze_test`.
+- **Task 1:** the CLI docstring exceeded 100 columns; shortened. Everything else as written.
+- **Task 4:** `SPORT_KCAL_PER_KG_H` rows are written one key per line (ruff format).
+- **Task 5:** all 35 tests passed first run; no test-data tweak was needed for the fat-floor case.
+- **Task 6:** the tests use two small helpers (`vf`, `vr`, `step`) instead of the plan's inline calls to stay under the line limit. Same assertions.
+- **Task 8:** the spike script is committed but not run; it needs Garmin auth and the `--probe-write` pass writes to Garmin. Brian runs it and records the findings here.
+- **Smoke (README snippet, 80 kg, 15 % BF, lose, FTP 250):** rest days 2256 kcal (240/144/80) with a 440 kcal deficit; a 50-minute threshold run day comes out `hard` at 3632 kcal (604/160/64) and hits `fat_floor` because 7.5 g/kg carbs plus 2 g/kg protein leave under 0.8 g/kg fat at that session size. That is the spec's rule working, but expect the floor on most hard days for athletes around 80 kg with sub-1000 kcal sessions; the total rises above maintenance by roughly 100 kcal on those days.
+- **For Plan 2:** `PlanContext.phases` is keyed by week Monday (`energy.week_monday`); build it from `plan_weeks.week_start`. `Session` for a `workouts` row: `duration_min = planned_duration_sec // 60`, `distance_km = planned_distance_m / 1000`, intensity from `planned_if` (below 0.75 endurance, below 0.85 tempo, below 0.95 threshold, else vo2) until the workout carries a structured intensity.
