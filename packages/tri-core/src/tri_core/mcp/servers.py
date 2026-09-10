@@ -27,9 +27,13 @@ class ServerSpec:
     env: dict[str, str] = field(default_factory=dict)
 
 
-def garmin_spec(settings: Settings) -> ServerSpec:
+def garmin_spec(settings: Settings, enabled_tools: list[str] | None = None) -> ServerSpec:
+    """Launch spec for the Garmin server. `enabled_tools` narrows the registered tool set;
+    each agent passes the list it needs (default: GARMIN_ENABLED_TOOLS, what sync uses)."""
     env = {
-        "GARMIN_ENABLED_TOOLS": ",".join(GARMIN_ENABLED_TOOLS),
+        "GARMIN_ENABLED_TOOLS": ",".join(
+            enabled_tools if enabled_tools is not None else GARMIN_ENABLED_TOOLS
+        ),
         "GARMIN_MCP_CALL_TIMEOUT": "90",
     }
     if settings.garmin_email:

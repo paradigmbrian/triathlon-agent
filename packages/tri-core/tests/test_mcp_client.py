@@ -6,7 +6,7 @@ from mcp.types import TextContent
 
 from tri_core.config import Settings
 from tri_core.mcp.client import McpToolClient, McpToolError, parse_tool_text
-from tri_core.mcp.servers import garmin_spec, trainingpeaks_spec
+from tri_core.mcp.servers import GARMIN_ENABLED_TOOLS, garmin_spec, trainingpeaks_spec
 
 
 def test_parse_json_object():
@@ -89,3 +89,12 @@ async def test_live_servers_expose_expected_tools():
             "get_training_readiness",
             "get_activities_by_date",
         } <= set(names)
+
+
+def test_garmin_spec_enabled_tools_override():
+    s = Settings(_env_file=None)
+    default = garmin_spec(s)
+    assert default.env["GARMIN_ENABLED_TOOLS"] == ",".join(GARMIN_ENABLED_TOOLS)
+    custom = garmin_spec(s, enabled_tools=["get_body_composition", "get_nutrition_daily_settings"])
+    assert custom.env["GARMIN_ENABLED_TOOLS"] == "get_body_composition,get_nutrition_daily_settings"
+    assert custom.args == default.args
