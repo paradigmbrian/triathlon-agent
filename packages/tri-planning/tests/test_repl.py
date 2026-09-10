@@ -75,8 +75,10 @@ def test_turn_printer_handles_subgraph_events_and_interrupt():
     p.on_event((), "updates", {"targets": {"messages": [AIMessage(content="Targets: 14 weeks")]}})
     stop = Interrupt(value={"summary": "s", "changes": []})
     p.on_event((), "updates", {"__interrupt__": (stop,)})
+    p.on_event((), "updates", {"intake": {"messages": [AIMessage(content="Hello")]}})
     text = "".join(buf)
     assert "Hello" in text and "← set_training_goal" in text and "Targets: 14 weeks" in text
+    assert text.count("Hello") == 1 and "[intake]" not in text
     assert p.interrupt == {"summary": "s", "changes": []}
 
 

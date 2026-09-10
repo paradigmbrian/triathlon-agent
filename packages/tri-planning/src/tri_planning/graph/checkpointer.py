@@ -11,6 +11,13 @@ from contextlib import asynccontextmanager
 
 import psycopg
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
+from tri_planning.planning.models import CalendarChange, PlannedSession, ReviewDecision
+
+# Pydantic models that live in PlanningState. Registering them keeps the checkpointer from
+# warning (and, in strict mode, refusing) when it deserializes them.
+STATE_TYPES: tuple[type, ...] = (CalendarChange, PlannedSession, ReviewDecision)
 
 SETUP_HINT = (
     "checkpoint tables are missing; run once per database:\n"
@@ -19,9 +26,13 @@ SETUP_HINT = (
 )
 
 
+def make_serde() -> JsonPlusSerializer:
+    return JsonPlusSerializer(allowed_msgpack_modules=STATE_TYPES)
+
+
 @asynccontextmanager
 async def open_checkpointer(url: str) -> AsyncIterator[AsyncPostgresSaver]:
-    async with AsyncPostgresSaver.from_conn_string(url) as saver:
+    async with AsyncPostgresSaver.from_conn_string(url, serde=make_serde()) as saver:
         yield saver
 
 

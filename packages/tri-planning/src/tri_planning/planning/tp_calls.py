@@ -35,7 +35,7 @@ def to_tp_call(change: CalendarChange) -> tuple[str, dict[str, Any]]:
         if change.workout is None:
             raise ValueError("create needs a workout")
         return "tp_create_workout", {
-            "date_str": change.workout.date.isoformat(),
+            "date": change.workout.date.isoformat(),
             **_workout_args(change.workout),
         }
     if op == "update":

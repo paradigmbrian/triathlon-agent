@@ -24,7 +24,8 @@ structure to interval sessions; leave it out for steady endurance and swims desc
 
 Hard rules (a validator rejects the week otherwise):
 - The sessions' tss_planned must sum to within 10 % of the target.
-- No session on an unavailable day; only the day's allowed sports. Brick needs bike and run.
+- No session on an unavailable day; only the day's allowed sports. Brick is allowed when the
+  day lists brick, or both bike and run.
 - Sessions with intensity threshold, vo2 or race are never on consecutive days.
 - Total duration must not exceed the weekly hours max.
 Do not include rest days as sessions. Estimate TSS from duration and intensity factor:

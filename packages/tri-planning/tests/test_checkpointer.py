@@ -6,11 +6,37 @@ from langgraph.types import Command
 
 from tri_core.config import Settings
 from tri_core.testing import ScriptedChatModel, tool_call
-from tri_planning.graph.checkpointer import checkpointer_ready, open_checkpointer
+from tri_planning.graph.checkpointer import checkpointer_ready, make_serde, open_checkpointer
 from tri_planning.graph.graph import build_graph
 from tri_planning.testing import GOAL_ARGS, MONDAY, FakeTp, week_json
 
 pytestmark = pytest.mark.db
+
+
+def test_serde_round_trips_state_models_without_unregistered_warning(caplog):
+    import logging
+    from datetime import date
+
+    from langgraph.checkpoint.serde import jsonplus
+
+    from tri_planning.planning.models import CalendarChange, PlannedSession
+
+    jsonplus._warned_unregistered_types.clear()  # the warning fires once per process
+    session = PlannedSession(
+        date=date(2026, 9, 14),
+        sport="bike",
+        title="Ride",
+        description="",
+        duration_minutes=60,
+        tss_planned=50,
+        intensity="endurance",
+    )
+    change = CalendarChange(op="create", workout_date=session.date, workout=session, reason="r")
+    serde = make_serde()
+    with caplog.at_level(logging.WARNING):
+        back = serde.loads_typed(serde.dumps_typed({"pending_changes": [change]}))
+    assert back == {"pending_changes": [change]}
+    assert not [r for r in caplog.records if "unregistered" in r.getMessage()]
 
 
 async def test_second_process_resumes_from_postgres(nocommit, make_deps):

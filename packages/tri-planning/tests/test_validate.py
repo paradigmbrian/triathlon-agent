@@ -67,6 +67,7 @@ def test_sport_not_allowed_that_day():
 def test_rest_and_brick_rules():
     assert validate.sport_allowed("rest", [])
     assert validate.sport_allowed("brick", ["bike", "run"])
+    assert validate.sport_allowed("brick", ["bike", "brick"])
     assert not validate.sport_allowed("brick", ["bike"])
     assert validate.sport_allowed("brick", "any")
 

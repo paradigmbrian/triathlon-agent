@@ -33,7 +33,7 @@ def sport_allowed(sport: Sport, allowed: list[Sport] | Literal["any"]) -> bool:
     if sport == "rest" or allowed == "any":
         return True
     if sport == "brick":
-        return "bike" in allowed and "run" in allowed
+        return "brick" in allowed or ("bike" in allowed and "run" in allowed)
     return sport in allowed
 
 

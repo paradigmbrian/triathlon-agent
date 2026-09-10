@@ -352,3 +352,9 @@ Multi-athlete; nutrition; strength-workout structure (separate TP tool set); wri
 - Whether `tp_apply_training_plan` returns the created workout ids (needed to populate `plan_changes` ownership) or whether a follow-up `tp_get_workouts` is required.
 - How `tp_create_workout` reports the new `workout_id` in its result payload.
 - `uv` workspace behavior for `[project.scripts]` entry points across members.
+
+Resolved in milestone 3 (first real conversation, 2026-09-10):
+
+- `AsyncPostgresSaver.from_conn_string` already sets autocommit, `prepare_threshold=0` and `dict_row`; no custom connection handling needed. The saver is built with `JsonPlusSerializer(allowed_msgpack_modules=...)` listing the Pydantic models that live in state, otherwise every load logs an "unregistered type" warning.
+- `tp_apply_training_plan` returns only counts; ownership needs the follow-up `tp_get_workouts` (targets node).
+- `tp_create_workout` returns `{"success", "workout_id", ...}`. Its MCP input schema names the date field `date`, not `date_str` as in the Python signature; the server's dispatch maps one to the other. Plan 3's global constraints had this wrong and `tp_calls.to_tp_call` was corrected.

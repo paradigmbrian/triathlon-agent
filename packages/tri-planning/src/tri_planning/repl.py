@@ -30,6 +30,9 @@ CommandFn = Callable[[], Awaitable[str]]
 EditFn = Callable[[list[CalendarChange]], Awaitable[list[CalendarChange] | None]]
 
 REVIEW_PROMPT = "approve / reject <note> / edit"
+# Nodes that host a sub-agent: their text was already streamed token by token, so the
+# parent update that carries the same messages is not echoed again.
+STREAMED_NODES = frozenset({"intake"})
 
 
 def _text_of(msg: BaseMessage) -> str:
@@ -70,6 +73,8 @@ class TurnPrinter:
             self.interrupt = dict(first.value)
             return
         for node, payload in data.items():
+            if not namespace and node in STREAMED_NODES:
+                continue
             for msg in (payload or {}).get("messages", []):
                 if node == "model" and isinstance(msg, AIMessage):
                     for tc in msg.tool_calls:

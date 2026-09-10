@@ -40,7 +40,7 @@ def test_create_maps_sport_and_fields():
     )
     assert name == "tp_create_workout"
     assert args == {
-        "date_str": "2026-09-14",
+        "date": "2026-09-14",
         "sport": "Bike",
         "title": "Endurance ride",
         "duration_minutes": 60,
