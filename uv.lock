@@ -6,6 +6,7 @@ requires-python = "==3.12.*"
 members = [
     "tri-analyze",
     "tri-core",
+    "tri-nutrition",
     "tri-planning",
     "triathlon-agent",
 ]
@@ -1196,6 +1197,37 @@ requires-dist = [
 ]
 
 [[package]]
+name = "tri-nutrition"
+version = "0.1.0"
+source = { editable = "packages/tri-nutrition" }
+dependencies = [
+    { name = "langchain" },
+    { name = "langchain-anthropic" },
+    { name = "langchain-mcp-adapters" },
+    { name = "langgraph-checkpoint-postgres" },
+    { name = "psycopg", extra = ["binary"] },
+    { name = "pydantic-settings" },
+    { name = "pyyaml" },
+    { name = "rich" },
+    { name = "tri-core" },
+    { name = "typer" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "langchain", specifier = "==1.4.0" },
+    { name = "langchain-anthropic", specifier = "==1.7.1" },
+    { name = "langchain-mcp-adapters", specifier = "==0.3.2" },
+    { name = "langgraph-checkpoint-postgres", specifier = ">=3.1,<4" },
+    { name = "psycopg", extras = ["binary"], specifier = "==3.3.5" },
+    { name = "pydantic-settings", specifier = ">=2.6" },
+    { name = "pyyaml", specifier = ">=6" },
+    { name = "rich", specifier = ">=13" },
+    { name = "tri-core", editable = "packages/tri-core" },
+    { name = "typer", specifier = ">=0.15" },
+]
+
+[[package]]
 name = "tri-planning"
 version = "0.1.0"
 source = { editable = "packages/tri-planning" }
@@ -1233,6 +1265,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "tri-analyze" },
     { name = "tri-core" },
+    { name = "tri-nutrition" },
     { name = "tri-planning" },
 ]
 
@@ -1249,6 +1282,7 @@ dev = [
 requires-dist = [
     { name = "tri-analyze", editable = "packages/tri-analyze" },
     { name = "tri-core", editable = "packages/tri-core" },
+    { name = "tri-nutrition", editable = "packages/tri-nutrition" },
     { name = "tri-planning", editable = "packages/tri-planning" },
 ]
 
