@@ -47,6 +47,7 @@ async def test_read_tools_call_server_and_trim():
             "weight": 81510.0,
             "height": 180.34,
             "birthDate": "1986-06-11",
+            "measurementSystem": "statute_us",
         },
     }
     settings = {"calorieGoal": 2500, "macroGoals": {"carbs": 300, "protein": 150, "fat": 70}}
@@ -64,7 +65,13 @@ async def test_read_tools_call_server_and_trim():
         "read_garmin_nutrition_settings",
     }
     p = json.loads(await tools["read_garmin_profile"].ainvoke({}))
-    assert p == {"sex": "m", "weight_kg": 81.5, "height_cm": 180.3, "age": 40}
+    assert p == {
+        "sex": "m",
+        "weight_kg": 81.5,
+        "height_cm": 180.3,
+        "age": 40,
+        "unit_preference": "imperial",
+    }
     b = json.loads(await tools["read_body_composition"].ainvoke({"days": 14}))
     assert b[-1]["weight_kg"] == 81.5
     assert g.calls[-1] == (

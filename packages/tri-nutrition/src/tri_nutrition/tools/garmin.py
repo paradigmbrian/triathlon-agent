@@ -57,11 +57,13 @@ def _age(birth: str | None, today: date) -> int | None:
 def trim_profile(payload: Any, today: date) -> dict[str, Any]:
     data = (payload or {}).get("userData", {}) if isinstance(payload, dict) else {}
     gender = str(data.get("gender") or "").upper()
+    system = str(data.get("measurementSystem") or "")
     return {
         "sex": "f" if gender == "FEMALE" else "m" if gender == "MALE" else None,
         "weight_kg": round(float(data["weight"]) / 1000, 1) if data.get("weight") else None,
         "height_cm": round(float(data["height"]), 1) if data.get("height") else None,
         "age": _age(data.get("birthDate"), today),
+        "unit_preference": "imperial" if system.startswith("statute") else "metric",
     }
 
 
@@ -82,7 +84,8 @@ def make_garmin_read_tools(garmin: ToolCaller | None, today: Callable[[], date])
         return await garmin.call_json(tool, args) if garmin is not None else None
 
     async def read_garmin_profile() -> str:
-        """The athlete's Garmin profile: sex, weight_kg, height_cm, age. Read this first."""
+        """The athlete's Garmin profile: sex, weight_kg, height_cm, age, and unit_preference
+        (metric | imperial, from the Garmin display setting). Read this first."""
         if garmin is None:
             return UNAVAILABLE
         try:

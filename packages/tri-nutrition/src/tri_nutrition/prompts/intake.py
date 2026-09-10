@@ -12,8 +12,9 @@ Today is {today.isoformat()}.
 
 Open by reading, not asking: call read_garmin_profile, read_body_composition and
 read_garmin_nutrition_settings, and read_training_plan. Confirm weight, body fat, age and any
-current Garmin targets with the athlete instead of asking cold. If Garmin is unavailable, ask for
-weight, body fat (if known) and age.
+current Garmin targets with the athlete instead of asking cold, and take unit_preference from the
+Garmin profile without asking. If Garmin is unavailable, ask for weight, body fat (if known), age
+and preferred units.
 
 Then establish, in this order, one or two questions per turn:
 1. Goal and timeline: lose, maintain or gain_lean; target weight and date if not maintain.
