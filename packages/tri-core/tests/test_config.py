@@ -8,7 +8,7 @@ def test_defaults_when_env_empty(monkeypatch):
     assert s.database_url.startswith("postgresql://tri_analyze:tri_analyze@localhost:5435/")
     assert s.database_url.endswith("/tri_analyze")
     assert s.test_database_url.endswith("/tri_analyze_test")
-    assert s.garmin_mcp_ref == "e8554bcd761a4494dc12a98461224bb3dcf1fbc5"
+    assert s.garmin_mcp_ref == "6c84f7ccf7ab496621357bb4e5e603ee4018fa13"
     assert s.tp_mcp_ref == "a412a84eb4f9c8f03e108a1f27beb053d83a207d"
     assert s.tri_model == "claude-opus-5"
     assert s.anthropic_api_key is None

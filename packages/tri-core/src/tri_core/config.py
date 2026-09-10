@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     garmin_password: str | None = None
     tp_auth_cookie: str | None = None
 
-    garmin_mcp_ref: str = "e8554bcd761a4494dc12a98461224bb3dcf1fbc5"
+    garmin_mcp_ref: str = "6c84f7ccf7ab496621357bb4e5e603ee4018fa13"
     tp_mcp_ref: str = "a412a84eb4f9c8f03e108a1f27beb053d83a207d"
 
     tri_model: str = "claude-opus-5"
