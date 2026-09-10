@@ -1,0 +1,80 @@
+{
+  "args": {
+    "date": "2026-09-09"
+  },
+  "result": {
+    "mealDate": "2026-09-09",
+    "dayStartTime": "05:00:00",
+    "dayEndTime": "20:00:00",
+    "dailyViewType": "TIMELINE_VIEW",
+    "mealDetails": [
+      {
+        "meal": {
+          "mealId": 1424726,
+          "mealIndex": 1,
+          "mealName": "BREAKFAST",
+          "defaultMealName": "BREAKFAST",
+          "displayOrder": 0,
+          "startTime": "05:00:00",
+          "endTime": "08:59:00",
+          "goals": {},
+          "enabled": true,
+          "editable": true,
+          "translated": false
+        },
+        "mealNutritionGoals": {},
+        "loggedFoods": []
+      },
+      {
+        "meal": {
+          "mealId": 1424727,
+          "mealIndex": 2,
+          "mealName": "LUNCH",
+          "defaultMealName": "LUNCH",
+          "displayOrder": 1,
+          "startTime": "11:00:00",
+          "endTime": "13:00:00",
+          "goals": {},
+          "enabled": true,
+          "editable": true,
+          "translated": false
+        },
+        "mealNutritionGoals": {},
+        "loggedFoods": []
+      },
+      {
+        "meal": {
+          "mealId": 1424728,
+          "mealIndex": 3,
+          "mealName": "DINNER",
+          "defaultMealName": "DINNER",
+          "displayOrder": 2,
+          "startTime": "17:00:00",
+          "endTime": "19:00:00",
+          "goals": {},
+          "enabled": true,
+          "editable": true,
+          "translated": false
+        },
+        "mealNutritionGoals": {},
+        "loggedFoods": []
+      },
+      {
+        "meal": {
+          "mealId": 1424729,
+          "mealIndex": 4,
+          "mealName": "SNACKS",
+          "defaultMealName": "SNACKS",
+          "displayOrder": 6,
+          "goals": {},
+          "enabled": true,
+          "editable": false,
+          "translated": false
+        },
+        "mealNutritionGoals": {},
+        "loggedFoods": []
+      }
+    ],
+    "loggedFoodsWithServingSizes": []
+  }
+}

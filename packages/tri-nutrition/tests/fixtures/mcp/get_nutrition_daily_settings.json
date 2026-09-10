@@ -1,0 +1,16 @@
+{
+  "args": {
+    "date": "2026-09-09"
+  },
+  "result": {
+    "weightChangeType": "NO_GOAL",
+    "userDefinedActiveCalories": false,
+    "macroGoals": {},
+    "regionCode": "US",
+    "languageCode": "en",
+    "dailyTimelineStartTime": "05:00:00",
+    "dailyTimelineEndTime": "20:00:00",
+    "effectiveDate": "2026-08-26",
+    "nutritionStatus": "ACTIVE"
+  }
+}

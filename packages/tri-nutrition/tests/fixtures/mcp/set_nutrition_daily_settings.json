@@ -1,0 +1,12 @@
+{
+  "args": {
+    "date": "2027-10-15",
+    "calorie_goal": 2345,
+    "carbs_grams": 300,
+    "protein_grams": 150,
+    "fat_grams": 61
+  },
+  "result": {
+    "__error__": "set_nutrition_daily_settings: Error updating nutrition settings: Garmin Connect is unreachable. Check your network connection or try again later. (Details: HTTP error: API Error 400 - Provided date 2027-10-15 is after 90 days from current date.)"
+  }
+}

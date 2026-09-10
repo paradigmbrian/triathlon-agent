@@ -1,0 +1,15 @@
+{
+  "args": {
+    "date": "2026-09-09"
+  },
+  "result": {
+    "userId": 1000001,
+    "calendarDate": "2026-09-09",
+    "valueInML": null,
+    "goalInML": 2839.056,
+    "dailyAverageinML": null,
+    "lastEntryTimestampLocal": null,
+    "sweatLossInML": null,
+    "activityIntakeInML": null
+  }
+}

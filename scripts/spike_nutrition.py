@@ -1,9 +1,14 @@
 """One-off spike for the nutrition agent: record the Garmin body-composition and nutrition tool
 payloads, and probe whether set_nutrition_daily_settings on a far-future date is per-day.
 
-Run:  uv run python scripts/spike_nutrition.py [--days 14] [--probe-write]
+Run:  uv run python scripts/spike_nutrition.py [--days 14] [--date YYYY-MM-DD] [--probe-write]
 Writes packages/tri-nutrition/tests/fixtures/mcp/<tool>.json. Review each file before
 committing: scrub anything you consider private. Numbers are fine.
+
+Findings 2026-09-10: Garmin rejects any nutrition date more than 90 days out
+("Provided date ... is after 90 days from current date"), so the write probe uses today + 60.
+The probe refuses to run when the day carries no goals yet, because there is no tool to clear a
+day's goals afterwards; pass --allow-stray to accept leaving the probe target in place.
 """
 
 from __future__ import annotations
@@ -19,6 +24,7 @@ from tri_core.config import get_settings
 from tri_core.mcp.client import McpToolClient, McpToolError
 from tri_core.mcp.servers import garmin_spec
 
+PROBE_DAYS_AHEAD = 60  # inside Garmin's 90-day window
 OUT = Path("packages/tri-nutrition/tests/fixtures/mcp")
 NUTRITION_TOOLS = [
     "get_body_composition",
@@ -49,11 +55,11 @@ async def record(client: McpToolClient, tool: str, args: dict[str, Any], suffix:
     return result
 
 
-async def main(days: int, probe_write: bool) -> None:
+async def main(days: int, log_date: str | None, probe_write: bool, allow_stray: bool) -> None:
     settings = get_settings()
     today = date.today()
     start = (today - timedelta(days=days)).isoformat()
-    yesterday = (today - timedelta(days=1)).isoformat()
+    yesterday = log_date or (today - timedelta(days=1)).isoformat()
     async with McpToolClient(garmin_spec(settings, enabled_tools=NUTRITION_TOOLS)) as g:
         print("tools:", await g.list_tool_names())
         await record(g, "get_user_profile", {})
@@ -65,8 +71,13 @@ async def main(days: int, probe_write: bool) -> None:
         await record(g, "get_hydration_data", {"date": yesterday})
         if not probe_write:
             return
-        far = (today + timedelta(days=400)).isoformat()
+        far = (today + timedelta(days=PROBE_DAYS_AHEAD)).isoformat()
         before = await record(g, "get_nutrition_daily_settings", {"date": far}, "_far_before")
+        goals = before.get("macroGoals") if isinstance(before, dict) else None
+        if not goals and not allow_stray:
+            print(f"{far} has no goals set; a probe write could not be restored. Skipping.")
+            print("Pass --allow-stray to write anyway and leave the probe target in place.")
+            return
         await record(
             g,
             "set_nutrition_daily_settings",
@@ -78,28 +89,26 @@ async def main(days: int, probe_write: bool) -> None:
                 "fat_grams": 61,
             },
         )
-        await record(g, "get_nutrition_daily_settings", {"date": far}, "_far_after")
+        after = await record(g, "get_nutrition_daily_settings", {"date": far}, "_far_after")
+        next_day = (today + timedelta(days=PROBE_DAYS_AHEAD + 1)).isoformat()
         after_next = await record(
-            g,
-            "get_nutrition_daily_settings",
-            {"date": (today + timedelta(days=401)).isoformat()},
-            "_far_next_day",
+            g, "get_nutrition_daily_settings", {"date": next_day}, "_far_next_day"
         )
-        print("per-day override?", "yes" if after_next != before else "NO: default changed")
-        if isinstance(before, dict):
-            restore = {
-                "date": far,
-                "calorie_goal": before.get("calorie_goal") or before.get("calorieGoal"),
-                "carbs_grams": before.get("carbs_grams") or before.get("carbsGoal"),
-                "protein_grams": before.get("protein_grams") or before.get("proteinGoal"),
-                "fat_grams": before.get("fat_grams") or before.get("fatGoal"),
-            }
-            await record(g, "set_nutrition_daily_settings", restore, "_restore")
+        ok = all(isinstance(x, dict) and "__error__" not in x for x in (before, after, after_next))
+        if not ok:
+            print("per-day override? unknown: a call errored; see the _far_*.json files")
+        else:
+            print("per-day override?", "yes" if after_next == before else "NO: default changed")
+        if isinstance(goals, dict) and goals:
+            print("previous goals:", goals)
+            print("restore by hand with set_nutrition_daily_settings using those values")
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=14)
+    ap.add_argument("--date", help="day to read the food log, meals and settings for")
     ap.add_argument("--probe-write", action="store_true")
+    ap.add_argument("--allow-stray", action="store_true")
     a = ap.parse_args()
-    asyncio.run(main(a.days, a.probe_write))
+    asyncio.run(main(a.days, a.date, a.probe_write, a.allow_stray))
