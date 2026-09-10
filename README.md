@@ -61,7 +61,7 @@ Deeper context lives next to the code:
    uvx --from git+https://github.com/JamsusMaximus/trainingpeaks-mcp@<ref> tp-mcp auth --from-browser chrome
    ```
 5. First sync: `uv run tri sync --full` (a year of TrainingPeaks, 60 days of Garmin).
-6. Checkpoint tables (once per database): `uv run python scripts/setup_checkpointer.py <url>`
+6. Checkpoint and LangGraph store tables (once per database): `uv run python scripts/setup_checkpointer.py <url>`
    for both `tri_analyze` and `tri_analyze_test`.
 
 ## Run
@@ -128,7 +128,7 @@ migrations/             001_initial.sql (sync tables), 002_planning.sql and 003_
 packages/tri-core/      src/tri_core/{config,cli,mcp,db,sync,testing}
 packages/tri-analyze/   src/tri_analyze/{cli,allowlist,agent}
 packages/tri-planning/  src/tri_planning/{config,cli,repo,repl,testing,planning,graph,tools,prompts}
-packages/tri-nutrition/ src/tri_nutrition/{config,cli,repo,nutrition}
+packages/tri-nutrition/ src/tri_nutrition/{config,cli,repo,repl,store,plan_loader,testing,nutrition,graph,tools,prompts}
 docs/superpowers/       specs and implementation plans
 ```
 

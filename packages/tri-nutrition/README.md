@@ -37,3 +37,49 @@ for t in ts:
 print(validate_targets(ts, p) or 'within bounds')
 "
 ```
+
+## The graph (Plan 2)
+
+`build_graph(deps, checkpointer, store)` compiles a LangGraph `StateGraph` over `NutritionState`
+with two kinds of persistence: the checkpointer saves the thread's state after every node (so a
+pause at `review` survives the process exiting), and the Store holds the athlete's profile, fuel
+log and product library under `("athlete", "nutrition")`, which outlive any thread.
+
+```mermaid
+flowchart TD
+    START([START]) --> route
+    route -->|pending_changes| review
+    route -->|no profile in the Store| intake
+    route -->|profile exists| checkin
+    intake["intake\ncreate_agent sub-agent\nreads Garmin, asks, calls save_nutrition_profile"]
+    checkin["checkin\ncreate_agent sub-agent\nquestions and profile edits (Plan 4: the check-in)"]
+    targets["targets\npure Python\nprofile + plan -> DayTargets, Garmin change set"]
+    fuel["fuel\n(Plan 3)"]
+    review["review\ninterrupt()\napprove / reject / edit"]
+    apply["apply\nthe only Garmin writer\none call per day, each recorded"]
+    intake -->|profile saved| targets
+    intake -->|still asking| END1([END])
+    checkin -->|profile saved| targets
+    checkin --> END2([END])
+    targets --> fuel
+    targets -->|bounds violated| END3([END])
+    fuel --> review
+    review -->|approve / edit| apply
+    review -->|reject| intake
+    review -->|reject| checkin
+    apply --> END4([END])
+```
+
+## Commands
+
+- `tri-nutrition chat [--no-live]`: the REPL. `/status`, `/profile`, `/pending`, `/sync`, `/quit`.
+  At review: `approve`, `reject <note>`, or `edit` (YAML in `$EDITOR`).
+- `tri-nutrition reset [--yes] [--forget-profile]`: clears the thread and unwritten rows; only
+  `--forget-profile` deletes the Store keys.
+
+Setup once per database (creates the checkpoint and store tables):
+
+```bash
+uv run python scripts/setup_checkpointer.py $DATABASE_URL
+uv run python scripts/setup_checkpointer.py $TEST_DATABASE_URL
+```

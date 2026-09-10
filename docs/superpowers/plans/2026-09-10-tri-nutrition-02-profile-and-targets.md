@@ -3552,6 +3552,10 @@ git commit -m "feat(nutrition): chat and reset commands, Postgres store round tr
 - Spec §15 item 5 is answered in the constraints (`get_store()` works inside `create_agent` tools; nodes take `store` by keyword). Item 2 (per-day targets on the watch) is observed in Task 9 Step 5.
 - Type consistency: `build_graph(deps, checkpointer, store)`; `GraphDeps.garmin`; `make_deps(model, *, garmin, horizon, today)` in the conftest; `S.get_profile(store)`/`S.put_profile(store, profile)`; `plan_loader.load_horizon(conn, today, horizon_days)`; `to_garmin_call(change)`; `day_target_change(target)`; `targets_needing_write(new, existing)`; `render_targets(targets)`; `render_review(payload)`; `apply_overrides(profile, overrides)` imported by `apply` from `targets`.
 
-## Execution notes
+## Execution notes (2026-09-10, for Plan 3 to pick up)
 
-(Filled in during execution; Plan 3 reads these first.)
+- Executed inline on branch `feat/tri-nutrition-02`, one commit per task (Tasks 1+2 and 3+4 were committed together). Every task's code matched the plan; no design changes were needed.
+- **Verified in tests:** `langgraph.config.get_store()` resolves inside a `create_agent` tool when the sub-agent is invoked with the parent node's `config`, and inside a tool called directly from a node. Nodes take `store` as a keyword-only parameter. Both hold on langgraph 1.2.11 / langgraph-prebuilt 1.1.0.
+- **Suite:** 362 passed, 4 skipped. The skips are the two Postgres Store tests (`test_postgres_store_round_trip`, `test_second_process_resumes_and_reads_profile_from_postgres`), which need `scripts/setup_checkpointer.py` re-run against `tri_analyze_test` (it now also creates the `store` tables), plus the two pre-existing live tests.
+- **Brian-only steps left:** run the setup script against both databases, then `uv run tri-nutrition chat` for the first conversation (Task 9 Step 5) and record here whether the watch shows per-day targets and what `set_nutrition_daily_settings` returned.
+- **For Plan 3:** the `fuel` node is `graph/nodes/fuel.py::fuel_node` returning `{}`; replace it with `make_fuel_node(deps)` and keep the `targets -> fuel -> review` edges. `apply` drops non-Garmin ops with a "skipped" line (`GARMIN_OPS` in `graph/nodes/apply.py`); Plan 3 adds `set_session_note` and `set_race_note` there with the TP caller and `repo.owned_note_ids`. `GraphDeps` needs a `tp: ToolCaller | None` field for that.
