@@ -9,6 +9,8 @@ Findings 2026-09-10: Garmin rejects any nutrition date more than 90 days out
 ("Provided date ... is after 90 days from current date"), so the write probe uses today + 60.
 The probe refuses to run when the day carries no goals yet, because there is no tool to clear a
 day's goals afterwards; pass --allow-stray to accept leaving the probe target in place.
+Outcome 2026-09-10: Garmin rejects any effective date after today, so the future-day probe always
+errors; only today's settings can be written. Settings are one record versioned by effectiveDate.
 """
 
 from __future__ import annotations
@@ -78,7 +80,7 @@ async def main(days: int, log_date: str | None, probe_write: bool, allow_stray: 
             print(f"{far} has no goals set; a probe write could not be restored. Skipping.")
             print("Pass --allow-stray to write anyway and leave the probe target in place.")
             return
-        await record(
+        written = await record(
             g,
             "set_nutrition_daily_settings",
             {
@@ -94,7 +96,11 @@ async def main(days: int, log_date: str | None, probe_write: bool, allow_stray: 
         after_next = await record(
             g, "get_nutrition_daily_settings", {"date": next_day}, "_far_next_day"
         )
-        ok = all(isinstance(x, dict) and "__error__" not in x for x in (before, after, after_next))
+        ok = (
+            all(isinstance(x, dict) and "__error__" not in x for x in (before, after, after_next))
+            and isinstance(written, dict)
+            and "__error__" not in written
+        )
         if not ok:
             print("per-day override? unknown: a call errored; see the _far_*.json files")
         else:
