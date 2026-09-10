@@ -1,41 +1,82 @@
 {
   "args": {
-    "date": "2026-09-09"
+    "date": "2026-09-10"
   },
   "result": {
-    "mealDate": "2026-09-09",
+    "mealDate": "2026-09-10",
     "dayStartTime": "05:00:00",
     "dayEndTime": "20:00:00",
     "dailyViewType": "TIMELINE_VIEW",
+    "dailyNutritionContent": {
+      "calories": 213,
+      "carbs": 2.0,
+      "fat": 15.0,
+      "protein": 18.0,
+      "caloriesPercentage": 0.0
+    },
     "mealDetails": [
       {
         "meal": {
           "mealId": 1424726,
           "mealIndex": 1,
           "mealName": "BREAKFAST",
-          "defaultMealName": "BREAKFAST",
           "displayOrder": 0,
           "startTime": "05:00:00",
           "endTime": "08:59:00",
           "goals": {},
-          "enabled": true,
           "editable": true,
           "translated": false
         },
+        "mealNutritionContent": {
+          "calories": 213,
+          "carbs": 2.0,
+          "protein": 18.0,
+          "fat": 15.0
+        },
         "mealNutritionGoals": {},
-        "loggedFoods": []
+        "loggedFoods": [
+          {
+            "id": "45a633eef4ce41caa33accdda475b7d4",
+            "logId": "53bdf13f02314def855242e23ed6ecf7",
+            "logTimestamp": "2026-09-10T23:28:24.124Z",
+            "logSource": "GCW",
+            "logCategory": "REGULAR_LOG",
+            "servingQty": 1.0,
+            "foodMetaData": {
+              "foodId": "45a633eef4ce41caa33accdda475b7d4",
+              "foodName": "Eggs (3 large)",
+              "source": "GARMIN",
+              "regionCode": "US",
+              "languageCode": "en",
+              "customFoodType": "FOOD"
+            },
+            "nutritionContent": {
+              "servingId": "509444783c2a4816a2a7c3dc8dc07e79",
+              "servingUnit": "serving",
+              "numberOfUnits": 1.0,
+              "calories": 213,
+              "carbs": 1.5,
+              "protein": 18.0,
+              "fat": 15.0,
+              "unitHasServing": false
+            },
+            "isFavorite": false,
+            "mealId": 1424726,
+            "mealTime": "05:00:00",
+            "foodInactive": false,
+            "type": "FOOD"
+          }
+        ]
       },
       {
         "meal": {
           "mealId": 1424727,
           "mealIndex": 2,
           "mealName": "LUNCH",
-          "defaultMealName": "LUNCH",
           "displayOrder": 1,
           "startTime": "11:00:00",
           "endTime": "13:00:00",
           "goals": {},
-          "enabled": true,
           "editable": true,
           "translated": false
         },
@@ -47,12 +88,10 @@
           "mealId": 1424728,
           "mealIndex": 3,
           "mealName": "DINNER",
-          "defaultMealName": "DINNER",
           "displayOrder": 2,
           "startTime": "17:00:00",
           "endTime": "19:00:00",
           "goals": {},
-          "enabled": true,
           "editable": true,
           "translated": false
         },
@@ -64,10 +103,8 @@
           "mealId": 1424729,
           "mealIndex": 4,
           "mealName": "SNACKS",
-          "defaultMealName": "SNACKS",
           "displayOrder": 6,
           "goals": {},
-          "enabled": true,
           "editable": false,
           "translated": false
         },
@@ -75,6 +112,30 @@
         "loggedFoods": []
       }
     ],
-    "loggedFoodsWithServingSizes": []
+    "loggedFoodsWithServingSizes": [
+      {
+        "foodMetaData": {
+          "foodId": "45a633eef4ce41caa33accdda475b7d4",
+          "foodName": "Eggs (3 large)",
+          "source": "GARMIN",
+          "regionCode": "US",
+          "languageCode": "en",
+          "customFoodType": "FOOD"
+        },
+        "nutritionContents": [
+          {
+            "servingId": "509444783c2a4816a2a7c3dc8dc07e79",
+            "servingUnit": "serving",
+            "numberOfUnits": 1.0,
+            "calories": 213,
+            "carbs": 1.5,
+            "protein": 18.0,
+            "fat": 15.0,
+            "unitHasServing": false
+          }
+        ],
+        "foodImages": []
+      }
+    ]
   }
 }

@@ -63,12 +63,12 @@
       "golfSpeedUnit": null,
       "externalBottomTime": null,
       "availableTrainingDays": [
-        "WEDNESDAY",
-        "FRIDAY",
         "THURSDAY",
         "SUNDAY",
-        "MONDAY",
         "TUESDAY",
+        "FRIDAY",
+        "MONDAY",
+        "WEDNESDAY",
         "SATURDAY"
       ],
       "preferredLongTrainingDays": [

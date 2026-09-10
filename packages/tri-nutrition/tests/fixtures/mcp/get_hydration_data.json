@@ -1,10 +1,10 @@
 {
   "args": {
-    "date": "2026-09-09"
+    "date": "2026-09-10"
   },
   "result": {
     "userId": 1000001,
-    "calendarDate": "2026-09-09",
+    "calendarDate": "2026-09-10",
     "valueInML": null,
     "goalInML": 2839.056,
     "dailyAverageinML": null,
