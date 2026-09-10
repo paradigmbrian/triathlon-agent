@@ -1,9 +1,10 @@
 """Targets node: profile + horizon -> DayTargets in the database and a Garmin change set.
-No model call."""
+No model call. The horizon builder is shared with the `today` command."""
 
 from __future__ import annotations
 
-from datetime import timedelta
+from dataclasses import dataclass, field
+from datetime import date, timedelta
 from typing import Any
 
 from langchain_core.messages import AIMessage
@@ -16,7 +17,7 @@ from tri_nutrition.graph.deps import GraphDeps
 from tri_nutrition.graph.state import NutritionState
 from tri_nutrition.nutrition.bounds import validate_targets
 from tri_nutrition.nutrition.garmin_calls import day_target_change, targets_needing_write
-from tri_nutrition.nutrition.models import NutritionProfile
+from tri_nutrition.nutrition.models import DayTarget, NutritionChange, NutritionProfile
 from tri_nutrition.nutrition.targets import build
 from tri_nutrition.repl import render_targets
 
@@ -31,47 +32,81 @@ def apply_overrides(
     return NutritionProfile.model_validate({**profile.model_dump(mode="json"), **overrides})
 
 
+@dataclass
+class Horizon:
+    """What one regeneration produced. `violations` non-empty means nothing was stored."""
+
+    today: date
+    targets: list[DayTarget] = field(default_factory=list)
+    source: str = ""
+    violations: list[str] = field(default_factory=list)
+    changes: list[NutritionChange] = field(default_factory=list)  # today's Garmin write, if any
+    error: str | None = None
+
+    def summary(self) -> str:
+        if self.error:
+            return self.error
+        if self.violations:
+            return "Targets not written; bounds violated:\n  " + "\n  ".join(self.violations)
+        end = self.targets[-1].day if self.targets else self.today
+        what = (
+            f"today's target ({self.today}) needs a Garmin write"
+            if self.changes
+            else f"today's target ({self.today}) is already on Garmin"
+        )
+        return (
+            f"Daily targets for {self.today} to {end} ({self.source}), stored; {what}. Garmin "
+            "holds only the current day; run `tri-nutrition today` each morning.\n"
+            + render_targets(self.targets)
+        )
+
+
+async def build_horizon(
+    deps: GraphDeps, store: BaseStore, overrides: dict[str, Any] | None = None
+) -> Horizon:
+    """Regenerate the horizon from the Store profile and the plan; upsert it unless a bound is
+    violated; return today's Garmin change when today's row needs a write."""
+    today = deps.today()
+    base = await S.get_profile(store)
+    if base is None:
+        return Horizon(today=today, error=NO_PROFILE)
+    profile = apply_overrides(base, overrides)
+    with deps.connect() as conn:
+        sessions, ctx = plan_loader.load_horizon(conn, today, deps.horizon_days)
+    targets = build(profile, sessions, ctx, today, deps.horizon_days)
+    violations = validate_targets(targets, profile)
+    if violations:
+        return Horizon(today=today, targets=targets, source=ctx.source, violations=violations)
+    end = today + timedelta(days=deps.horizon_days - 1)
+    with deps.connect() as conn:
+        existing = repo.list_targets(conn, today, end)
+        repo.upsert_targets(conn, targets)
+        conn.commit()
+    needing = [t for t in targets_needing_write(targets, existing) if t.day == today]
+    return Horizon(
+        today=today,
+        targets=targets,
+        source=ctx.source,
+        changes=[day_target_change(t) for t in needing],
+    )
+
+
 def make_targets_node(deps: GraphDeps) -> Any:
     async def targets_node(
         state: NutritionState, config: RunnableConfig, *, store: BaseStore
     ) -> dict[str, Any]:
-        base = await S.get_profile(store)
-        if base is None:
+        h = await build_horizon(deps, store, state.get("profile_overrides"))
+        if h.error or h.violations:
             return {
                 "pending_changes": [],
                 "pending_summary": None,
                 "profile_saved": False,
-                "last_error": NO_PROFILE,
-                "messages": [AIMessage(NO_PROFILE)],
+                "last_error": h.error or "; ".join(h.violations),
+                "messages": [AIMessage(h.summary())],
             }
-        profile = apply_overrides(base, state.get("profile_overrides"))
-        today = deps.today()
-        with deps.connect() as conn:
-            sessions, ctx = plan_loader.load_horizon(conn, today, deps.horizon_days)
-        targets = build(profile, sessions, ctx, today, deps.horizon_days)
-        violations = validate_targets(targets, profile)
-        if violations:
-            text = "Targets not written; bounds violated:\n  " + "\n  ".join(violations)
-            return {
-                "pending_changes": [],
-                "pending_summary": None,
-                "profile_saved": False,
-                "last_error": "; ".join(violations),
-                "messages": [AIMessage(text)],
-            }
-        end = today + timedelta(days=deps.horizon_days - 1)
-        with deps.connect() as conn:
-            existing = repo.list_targets(conn, today, end)
-            repo.upsert_targets(conn, targets)
-            conn.commit()
-        changes = [day_target_change(t) for t in targets_needing_write(targets, existing)]
-        summary = (
-            f"Daily targets for {today} to {end} ({ctx.source}); {len(changes)} of "
-            f"{len(targets)} days need a Garmin write.\n" + render_targets(targets)
-        )
         return {
-            "pending_changes": changes,
-            "pending_summary": summary,
+            "pending_changes": h.changes,
+            "pending_summary": h.summary(),
             "profile_saved": False,
             "last_error": None,
         }

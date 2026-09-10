@@ -42,7 +42,8 @@ async def test_intake_to_review_pauses_before_any_write(ndb, make_deps, mem_stor
     out = await graph.ainvoke({"messages": [HumanMessage("set up my nutrition")]}, CFG)
     assert "__interrupt__" in out
     payload = out["__interrupt__"][0].value
-    assert len(payload["changes"]) == 7 and "kcal" in payload["summary"]
+    assert len(payload["changes"]) == 1 and "kcal" in payload["summary"]
+    assert payload["changes"][0]["day"] == MONDAY.isoformat()
     assert g.calls == []
     snap = await graph.aget_state(CFG)
     assert snap.next == ("review",) and snap.values["regenerate_from"] == "intake"
@@ -54,10 +55,10 @@ async def test_approve_applies_and_writes_garmin(ndb, make_deps, mem_store):
     graph = make_graph(make_deps, mem_store, ScriptedChatModel(script=intake_script()), g)
     await graph.ainvoke({"messages": [HumanMessage("set up my nutrition")]}, CFG)
     out = await graph.ainvoke(APPROVE, CFG)
-    assert out["pending_changes"] == [] and len(g.calls) == 7
+    assert out["pending_changes"] == [] and len(g.calls) == 1
     stored = repo.list_targets(ndb, MONDAY, MONDAY + timedelta(days=6))
-    assert all(s.written_to_garmin for s in stored)
-    assert "applied 7 of 7" in out["messages"][-1].content
+    assert [s.written_to_garmin for s in stored] == [True] + [False] * 6
+    assert "applied 1 of 1" in out["messages"][-1].content
 
 
 async def test_reject_routes_back_to_intake_with_note(ndb, make_deps, mem_store):
@@ -90,7 +91,7 @@ async def test_checkin_profile_edit_regenerates_targets(ndb, make_deps, mem_stor
     )
     graph = make_graph(make_deps, mem_store, model, FakeGarmin(), horizon=3)
     out = await graph.ainvoke({"messages": [HumanMessage("I'm on my feet all day now")]}, CFG)
-    assert "__interrupt__" in out and len(out["__interrupt__"][0].value["changes"]) == 3
+    assert "__interrupt__" in out and len(out["__interrupt__"][0].value["changes"]) == 1
     assert (await graph.aget_state(CFG)).values["regenerate_from"] == "checkin"
 
 
@@ -98,23 +99,26 @@ async def test_edit_replaces_change_set(ndb, make_deps, mem_store):
     g = FakeGarmin()
     graph = make_graph(make_deps, mem_store, ScriptedChatModel(script=intake_script()), g)
     out = await graph.ainvoke({"messages": [HumanMessage("go")]}, CFG)
-    edited = out["__interrupt__"][0].value["changes"][:2]
+    edited = out["__interrupt__"][0].value["changes"]
+    edited[0]["payload"] = {**edited[0]["payload"], "carbs_grams": 300, "calorie_goal": 9999}
     out = await graph.ainvoke(Command(resume={"action": "edit", "changes": edited}), CFG)
-    assert len(g.calls) == 2 and out["pending_changes"] == []
+    assert len(g.calls) == 1 and out["pending_changes"] == []
+    sent = g.calls[0][1]
+    assert sent["carbs_grams"] == 300 and sent["calorie_goal"] != 9999  # consistency fix applied
 
 
-async def test_mid_batch_failure_then_reproposes_remainder(ndb, make_deps, mem_store):
-    g = FakeGarmin(fail_on_call=3)
+async def test_garmin_failure_keeps_today_pending_then_reproposes(ndb, make_deps, mem_store):
+    g = FakeGarmin(fail_on_call=1)
     model = ScriptedChatModel(script=[*intake_script(), AIMessage(content="Trying again.")])
     graph = make_graph(make_deps, mem_store, model, g, horizon=4)
     await graph.ainvoke({"messages": [HumanMessage("go")]}, CFG)
     out = await graph.ainvoke(APPROVE, CFG)
-    assert len(out["pending_changes"]) == 2 and "boom" in out["last_error"]
+    assert len(out["pending_changes"]) == 1 and "boom" in out["last_error"]
     g.fail_on_call = None
     out = await graph.ainvoke({"messages": [HumanMessage("try again")]}, CFG)
-    assert "__interrupt__" in out and len(out["__interrupt__"][0].value["changes"]) == 2
+    assert "__interrupt__" in out and len(out["__interrupt__"][0].value["changes"]) == 1
     out = await graph.ainvoke(APPROVE, CFG)
-    assert out["pending_changes"] == [] and len(g.calls) == 5  # 2 ok + 1 failed + 2 retried
+    assert out["pending_changes"] == [] and len(g.calls) == 2  # 1 failed + 1 retried
 
 
 def test_route_functions():

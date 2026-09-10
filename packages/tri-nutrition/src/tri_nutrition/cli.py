@@ -1,4 +1,5 @@
-"""Command-line entry points for the nutrition agent: chat, reset (check-in arrives in Plan 4)."""
+"""Command-line entry points for the nutrition agent: chat, today, reset (check-in arrives in
+Plan 4)."""
 
 from __future__ import annotations
 
@@ -154,6 +155,61 @@ async def _chat(*, no_live: bool) -> None:
             commands={"status": cmd_status, "profile": cmd_profile, "sync": cmd_sync},
             edit=edit_in_editor,
         )
+
+
+@app.command()
+def today(
+    yes: bool = typer.Option(False, "--yes", help="Write without asking"),
+    no_live: bool = typer.Option(False, "--no-live", help="Regenerate only; do not start Garmin"),
+) -> None:
+    """Regenerate the horizon and write today's target to Garmin (the daily write; Garmin holds
+    only the current day's goal)."""
+    raise typer.Exit(code=asyncio.run(_today(yes=yes, no_live=no_live)))
+
+
+async def _today(*, yes: bool, no_live: bool) -> int:
+    from contextlib import AsyncExitStack
+
+    from tri_core.mcp.client import McpToolClient
+    from tri_core.mcp.servers import garmin_spec
+    from tri_nutrition import store as S
+    from tri_nutrition.allowlist import GARMIN_SERVER_TOOLS
+    from tri_nutrition.daily import describe_change, propose_today, write_today
+    from tri_nutrition.graph.deps import make_deps
+    from tri_nutrition.graph.llm import make_model
+
+    settings = get_nutrition_settings()
+    if not S.store_ready(settings.database_url):
+        console.print(S.STORE_SETUP_HINT, style="red")
+        return 2
+    async with AsyncExitStack() as stack:
+        garmin = None
+        if not no_live:
+            try:
+                garmin = await asyncio.wait_for(
+                    stack.enter_async_context(
+                        McpToolClient(garmin_spec(settings, enabled_tools=GARMIN_SERVER_TOOLS))
+                    ),
+                    timeout=GARMIN_START_TIMEOUT_S,
+                )
+            except Exception as exc:
+                _out(f"garmin MCP server unavailable ({type(exc).__name__}: {exc})\n")
+                return 1
+        store = await stack.enter_async_context(S.open_store(settings.database_url))
+        deps = make_deps(settings, make_model(settings), garmin)
+        h = await propose_today(deps, store)
+        _out(h.summary() + "\n")
+        if h.error or h.violations:
+            return 1
+        if not h.changes:
+            return 0
+        if garmin is None:
+            _out("(--no-live: horizon stored, nothing written)\n")
+            return 0
+        if not yes and not typer.confirm(f"Write {describe_change(h)} to Garmin?"):
+            return 1
+        _out(await write_today(deps, h) + "\n")
+    return 0
 
 
 @app.command()

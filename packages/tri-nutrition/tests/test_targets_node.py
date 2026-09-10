@@ -39,15 +39,15 @@ def node_graph(make_deps, mem_store, horizon):
     )
 
 
-async def test_builds_upserts_and_proposes_every_day(ndb, make_deps, mem_store):
+async def test_builds_upserts_and_proposes_today(ndb, make_deps, mem_store):
     await S.put_profile(mem_store, NutritionProfile(**PROFILE_ARGS))
     seed_ftp(ndb, 250)
     hard_run = session_json(MONDAY + timedelta(days=2), "run", 50, "threshold", 60)
     seed_goal_and_plan(ndb, MONDAY, [("build", [hard_run]), ("build", None)])
     graph = node_graph(make_deps, mem_store, 7)
     out = await graph.ainvoke({"profile_saved": True, "regenerate_from": "intake"}, CFG)
-    assert len(out["pending_changes"]) == 7 and out["profile_saved"] is False
-    assert all(c.op == "set_day_targets" for c in out["pending_changes"])
+    assert [c.day for c in out["pending_changes"]] == [MONDAY] and out["profile_saved"] is False
+    assert out["pending_changes"][0].op == "set_day_targets"
     stored = repo.list_targets(ndb, MONDAY, MONDAY + timedelta(days=6))
     assert len(stored) == 7 and stored[2].target.day_type == "hard"
     assert stored[0].target.plan_phase == "build" and stored[0].target.source == "plan"
@@ -58,10 +58,11 @@ async def test_builds_upserts_and_proposes_every_day(ndb, make_deps, mem_store):
 async def test_unchanged_written_days_are_not_reproposed(ndb, make_deps, mem_store):
     await S.put_profile(mem_store, NutritionProfile(**PROFILE_ARGS))
     graph = node_graph(make_deps, mem_store, 3)
-    await graph.ainvoke({"profile_saved": True}, CFG)
-    repo.mark_targets_written(ndb, [MONDAY, MONDAY + timedelta(days=1)])
+    first = await graph.ainvoke({"profile_saved": True}, CFG)
+    assert [c.day for c in first["pending_changes"]] == [MONDAY]
+    repo.mark_targets_written(ndb, [MONDAY])
     out = await graph.ainvoke({"profile_saved": True}, CFG)
-    assert [c.day for c in out["pending_changes"]] == [MONDAY + timedelta(days=2)]
+    assert out["pending_changes"] == [] and "already on Garmin" in out["pending_summary"]
 
 
 async def test_overrides_apply_on_top_of_store_profile(ndb, make_deps, mem_store):

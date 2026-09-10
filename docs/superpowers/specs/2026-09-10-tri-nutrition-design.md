@@ -1,7 +1,7 @@
 # tri-nutrition — Endurance Nutrition Agent (package `tri_nutrition`)
 
 **Date:** 2026-09-10
-**Status:** Approved design, pending implementation plan
+**Status:** Approved design; revised 2026-09-10 after the first live run (Garmin holds only today's target, see §2 and §8)
 **Purpose:** A LangChain/LangGraph learning project that also produces a useful tool: an agent that interviews the athlete about diet, restrictions, habits, body composition and physique goals, then derives periodized daily nutrition targets and per-session fueling plans from the training plan, writes them to Garmin Connect and TrainingPeaks after approval, and checks in against logged intake and body composition as training unfolds.
 
 Companion specs: `tri-analyze` (2026-09-06) and `tri-planning` (2026-09-07). This spec assumes both and copies their patterns.
@@ -16,7 +16,7 @@ Companion specs: `tri-analyze` (2026-09-06) and `tri-planning` (2026-09-07). Thi
 | Time series | Daily targets, fuel plans and the write audit live in Postgres tables (`003_nutrition.sql`) | Trend queries and audit are SQL-shaped; the Store is key-value. |
 | Write safety | Propose, then approve. `interrupt()` before any Garmin or TrainingPeaks write | Same as planning. |
 | Targets | Python derives daily calorie and macro targets from RMR, body mass and the planned sessions; the LLM writes fueling notes and the race-day plan within Python-checked bounds | Deterministic, testable safety math; the model does prose and product choice. |
-| Horizon | Rolling window of `TRI_NUTRITION_HORIZON_DAYS` (default 14) days of targets and notes | Targets change when the plan changes; the window is cheap to regenerate. |
+| Horizon | Rolling window of `TRI_NUTRITION_HORIZON_DAYS` (default 14) days of targets and notes, stored in Postgres; **Garmin carries only today's target** (written by `tri-nutrition today` each morning or by any run of the graph); future days reach the athlete through TrainingPeaks notes | Garmin cannot store a future day's goal (verified 2026-09-10). Targets change when the plan changes; the window is cheap to regenerate. |
 | Data sources | Garmin Connect (Index scale body composition, food log, nutrition settings), TrainingPeaks (calendar, notes), local Postgres (plan tables, workouts, metrics) | Verified 2026-09-10 that the athlete uses a Garmin Index scale and logs food in Garmin Connect. |
 | Interface | Terminal REPL and CLI | Same as the other agents. |
 | LLM | `claude-opus-5` via `langchain-anthropic` | Same as the other agents. |
@@ -33,7 +33,7 @@ Garmin MCP tools (all take `YYYY-MM-DD` dates and return `json.dumps` on success
 - `get_nutrition_daily_food_log(date)`: logged items with calories and macros per item.
 - `get_nutrition_daily_meals(date)`: per-meal totals.
 - `get_nutrition_daily_settings(date)`: current calorie and macro targets.
-- `set_nutrition_daily_settings(date, calorie_goal?, carbs_grams?, fat_grams?, protein_grams?)`: read-modify-write of the day's targets; Garmin silently corrects a calorie goal that disagrees with `4c + 4p + 9f`.
+- `set_nutrition_daily_settings(date, calorie_goal?, carbs_grams?, fat_grams?, protein_grams?)`: read-modify-write of the nutrition goal record. **Verified 2026-09-10 by direct probes:** macros are grams; the record is one goal versioned by `effectiveDate` (reading a date returns the version in force that day); **Garmin rejects any effective date later than today**, so only today's target can be written, never a future day's. The tool's echo of the macros is unreliable; writes are verified by a read-back.
 - `get_hydration_data(date)`, `get_stats(date)` (daily total and BMR kcal).
 
 These tools are not in `GARMIN_ENABLED_TOOLS` today. `tri_core.mcp.servers.garmin_spec` gains an `enabled_tools` parameter so each agent registers the set it needs; the default stays the current list.
@@ -203,10 +203,10 @@ checkin -> targets  (save_nutrition_profile or propose_target_changes was called
 Edge functions are pure over state, so a `route` node does the one Store read that routing needs.
 
 - **intake**: `create_agent` sub-agent with `query_training_db`, `read_training_plan`, Garmin live `get_body_composition`, `get_user_profile`, `get_nutrition_daily_settings`, and `save_nutrition_profile`. The prompt tells it to open by reading weight, body fat, age and the current Garmin targets so it confirms rather than asks cold; then to establish, in order: goal and timeline; dietary pattern, allergies, intolerances and medical restrictions; GI history by sport; meals, cooking, caffeine, alcohol, food tracking and scale cadence; tested products and sweat rate; constraints. It warns when a `lose` goal overlaps peak, taper or race weeks of the active plan, and when the requested rate exceeds `max_weekly_change_pct`. Language suggesting disordered eating triggers a fixed referral message and the tool refuses `goal = lose`. After confirmation it calls `save_nutrition_profile` once and replies with a fixed sentence. Later profile edits happen in chat through the checkin sub-agent, which also holds `save_nutrition_profile`; the tool overwrites the Store key and the graph regenerates targets.
-- **targets**: pure Python. Reads the profile from the Store, the horizon's sessions from `plan_weeks.designed` and `workouts` (planned, not completed), and phases from `plan_weeks`. Calls `targets.build`, runs `bounds.validate_targets`; on violations it writes nothing, puts the violations in `last_error` and an `AIMessage`, and routes to END. Otherwise upserts `nutrition_targets` and emits one `set_day_targets` change per day whose kcal or macros differ from the row's previous values when that row had `written_to_garmin = true`, or for every day otherwise. `profile_overrides` in state are applied on top of the Store profile before building.
+- **targets**: pure Python. Reads the profile from the Store, the horizon's sessions from `plan_weeks.designed` and `workouts` (planned, not completed), and phases from `plan_weeks`. Calls `targets.build`, runs `bounds.validate_targets`; on violations it writes nothing, puts the violations in `last_error` and an `AIMessage`, and routes to END. Otherwise upserts `nutrition_targets` and emits one `set_day_targets` change for **today only** (Garmin cannot hold a future day's goal), and only when today's kcal or macros differ from the stored row's previous values or that row was never written. The table shown at review still covers the whole horizon. `profile_overrides` in state are applied on top of the Store profile before building.
 - **fuel**: for each session in the horizon with duration over 75 minutes or intensity in {threshold, vo2, race}, one `with_structured_output(SessionFuel)` call; for the goal event when it lies within 21 days, one `with_structured_output(RaceFuelPlan)` call. Inputs are the profile, product library, fuel log, the session, and that day's `DayTarget`. Runs `bounds.validate_fuel` or `validate_race`; retries once with the violation list; then upserts `fuel_plans` with any remaining violations and emits `set_session_note` and `set_race_note` changes. Traces are tagged `day` and `kind`.
 - **review**: `interrupt({"summary", "changes"})`. Resume is `Command(resume=decision)`. Reject routes to the conversational node that started the run (`regenerate_from`: intake or checkin) with the note appended as a `HumanMessage`, so the athlete can say what to change.
-- **apply**: translates each `NutritionChange` to one server call, checks the Garmin calorie goal against `4c + 4p + 9f` (recomputes the goal from the macros when off by more than 20 kcal), checks note ownership, records a `nutrition_changes` row per call, marks `written_to_garmin` and `written`, and persists any `profile_overrides` into the Store profile. A failed call stops the batch; the partial result lands in `last_error`.
+- **apply**: translates each `NutritionChange` to one server call (a `set_day_targets` change is refused unless its day is today), checks the Garmin calorie goal against `4c + 4p + 9f` (recomputes the goal from the macros when off by more than 20 kcal), checks note ownership, records a `nutrition_changes` row per call, marks `written_to_garmin` and `written`, and persists any `profile_overrides` into the Store profile. A failed call stops the batch; the partial result lands in `last_error`.
 - **checkin**: `create_agent` sub-agent with `query_training_db`, `read_training_plan`, Garmin live `get_body_composition`, `get_nutrition_daily_food_log`, `get_nutrition_daily_meals`, `get_hydration_data`, and the commit tools `record_fuel_feedback` and `propose_target_changes`. Its prompt encodes the check-in: logged intake versus target per day type over 7 days; weight and body fat trend over 14 and 28 days against the goal rate; low-intake days followed by poor readiness or sleep; TP workout comments mentioning GI trouble; whether fewer than 7 days of targets remain. `propose_target_changes` accepts profile field overrides (for example a changed activity factor or a paused deficit) and a reason; it writes them to `profile_overrides` in state and sets `regenerate_from = "checkin"`. The graph re-runs `targets` and `fuel` with the overrides applied and the result goes to review; on approve, `apply` persists the overrides into the Store profile, and on reject they are discarded and the note returns to checkin. Extending the horizon is the same call with no overrides.
 
 Write tools are never bound to a sub-agent. Only `apply` holds the write allow-list.
@@ -355,6 +355,7 @@ Violations are returned as a list of strings. Nothing that fails a bound is ever
 ## 8. Commands
 
 - `tri-nutrition chat`: REPL. Streams tokens, prints `→ tool(args)` and `← tool: N chars`. At review, prints the horizon as a table (day, type, kcal, C/P/F, note?) followed by any race timeline, then prompts `approve / reject <note> / edit`; `edit` opens the change set as YAML in `$EDITOR`. `/status` prints goal, weight and body fat trend, days of targets remaining, last write. `/profile` prints the Store profile. `/pending` re-prints a paused change set. `/sync` runs `tri sync`. `/quit`.
+- `tri-nutrition today [--yes]`: regenerates the horizon from the stored profile and plan (no model call), upserts it, and proposes today's Garmin target; prints the day and asks `y/N` unless `--yes`. This is the daily write, run each morning by the athlete (scheduled execution stays out of scope). It does nothing when today's row is already written with the same values.
 - `tri-nutrition check-in [--yes]`: runs `tri sync`, invokes the graph on thread `nutrition` with the fixed check-in prompt, prints the proposed change set and exits paused at review. `--yes` resumes with approve.
 - `tri-nutrition reset [--yes] [--forget-profile]`: clears the thread and the tables' unwritten rows. Only `--forget-profile` deletes the Store keys. Never touches Garmin or TrainingPeaks.
 
@@ -367,7 +368,8 @@ Violations are returned as a list of strings. Nothing that fails a bound is ever
 | No active plan in `plan_weeks` | Sessions come from `workouts` rows synced from the TP calendar (`source = tp_calendar`). If the horizon has no planned workouts either, days are typed from the profile's weekly hours and flagged `profile_hours`, and intake says so. |
 | Bounds violation in targets | Nothing written; violations printed; the athlete adjusts the profile in chat. |
 | Fuel validation fails twice | The plan is stored with its violations and shown at review; the athlete edits or rejects with guidance. |
-| Garmin write fails mid-batch | Batch stops; applied days are recorded; `last_error` names the failed day; review re-proposes the remainder. |
+| Garmin write fails | The change stays pending; `last_error` names the day; review re-proposes it next turn. (A batch now holds at most today's target plus TrainingPeaks notes; a mid-batch stop still records what was applied.) |
+| Garmin refuses a future date | Cannot happen by construction: `apply` and `today` only ever send today's date. |
 | Ownership check fails on a note | The change is dropped with a printed reason. |
 | Auth expired | Detected from server error text; the re-auth command is printed. |
 | Anthropic API error | Caught per turn, printed, REPL continues. |
@@ -383,7 +385,7 @@ Violations are returned as a list of strings. Nothing that fails a bound is ever
 - **Graph, `ScriptedChatModel` and `InMemoryStore`:** intake ends on `save_nutrition_profile` and the profile is in the Store; a new thread routes to `checkin` because the profile exists; review pauses and `Command(resume=approve)` reaches apply; reject routes back to intake or checkin with the note in messages; checkin ends on `propose_target_changes`, targets regenerate with the overrides, and approve persists them to the Store; a second process reads the profile from `AsyncPostgresStore`.
 - **Apply, fake Garmin and TP callers:** ownership refusal, mid-batch failure, one `nutrition_changes` row per call.
 - **DB tests** use `tri_analyze_test` and the rolled-back `db` fixture from `tri_core.testing`.
-- **Live, opt-in:** set a Garmin nutrition target 400 days out, read it back, restore the previous values.
+- **Live, opt-in:** set today's Garmin nutrition target, read it back, restore the previous values.
 - Definition of done per task: `uv run pytest`, `ruff check`, `ruff format --check`, `mypy` strict on `src/`.
 
 ## 12. Observability and evaluation
@@ -405,7 +407,7 @@ Meal plans and recipes; supplement protocols beyond caffeine, and a nitrate ment
 ## 15. Open items to verify in milestone 1
 
 - The exact JSON shape of `get_body_composition` for a range (field names for weight, body fat, muscle mass, water) and of `get_nutrition_daily_food_log` and `get_nutrition_daily_meals`; record fixtures with `scripts/spike_mcp.py` and scrub them.
-- Whether `set_nutrition_daily_settings` for a future date creates a per-day override or changes the inherited default, and whether the watch shows per-day targets.
+- ~~Whether `set_nutrition_daily_settings` for a future date creates a per-day override or changes the inherited default, and whether the watch shows per-day targets.~~ **Resolved 2026-09-10:** neither; future dates are rejected. Only today's goal can be written.
 - Whether `tp_set_workout_note` appears in the TP calendar view and mobile app as expected, or whether `description` is the better field for a fueling note.
 - `tp_create_note` return payload: does it carry the new note id needed for ownership?
 - How `get_store()` is exposed inside `create_agent` tools in langchain 1.4.0 (runtime injection versus `langgraph.config.get_store`).

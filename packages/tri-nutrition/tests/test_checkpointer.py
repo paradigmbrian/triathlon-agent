@@ -63,7 +63,7 @@ async def test_second_process_resumes_and_reads_profile_from_postgres(nocommit, 
             snap = await graph2.aget_state(thread)
             assert snap.next == ("review",)
             out = await graph2.ainvoke(Command(resume={"action": "approve"}), thread)
-            assert out["pending_changes"] == [] and len(garmin.calls) == 2
+            assert out["pending_changes"] == [] and len(garmin.calls) == 1
     finally:
         async with open_checkpointer(url) as saver3, S.open_store(url) as store3:
             await saver3.adelete_thread(thread["configurable"]["thread_id"])

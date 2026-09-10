@@ -51,30 +51,29 @@ def state(changes, **over):
     return {"pending_changes": changes, "pending_summary": "s", **over}
 
 
-async def test_applies_all_records_rows_and_marks_written(ndb, make_deps, mem_store):
-    ts = [target(), target(MONDAY + timedelta(days=1))]
-    repo.upsert_targets(ndb, ts)
+async def test_applies_today_records_row_and_marks_written(ndb, make_deps, mem_store):
+    repo.upsert_targets(ndb, [target(), target(MONDAY + timedelta(days=1))])
     g = FakeGarmin()
     out = await apply_graph(make_deps, mem_store, g).ainvoke(
-        state([day_target_change(t) for t in ts]), CFG
+        state([day_target_change(target())]), CFG
     )
     assert out["pending_changes"] == [] and out["last_error"] is None
-    assert [c[0] for c in g.calls] == ["set_nutrition_daily_settings"] * 2
+    assert [c[0] for c in g.calls] == ["set_nutrition_daily_settings"]
     assert g.calls[0][1]["date"] == "2026-09-14" and g.calls[0][1]["calorie_goal"] == 2800
     stored = repo.list_targets(ndb, MONDAY, MONDAY + timedelta(days=1))
-    assert [s.written_to_garmin for s in stored] == [True, True]
+    assert [s.written_to_garmin for s in stored] == [True, False]
     rows = ndb.execute(
         "select operation, target_key, result from nutrition_changes order by id"
     ).fetchall()
-    assert [r["target_key"] for r in rows] == ["2026-09-14", "2026-09-15"]
+    assert [r["target_key"] for r in rows] == ["2026-09-14"]
     assert rows[0]["result"]["status"] == "updated"
-    assert "applied 2 of 2" in out["messages"][-1].content
+    assert "applied 1 of 1" in out["messages"][-1].content
 
 
-async def test_mid_batch_failure_keeps_remainder_pending(ndb, make_deps, mem_store):
-    ts = [target(MONDAY + timedelta(days=i)) for i in range(3)]
+async def test_future_day_is_refused_and_batch_stops(ndb, make_deps, mem_store):
+    ts = [target(), target(MONDAY + timedelta(days=1)), target(MONDAY + timedelta(days=2))]
     repo.upsert_targets(ndb, ts)
-    g = FakeGarmin(fail_on_call=2)
+    g = FakeGarmin()
     out = await apply_graph(make_deps, mem_store, g).ainvoke(
         state([day_target_change(t) for t in ts]), CFG
     )
@@ -82,10 +81,23 @@ async def test_mid_batch_failure_keeps_remainder_pending(ndb, make_deps, mem_sto
         MONDAY + timedelta(days=1),
         MONDAY + timedelta(days=2),
     ]
-    assert "boom" in out["last_error"] and "2026-09-15" in out["last_error"]
+    assert "only hold today" in out["last_error"] and "2026-09-15" in out["last_error"]
+    assert len(g.calls) == 1  # today went through, the future day never reached Garmin
     stored = repo.list_targets(ndb, MONDAY, MONDAY + timedelta(days=2))
     assert [s.written_to_garmin for s in stored] == [True, False, False]
     assert ndb.execute("select count(*) as n from nutrition_changes").fetchone()["n"] == 1
+
+
+async def test_garmin_failure_keeps_change_pending(ndb, make_deps, mem_store):
+    repo.upsert_targets(ndb, [target()])
+    g = FakeGarmin(fail_on_call=1)
+    out = await apply_graph(make_deps, mem_store, g).ainvoke(
+        state([day_target_change(target())]), CFG
+    )
+    assert [c.day for c in out["pending_changes"]] == [MONDAY]
+    assert "boom" in out["last_error"]
+    assert repo.list_targets(ndb, MONDAY, MONDAY)[0].written_to_garmin is False
+    assert ndb.execute("select count(*) as n from nutrition_changes").fetchone()["n"] == 0
 
 
 async def test_refuses_without_garmin(ndb, make_deps, mem_store):

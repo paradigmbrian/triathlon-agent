@@ -74,6 +74,10 @@ flowchart TD
 
 - `tri-nutrition chat [--no-live]`: the REPL. `/status`, `/profile`, `/pending`, `/sync`, `/quit`.
   At review: `approve`, `reject <note>`, or `edit` (YAML in `$EDITOR`).
+- `tri-nutrition today [--yes] [--no-live]`: the daily write. Regenerates the horizon from the
+  stored profile and plan (no model call), stores it, and writes today's target to Garmin after a
+  `y/N`. Garmin holds only the current day's goal (a future date is rejected by Garmin), so run
+  this each morning; the chat's review only ever proposes today's Garmin write too.
 - `tri-nutrition reset [--yes] [--forget-profile]`: clears the thread and unwritten rows; only
   `--forget-profile` deletes the Store keys.
 

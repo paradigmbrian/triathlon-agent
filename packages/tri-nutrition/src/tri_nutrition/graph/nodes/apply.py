@@ -1,5 +1,5 @@
 """Apply node: the only place Garmin (and, from Plan 3, TrainingPeaks) is written.
-One call per change, recorded as it goes."""
+One call per change, recorded as it goes. `write_change` is shared with the `today` command."""
 
 from __future__ import annotations
 
@@ -23,6 +23,24 @@ GARMIN_OPS = ("set_day_targets",)
 
 def _label(c: NutritionChange) -> str:
     return f"{c.op} {c.target_key or c.day}"
+
+
+async def write_change(deps: GraphDeps, thread_id: str, change: NutritionChange) -> dict[str, Any]:
+    """Send one Garmin change, record the audit row, mark the day written. Raises on failure.
+    A set_day_targets change for any day but today is refused: Garmin holds only the current
+    day's goal."""
+    if deps.garmin is None:
+        raise McpToolError("set_nutrition_daily_settings", "Garmin server unavailable")
+    if change.op == "set_day_targets" and change.day != deps.today():
+        raise ValueError(f"Garmin can only hold today's target; {change.day} is not today")
+    name, args = to_garmin_call(change)
+    result = await deps.garmin.call_json(name, args)
+    payload = result if isinstance(result, dict) else {"result": result}
+    with deps.connect() as conn:
+        repo.insert_change(conn, thread_id, change, payload)
+        repo.mark_targets_written(conn, [change.day])
+        conn.commit()
+    return payload
 
 
 def make_apply_node(deps: GraphDeps) -> Any:
@@ -51,21 +69,10 @@ def make_apply_node(deps: GraphDeps) -> Any:
         error: str | None = None
         for change in garmin_changes:
             try:
-                name, args = to_garmin_call(change)
-                assert deps.garmin is not None
-                result = await deps.garmin.call_json(name, args)
+                await write_change(deps, thread_id, change)
             except (McpToolError, ValueError) as exc:
                 error = f"{_label(change)} failed: {exc}"
                 break
-            with deps.connect() as conn:
-                repo.insert_change(
-                    conn,
-                    thread_id,
-                    change,
-                    result if isinstance(result, dict) else {"result": result},
-                )
-                repo.mark_targets_written(conn, [change.day])
-                conn.commit()
             applied.append(change)
             remaining.remove(change)
 
@@ -84,7 +91,7 @@ def make_apply_node(deps: GraphDeps) -> Any:
         if error:
             lines.append(f"  stopped: {error}")
             lines.append(
-                f"  {len(remaining)} days still pending; they will be re-proposed next turn."
+                f"  {len(remaining)} change(s) still pending; they will be re-proposed next turn."
             )
         return {
             "pending_changes": remaining,
