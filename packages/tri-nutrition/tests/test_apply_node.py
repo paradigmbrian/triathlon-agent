@@ -9,8 +9,16 @@ from tri_nutrition import store as S
 from tri_nutrition.graph.nodes.apply import make_apply_node
 from tri_nutrition.graph.state import NutritionState
 from tri_nutrition.nutrition.garmin_calls import day_target_change
-from tri_nutrition.nutrition.models import DayTarget, NutritionChange, NutritionProfile
-from tri_nutrition.testing import MONDAY, PROFILE_ARGS, FakeGarmin
+from tri_nutrition.nutrition.models import DayTarget, NutritionProfile, RaceFuelPlan, SessionFuel
+from tri_nutrition.nutrition.tp_calls import race_note_change, session_note_change
+from tri_nutrition.testing import (
+    MONDAY,
+    PROFILE_ARGS,
+    FakeGarmin,
+    FakeTp,
+    race_plan_json,
+    session_fuel_json,
+)
 
 pytestmark = pytest.mark.db
 CFG = {"configurable": {"thread_id": "t"}}
@@ -67,7 +75,7 @@ async def test_applies_today_records_row_and_marks_written(ndb, make_deps, mem_s
     ).fetchall()
     assert [r["target_key"] for r in rows] == ["2026-09-14"]
     assert rows[0]["result"]["status"] == "updated"
-    assert "applied 1 of 1" in out["messages"][-1].content
+    assert "Applied 1 of 1" in out["messages"][-1].content
 
 
 async def test_future_day_is_refused_and_batch_stops(ndb, make_deps, mem_store):
@@ -117,9 +125,81 @@ async def test_overrides_persist_to_store_on_full_success(ndb, make_deps, mem_st
     assert (await S.get_profile(mem_store)).activity_factor == 1.5
 
 
-async def test_non_garmin_ops_are_skipped_with_reason(ndb, make_deps, mem_store):
-    note = NutritionChange(op="set_race_note", target_key="", day=MONDAY, payload={}, reason="r")
+def apply_graph2(make_deps, mem_store, garmin, tp):
+    g: StateGraph[NutritionState] = StateGraph(NutritionState)
+    deps = make_deps(ScriptedChatModel(script=[]), garmin=garmin, tp=tp)
+    g.add_node("apply", make_apply_node(deps))
+    g.add_edge(START, "apply")
+    g.add_edge("apply", END)
+    return g.compile(store=mem_store)
+
+
+def session_change(workout_id="w1", day=MONDAY):
+    return session_note_change(SessionFuel.model_validate(session_fuel_json(workout_id, day)))
+
+
+async def test_session_note_written_when_note_empty_then_owned(ndb, make_deps, mem_store):
+    repo.upsert_fuel_plan(ndb, "session", MONDAY, "w1", {"note_text": "n"}, [])
+    tp = FakeTp()
+    graph = apply_graph2(make_deps, mem_store, FakeGarmin(), tp)
+    out = await graph.ainvoke(state([session_change()]), CFG)
+    assert [c[0] for c in tp.calls] == ["tp_get_workout_note", "tp_set_workout_note"]
+    assert out["pending_changes"] == [] and out["last_error"] is None
+    assert repo.list_fuel_plans(ndb, MONDAY, MONDAY)[0].written is True
+    assert repo.session_note_owned(ndb, "w1")
+    # second write: owned, no read needed even if the athlete has since typed a note
+    tp2 = FakeTp(responses={"tp_get_workout_note": {"note": "athlete wrote this"}})
+    graph = apply_graph2(make_deps, mem_store, FakeGarmin(), tp2)
+    out = await graph.ainvoke(state([session_change()]), CFG)
+    assert [c[0] for c in tp2.calls] == ["tp_set_workout_note"] and out["pending_changes"] == []
+
+
+async def test_session_note_refused_when_athlete_note_exists(ndb, make_deps, mem_store):
+    tp = FakeTp(responses={"tp_get_workout_note": {"note": "my own reminder"}})
+    graph = apply_graph2(make_deps, mem_store, FakeGarmin(), tp)
+    out = await graph.ainvoke(state([session_change()]), CFG)
+    assert [c[0] for c in tp.calls] == ["tp_get_workout_note"]
+    assert out["pending_changes"] == [] and "not agent-authored" in out["messages"][-1].content
+
+
+async def test_race_note_create_records_id_then_update_owned(ndb, make_deps, mem_store):
+    plan = RaceFuelPlan.model_validate(race_plan_json(MONDAY + timedelta(days=10)))
+    repo.upsert_fuel_plan(ndb, "race", plan.event_date, None, plan.model_dump(mode="json"), [])
+    tp = FakeTp()
+    create = race_note_change(plan, "Race fuel: City Tri", None)
+    await apply_graph2(make_deps, mem_store, FakeGarmin(), tp).ainvoke(state([create]), CFG)
+    assert tp.calls[0][0] == "tp_create_note"
+    plans = repo.list_fuel_plans(ndb, plan.event_date, plan.event_date)
+    race = next(p for p in plans if p.kind == "race")
+    assert race.written and race.tp_note_id == "n1"
+    assert repo.owned_note_ids(ndb) == {"n1"}
+    update = race_note_change(plan, "Race fuel: City Tri", "n1")
+    tp2 = FakeTp()
+    await apply_graph2(make_deps, mem_store, FakeGarmin(), tp2).ainvoke(state([update]), CFG)
+    assert tp2.calls[0] == (
+        "tp_update_note",
+        {"note_id": "n1", "title": "Race fuel: City Tri", "description": plan.note_text},
+    )
+    foreign = race_note_change(plan, "Race fuel: City Tri", "coach-9")
+    tp3 = FakeTp()
+    out = await apply_graph2(make_deps, mem_store, FakeGarmin(), tp3).ainvoke(state([foreign]), CFG)
+    assert tp3.calls == [] and "not agent-authored" in out["messages"][-1].content
+
+
+async def test_tp_down_holds_notes_but_garmin_applies(ndb, make_deps, mem_store):
+    repo.upsert_targets(ndb, [target()])
     g = FakeGarmin()
-    out = await apply_graph(make_deps, mem_store, g).ainvoke(state([note]), CFG)
-    assert g.calls == [] and out["pending_changes"] == []
-    assert "skipped" in out["messages"][-1].content
+    out = await apply_graph2(make_deps, mem_store, g, None).ainvoke(
+        state([day_target_change(target()), session_change()]), CFG
+    )
+    assert len(g.calls) == 1 and [c.op for c in out["pending_changes"]] == ["set_session_note"]
+    assert "TrainingPeaks server unavailable" in out["last_error"]
+
+
+async def test_tp_failure_stops_batch_and_keeps_remainder(ndb, make_deps, mem_store):
+    tp = FakeTp(fail_on_call=2)  # get_workout_note ok, set fails
+    out = await apply_graph2(make_deps, mem_store, FakeGarmin(), tp).ainvoke(
+        state([session_change("w1"), session_change("w2", MONDAY + timedelta(days=1))]), CFG
+    )
+    assert [c.target_key for c in out["pending_changes"]] == ["w1", "w2"]
+    assert "boom" in out["last_error"]

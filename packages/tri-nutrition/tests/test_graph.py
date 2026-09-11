@@ -58,7 +58,7 @@ async def test_approve_applies_and_writes_garmin(ndb, make_deps, mem_store):
     assert out["pending_changes"] == [] and len(g.calls) == 1
     stored = repo.list_targets(ndb, MONDAY, MONDAY + timedelta(days=6))
     assert [s.written_to_garmin for s in stored] == [True] + [False] * 6
-    assert "applied 1 of 1" in out["messages"][-1].content
+    assert "Applied 1 of 1" in out["messages"][-1].content
 
 
 async def test_reject_routes_back_to_intake_with_note(ndb, make_deps, mem_store):

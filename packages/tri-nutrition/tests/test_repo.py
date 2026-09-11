@@ -102,3 +102,17 @@ def test_changes_and_note_ownership(ndb):
     assert row["operation"] == "set_race_note" and row["payload"]["op"] == "set_race_note"
     assert row["result"] == {"id": "note-9"} and row["reason"] == "race"
     assert repo.last_change_at(ndb) is not None
+
+
+def test_mark_fuel_written_for_and_session_ownership(ndb):
+    repo.upsert_fuel_plan(ndb, "session", MON, "w1", {"note_text": "x"}, [])
+    repo.mark_fuel_written_for(ndb, "session", MON, "w1", None)
+    assert repo.list_fuel_plans(ndb, MON, MON)[0].written is True
+    rid = repo.upsert_fuel_plan(ndb, "race", MON, None, {"note_text": "r"}, [])
+    repo.mark_fuel_written_for(ndb, "race", MON, None, "n-1")
+    race = next(p for p in repo.list_fuel_plans(ndb, MON, MON) if p.kind == "race")
+    assert race.written and race.tp_note_id == "n-1" and race.id == rid
+    assert repo.session_note_owned(ndb, "w1") is False
+    change = NutritionChange(op="set_session_note", target_key="w1", day=MON, payload={}, reason="")
+    repo.insert_change(ndb, "nutrition", change, {"success": True})
+    assert repo.session_note_owned(ndb, "w1") is True

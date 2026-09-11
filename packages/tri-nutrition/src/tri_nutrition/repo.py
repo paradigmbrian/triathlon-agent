@@ -181,3 +181,22 @@ def owned_note_ids(conn: Conn) -> set[str]:
 def last_change_at(conn: Conn) -> datetime | None:
     row = conn.execute("select max(applied_at) as at from nutrition_changes").fetchone()
     return row["at"] if row else None
+
+
+def mark_fuel_written_for(
+    conn: Conn, kind: str, day: date, tp_workout_id: str | None, tp_note_id: str | None
+) -> None:
+    conn.execute(
+        "update fuel_plans set written = true, tp_note_id = coalesce(%s::text, tp_note_id) "
+        "where kind = %s and day = %s and coalesce(tp_workout_id, '') = %s",
+        (tp_note_id, kind, day, tp_workout_id or ""),
+    )
+
+
+def session_note_owned(conn: Conn, workout_id: str) -> bool:
+    row = conn.execute(
+        "select 1 as x from nutrition_changes where operation = 'set_session_note' "
+        "and target_key = %s limit 1",
+        (workout_id,),
+    ).fetchone()
+    return row is not None
