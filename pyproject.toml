@@ -3,7 +3,7 @@ name = "triathlon-agent"
 version = "0.1.0"
 description = "Triathlon training agents over Garmin + TrainingPeaks data (uv workspace root)"
 requires-python = ">=3.12,<3.13"
-dependencies = ["tri-core", "tri-analyze", "tri-planning", "tri-nutrition"]
+dependencies = ["tri-core", "tri-analyze", "tri-planning", "tri-nutrition", "tri-wellness"]
 
 [tool.uv]
 package = false
@@ -16,6 +16,7 @@ tri-core = { workspace = true }
 tri-analyze = { workspace = true }
 tri-planning = { workspace = true }
 tri-nutrition = { workspace = true }
+tri-wellness = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -44,12 +45,12 @@ extend-exclude = ["docs"]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["tri_core", "tri_analyze", "tri_planning", "tri_nutrition"]
+known-first-party = ["tri_core", "tri_analyze", "tri_planning", "tri_nutrition", "tri_wellness"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["packages/tri-core/src", "packages/tri-analyze/src", "packages/tri-planning/src", "packages/tri-nutrition/src"]
+files = ["packages/tri-core/src", "packages/tri-analyze/src", "packages/tri-planning/src", "packages/tri-nutrition/src", "packages/tri-wellness/src"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
