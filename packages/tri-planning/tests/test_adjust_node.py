@@ -84,7 +84,7 @@ def test_changes_from_messages_merges_tool_results():
     assert changes_from_messages([AIMessage(content="no changes")]) == ([], None)
 
 
-async def test_turn_without_proposal_returns_messages_only(nocommit, make_deps):
+async def test_turn_without_proposal_clears_pending_changes(nocommit, make_deps):
     gid, pid, _ = seed(nocommit)
     model = ScriptedChatModel(script=[AIMessage(content="All on track. No changes.")])
     node = make_adjust_node(make_deps(model, tp=FakeTp(), today=MONDAY + timedelta(days=3)))
@@ -97,7 +97,9 @@ async def test_turn_without_proposal_returns_messages_only(nocommit, make_deps):
         },
         CFG,
     )
-    assert "pending_changes" not in out and out["messages"][-1].content.startswith("All on track")
+    assert out["pending_changes"] == [] and out["changes_from"] is None
+    assert out["pending_summary"] is None and out["review_decision"] is None
+    assert out["messages"][-1].content.startswith("All on track")
 
 
 async def test_proposal_becomes_pending_changes(nocommit, make_deps):

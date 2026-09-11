@@ -57,15 +57,13 @@ async def test_designs_next_undesigned_week_skipping_written(nocommit, make_deps
 
 async def test_horizon_exhausted_but_weeks_remain_beyond_it(nocommit, make_deps):
     gid, pid, targets = seed(nocommit)
-    repo.set_week_designed(
-        nocommit, pid, MONDAY, PlannedWeek.model_validate(week_json(MONDAY, targets[0].target_tss))
-    )
+    repo.mark_weeks_written(nocommit, pid, [MONDAY])
     deps = make_deps(ScriptedChatModel(script=[]), horizon=1)
     tool = make_design_next_week_tool(deps, lambda: pid)
 
     out = json.loads(await tool.ainvoke({}))
 
-    assert out == {"error": "every week inside the horizon is already designed"}
+    assert out == {"error": "every week inside the horizon is already on the calendar"}
     weeks = repo.list_weeks(nocommit, pid)
     assert weeks[1].designed is None
 
@@ -78,7 +76,24 @@ async def test_every_remaining_week_already_designed(nocommit, make_deps):
 
     out = json.loads(await tool.ainvoke({}))
 
-    assert out == {"error": "every remaining week is already designed"}
+    assert out == {"error": "every remaining week is already on the calendar"}
+
+
+async def test_designed_but_unwritten_week_inside_horizon_is_redesigned(nocommit, make_deps):
+    gid, pid, targets = seed(nocommit)
+    repo.set_week_designed(
+        nocommit, pid, MONDAY, PlannedWeek.model_validate(week_json(MONDAY, targets[0].target_tss))
+    )
+    model = ScriptedChatModel(script=[structured(week_json(MONDAY, targets[0].target_tss))])
+    deps = make_deps(model, horizon=3)
+    tool = make_design_next_week_tool(deps, lambda: pid)
+
+    out = json.loads(await tool.ainvoke({}))
+
+    assert model.calls == 1
+    assert out["week_start"] == MONDAY.isoformat()
+    weeks = repo.list_weeks(nocommit, pid)
+    assert weeks[0].designed is not None and not weeks[0].written_to_tp
 
 
 async def test_no_active_plan(make_deps):

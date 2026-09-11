@@ -75,17 +75,23 @@ def make_adjust_node(deps: GraphDeps) -> Any:
         before = state.get("messages", [])
         result = await agent.ainvoke({"messages": before}, config)
         new = result["messages"][len(before) :]
-        update: dict[str, Any] = {"messages": new}
         changes, summary = changes_from_messages(new)
         if changes:
-            update.update(
-                {
-                    "pending_changes": changes,
-                    "pending_summary": summary,
-                    "changes_from": "adjust",
-                    "review_decision": None,
-                }
-            )
-        return update
+            return {
+                "messages": new,
+                "pending_changes": changes,
+                "pending_summary": summary,
+                "changes_from": "adjust",
+                "review_decision": None,
+            }
+        # adjust is entered with either no pending changes or its own rejected proposal;
+        # a turn that proposes nothing must clear that proposal so it isn't re-reviewed.
+        return {
+            "messages": new,
+            "pending_changes": [],
+            "pending_summary": None,
+            "changes_from": None,
+            "review_decision": None,
+        }
 
     return adjust

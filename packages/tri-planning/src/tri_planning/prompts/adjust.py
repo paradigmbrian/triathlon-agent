@@ -73,9 +73,7 @@ def load_adjust_context(conn: Conn, today: date, plan_id: int, horizon: int) -> 
         "where metric_date between %s and %s",
         (monday, today),
     ).fetchone()
-    designed_remaining = sum(
-        1 for w in weeks if (w.designed is not None or w.written_to_tp) and w.week_start >= monday
-    )
+    designed_remaining = sum(1 for w in weeks if w.written_to_tp and w.week_start >= monday)
     return AdjustContext(
         today=today,
         goal=stored.goal,

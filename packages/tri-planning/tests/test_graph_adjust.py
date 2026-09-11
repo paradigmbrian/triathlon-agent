@@ -83,6 +83,51 @@ async def test_active_turn_proposes_reviews_and_applies(nocommit, make_deps):
     assert out["phase"] == "active" and out["pending_changes"] == []
 
 
+async def test_reject_clears_pending_changes_and_returns_to_adjust(nocommit, make_deps):
+    gid, pid = seed_active(nocommit)
+    tp = FakeTp()
+    model = ScriptedChatModel(
+        script=[
+            tool_call(
+                "propose_calendar_changes",
+                {
+                    "summary": "move it",
+                    "changes": [
+                        {
+                            "op": "move",
+                            "tp_workout_id": "w1",
+                            "new_date": (MONDAY + timedelta(days=4)).isoformat(),
+                            "reason": "rest day",
+                        }
+                    ],
+                },
+            ),
+            AIMessage(content="Proposed a move."),
+            AIMessage(content="Nothing else to change."),
+            AIMessage(content="All good this turn."),
+        ]
+    )
+    graph = build_graph(
+        make_deps(model, tp=tp, today=MONDAY + timedelta(days=1), horizon=3), InMemorySaver()
+    )
+    await graph.aupdate_state(CFG, {"goal_id": gid, "plan_id": pid, "phase": "active"})
+    out = await graph.ainvoke({"messages": [HumanMessage("I need Wednesday off")]}, CFG)
+    assert out["__interrupt__"][0].value["changes"][0]["op"] == "move"
+
+    out = await graph.ainvoke(Command(resume={"action": "reject", "note": "leave it"}), CFG)
+    assert "__interrupt__" not in out
+    assert out["pending_changes"] == [] and out["changes_from"] is None
+    assert any(
+        isinstance(m, HumanMessage) and "Plan review rejected: leave it" in m.content
+        for m in out["messages"]
+    )
+
+    out = await graph.ainvoke({"messages": [HumanMessage("anything else?")]}, CFG)
+    assert "__interrupt__" not in out
+    assert out["messages"][-1].content == "All good this turn."
+    assert tp.calls == []
+
+
 def test_after_adjust():
     assert after_adjust({"pending_changes": [1]}) == "review"
     assert after_adjust({"pending_changes": []}) == "__end__"

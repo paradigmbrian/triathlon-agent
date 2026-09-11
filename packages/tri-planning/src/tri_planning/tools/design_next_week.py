@@ -20,8 +20,9 @@ def make_design_next_week_tool(
     deps: GraphDeps, plan_id_getter: Callable[[], int | None]
 ) -> BaseTool:
     async def design_next_week(config: Annotated[RunnableConfig, InjectedToolArg]) -> str:
-        """Design the next undesigned week of the plan (sessions, TSS, structure) so the calendar
-        keeps at least two designed weeks ahead. Its sessions join the proposal automatically."""
+        """Design the next week of the plan not yet on the calendar (sessions, TSS, structure) so
+        the calendar keeps at least two designed weeks ahead. Its sessions join the proposal
+        automatically. Re-designs a week that was designed but never approved."""
         plan_id = plan_id_getter()
         if plan_id is None:
             return json.dumps({"error": "no active plan"})
@@ -38,22 +39,17 @@ def make_design_next_week_tool(
             (
                 w
                 for w in weeks
-                if w.week_start >= monday
-                and w.designed is None
-                and not w.written_to_tp
-                and w.week_start <= horizon_end
+                if w.week_start >= monday and not w.written_to_tp and w.week_start <= horizon_end
             ),
             None,
         )
         if row is None:
-            undesigned = [
-                w
-                for w in weeks
-                if w.week_start >= monday and w.designed is None and not w.written_to_tp
-            ]
-            if undesigned:
-                return json.dumps({"error": "every week inside the horizon is already designed"})
-            return json.dumps({"error": "every remaining week is already designed"})
+            unwritten = [w for w in weeks if w.week_start >= monday and not w.written_to_tp]
+            if unwritten:
+                return json.dumps(
+                    {"error": "every week inside the horizon is already on the calendar"}
+                )
+            return json.dumps({"error": "every remaining week is already on the calendar"})
         target = next(t for t in plan.targets if t.week_start == row.week_start)
         previous = next(
             (w.designed for w in reversed(weeks) if w.designed and w.week_start < row.week_start),
