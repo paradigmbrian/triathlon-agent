@@ -166,6 +166,12 @@ def test_yaml_round_trip_and_validation():
         review_from_yaml(text.replace("2026-08-20", "yesterday"), reg)
 
 
+def test_yaml_parse_failure_raises_value_error():
+    reg = load_registry("male", MARKERS_PATH)
+    with pytest.raises(ValueError, match="^yaml:"):
+        review_from_yaml("results: [\n  - marker: ferritin\n", reg)
+
+
 async def test_review_dialogue_paths():
     out = []
     # approve is blocked while a unit row remains

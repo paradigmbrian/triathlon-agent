@@ -173,7 +173,10 @@ def review_to_yaml(payload: dict[str, Any]) -> str:
 
 def review_from_yaml(text: str, registry: MarkerRegistry) -> dict[str, Any]:
     """Parse and validate an edited review document. Raises ValueError naming every bad row."""
-    doc = yaml.safe_load(text) or {}
+    try:
+        doc = yaml.safe_load(text) or {}
+    except yaml.YAMLError as exc:
+        raise ValueError(f"yaml: {exc}") from exc
     problems: list[str] = []
     results: list[LabResult] = []
     for i, row in enumerate(doc.get("results") or []):

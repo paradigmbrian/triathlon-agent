@@ -59,6 +59,9 @@ def make_editor(registry: Any) -> Any:
         except ValueError as exc:
             _out(f"edited YAML is not valid:\n{exc}\n")
             return None
+        except OSError as exc:
+            _out(f"could not run editor '{editor}': {exc}\n")
+            return None
         finally:
             os.unlink(path)
 
