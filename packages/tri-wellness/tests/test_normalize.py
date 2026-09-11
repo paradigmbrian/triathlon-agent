@@ -30,6 +30,11 @@ def raw(name, value, unit=None, ref_low=None, ref_high=None, flag=None):
         ("Not detected", None),
         ("", None),
         ("12.4 ng/mL", None),
+        ("5,2", None),
+        ("1,234.5", (1234.5, None)),
+        ("-5", None),
+        ("+5", (5.0, None)),
+        ("12,34", None),
     ],
 )
 def test_parse_value(text, expected):
@@ -87,6 +92,20 @@ def test_non_numeric_value_is_unmapped_with_marker(reg):
     out = normalize([raw("TPO Antibodies", "Negative", "IU/mL")], reg)
     [u] = out.unmapped
     assert u.reason == "value" and u.marker == "tpo_ab"
+
+
+def test_comma_decimal_value_is_unmapped_with_marker(reg):
+    out = normalize([raw("Glucose", "5,2", "mg/dL")], reg)
+    assert out.results == []
+    [u] = out.unmapped
+    assert u.reason == "value" and u.marker == "glucose"
+
+
+def test_whitespace_only_unit_is_unmapped_with_marker(reg):
+    out = normalize([raw("Ferritin", "42", "  ")], reg)
+    assert out.results == []
+    [u] = out.unmapped
+    assert u.reason == "unit" and u.marker == "ferritin"
 
 
 def test_duplicate_marker_first_row_wins(reg):

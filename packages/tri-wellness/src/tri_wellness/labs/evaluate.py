@@ -114,6 +114,15 @@ def _delta_pct(value: float, prev: float | None) -> float | None:
     return round((value - prev) / prev * 100, 1)
 
 
+def _functional_range(spec: MarkerSpec) -> tuple[float | None, float | None]:
+    """Collapse the side `functional_status` ignores, so the reported range matches direction."""
+    if spec.direction == "low":
+        return (spec.functional.low, None)
+    if spec.direction == "high":
+        return (None, spec.functional.high)
+    return (spec.functional.low, spec.functional.high)
+
+
 def evaluate(
     results: list[LabResult],
     registry: MarkerRegistry,
@@ -137,7 +146,7 @@ def evaluate(
                     r.value, r.lab_ref_low, r.lab_ref_high, spec
                 ),
                 functional_status=functional_status(r.value, spec),
-                functional_range=(spec.functional.low, spec.functional.high),
+                functional_range=_functional_range(spec),
                 previous=prev,
                 delta_pct=_delta_pct(r.value, prev[1] if prev else None),
                 active_confounders=[c for c in spec.confounders if c in panel_active],

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from tri_wellness.config import Sex
 from tri_wellness.labs.models import Confounder
@@ -45,12 +45,16 @@ class RegistryError(ValueError):
 
 
 class Range(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     low: float | None = None
     high: float | None = None
 
 
 class RawMarkerEntry(BaseModel):
     """One YAML entry before sex resolution. Range blocks are validated in `_resolve_range`."""
+
+    model_config = ConfigDict(extra="forbid")
 
     display: str
     system: str

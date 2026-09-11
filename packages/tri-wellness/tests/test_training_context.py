@@ -113,6 +113,53 @@ def test_sessions_window_hardest_first_completed_only(db):
     }
 
 
+def test_hard_session_without_tss_sorts_first_and_is_not_cut_by_limit(db):
+    # Three small-TSS sessions plus one qualifying-hard session that carries no TSS at all
+    # (duration only). Sorting by TSS/duration without a hardness key would put the null-TSS
+    # session last and `limit 3` would cut it -- it must come out first instead.
+    seed_workouts(
+        db,
+        [
+            {
+                "tp_workout_id": "w-hard",
+                "workout_date": day(-1),
+                "sport": "run",
+                "title": "long slow run",
+                "actual_duration_sec": 9000,  # 150 min: over HARD_SESSION_MIN, no TSS
+                "actual_tss": None,
+            },
+            {
+                "tp_workout_id": "w-a",
+                "workout_date": day(-1),
+                "sport": "bike",
+                "title": "a",
+                "actual_duration_sec": 1800,
+                "actual_tss": 40,
+            },
+            {
+                "tp_workout_id": "w-b",
+                "workout_date": day(-2),
+                "sport": "run",
+                "title": "b",
+                "actual_duration_sec": 1800,
+                "actual_tss": 35,
+            },
+            {
+                "tp_workout_id": "w-c",
+                "workout_date": day(-3),
+                "sport": "swim",
+                "title": "c",
+                "actual_duration_sec": 1800,
+                "actual_tss": 30,
+            },
+        ],
+    )
+    t = load_training_context(db, D)
+    assert len(t.last_sessions) == 3  # MAX_SESSIONS still caps the list
+    assert t.last_sessions[0]["title"] == "long slow run"
+    assert t.last_sessions[0]["tss"] is None
+
+
 def test_load_from_draw_day_row_and_seven_day_tss(db):
     seed_quiet_month(db)
     t = load_training_context(db, D)
@@ -156,3 +203,27 @@ def test_null_nights_are_skipped(db):
     t = load_training_context(db, D)
     assert t.sleep_2n_avg_sec == 25200 and t.hrv_2n_avg == 55
     assert t.sleep_30d_avg_sec is None
+
+
+def test_load_fallback_includes_day_minus_seven(db):
+    seed_daily_metrics(db, [{"metric_date": day(-7), "ctl": 33.0, "atl": 44.0, "tsb": -11.0}])
+    t = load_training_context(db, D)
+    assert (t.ctl, t.atl, t.tsb) == (33.0, 44.0, -11.0)
+
+
+def test_load_fallback_excludes_day_minus_eight(db):
+    seed_daily_metrics(db, [{"metric_date": day(-8), "ctl": 33.0, "atl": 44.0, "tsb": -11.0}])
+    t = load_training_context(db, D)
+    assert t.ctl is None and t.atl is None and t.tsb is None
+
+
+def test_baseline_window_includes_day_minus_thirty_excludes_day_minus_thirty_one(db):
+    seed_daily_metrics(
+        db,
+        [
+            {"metric_date": day(-30), "sleep_seconds": 25000},
+            {"metric_date": day(-31), "sleep_seconds": 10000},
+        ],
+    )
+    t = load_training_context(db, D)
+    assert t.sleep_30d_avg_sec == 25000

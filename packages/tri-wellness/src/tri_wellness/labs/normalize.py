@@ -9,6 +9,7 @@ from tri_wellness.ranges.registry import MarkerRegistry, MarkerSpec
 
 _BOUND_PREFIXES = ("<=", ">=", "≤", "≥", "<", ">")
 _NUMBER = re.compile(r"^[+-]?(\d+(\.\d*)?|\.\d+)$")
+_THOUSANDS = re.compile(r"^\d{1,3}(,\d{3})+(\.\d+)?$")  # e.g. '1,234.5'; '5,2' does not match
 
 
 def _fmt(n: float) -> str:
@@ -16,12 +17,14 @@ def _fmt(n: float) -> str:
 
 
 def parse_value(text: str) -> tuple[float, str | None] | None:
-    """'42' -> (42.0, None); '<5' -> (5.0, note); 'Not detected' -> None."""
+    """'42' -> (42.0, None); '<5' -> (5.0, note); '1,234.5' -> (1234.5, None); 'Not detected',
+    '5,2' (an ambiguous comma) and '-5' (no marker is negative) -> None."""
     s = text.strip()
     prefix = next((p for p in _BOUND_PREFIXES if s.startswith(p)), None)
     body = s[len(prefix) :].strip() if prefix else s
-    body = body.replace(",", "")
-    if not _NUMBER.match(body):
+    if _THOUSANDS.match(body):
+        body = body.replace(",", "")
+    if body.startswith("-") or not _NUMBER.match(body):
         return None
     n = float(body)
     note = f"value '{s}' stored as bound {_fmt(n)}" if prefix else None
@@ -70,7 +73,9 @@ def normalize(raw_results: list[RawResult], registry: MarkerRegistry) -> Normali
         number, note = parsed
         notes = [note] if note else []
         if factor != 1.0:
-            notes.append(f"converted from {raw.value.strip()} {raw.unit}")
+            unit = raw.unit
+            assert unit is not None  # _factor returns None above when raw.unit is None
+            notes.append(f"converted from {raw.value.strip()} {unit.strip()}")
         taken.add(spec.key)
         out.results.append(
             LabResult(

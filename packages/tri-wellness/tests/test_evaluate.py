@@ -241,3 +241,26 @@ def test_evaluate_uses_lab_range_for_conventional_status_only(reg):
     )
     assert f.conventional_status == "in_range"
     assert f.functional_status == "low"
+
+
+def test_functional_range_collapses_the_side_direction_ignores(reg):
+    # ck: direction high, functional {low: 40, high: 200} for male -- the low bound is
+    # ignored by functional_status, so it must not appear in the reported range either.
+    [ck] = evaluate(
+        [lr("ck", 250.0, "U/L")], reg, previous={}, context=FASTED_AM, training=quiet_training()
+    )
+    assert ck.functional_range == (None, 200.0)
+    # hdl: direction low, functional {low: 55, high: 85} for male -- the high bound is ignored.
+    [hdl] = evaluate(
+        [lr("hdl", 45.0, "mg/dL")], reg, previous={}, context=FASTED_AM, training=quiet_training()
+    )
+    assert hdl.functional_range == (55.0, None)
+    # ferritin: direction both -- both bounds are kept.
+    [fer] = evaluate(
+        [lr("ferritin", 100.0, "ng/mL")],
+        reg,
+        previous={},
+        context=FASTED_AM,
+        training=quiet_training(),
+    )
+    assert fer.functional_range == (50.0, 150.0)

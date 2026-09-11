@@ -76,6 +76,7 @@ def test_get_unknown_raises_keyerror():
         ("bad_functional_outside.yaml", "ferritin", "functional"),
         ("bad_duplicate_alias.yaml", "iron_serum", "aliases"),
         ("bad_conversion_target.yaml", "ferritin", "conversions"),
+        ("bad_unknown_field.yaml", "ferritin", "conversion"),
     ],
 )
 def test_validation_names_marker_and_field(file, marker, field):

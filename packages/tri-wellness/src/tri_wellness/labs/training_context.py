@@ -6,6 +6,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from tri_core.db.repo import Conn
+from tri_wellness.labs.evaluate import HARD_SESSION_MIN, HARD_SESSION_TSS
 from tri_wellness.labs.models import TrainingContext
 
 SESSION_WINDOW_DAYS = 3  # sessions on the three calendar days before the draw (the 72 h)
@@ -24,11 +25,18 @@ def _f(v: Any) -> float | None:
 
 def _sessions(conn: Conn, drawn_on: date) -> list[dict[str, Any]]:
     rows = conn.execute(
-        """
+        f"""
         select workout_date, sport, title, actual_duration_sec, actual_tss
         from workouts
         where completed and workout_date between %s and %s
-        order by actual_tss desc nulls last, actual_duration_sec desc nulls last, workout_date desc
+        -- hardness first: a session over evaluate.py's HARD_SESSION_TSS/HARD_SESSION_MIN
+        -- outranks every non-qualifying session, so a hard session can never be cut by
+        -- `limit`; ties break by actual TSS, then duration, then most recent workout_date
+        order by
+            (case when actual_tss > {HARD_SESSION_TSS}
+                       or actual_duration_sec > {HARD_SESSION_MIN * 60}
+                  then 1 else 0 end) desc,
+            actual_tss desc nulls last, actual_duration_sec desc nulls last, workout_date desc
         limit %s
         """,
         (
