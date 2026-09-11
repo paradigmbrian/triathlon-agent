@@ -13,7 +13,13 @@ from tri_planning import repo
 from tri_planning.graph.deps import GraphDeps
 from tri_planning.graph.state import PlanningState
 from tri_planning.planning import validate
-from tri_planning.planning.models import CalendarChange, PlannedWeek, PlanWeekRow
+from tri_planning.planning.models import (
+    CalendarChange,
+    PlannedWeek,
+    PlanWeekRow,
+    TrainingGoal,
+    WeekTarget,
+)
 from tri_planning.planning.targets import week_monday
 from tri_planning.planning.tp_calls import event_change
 from tri_planning.prompts.design import DESIGN_SYSTEM, render_design_prompt
@@ -25,16 +31,51 @@ def window_weeks(weeks: list[PlanWeekRow], today: date, horizon: int) -> list[Pl
     return [w for w in weeks if first <= w.week_start <= last and not w.written_to_tp]
 
 
-def make_design_node(deps: GraphDeps) -> Any:
+async def design_week(
+    deps: GraphDeps,
+    goal: TrainingGoal,
+    target: WeekTarget,
+    thresholds: dict[str, Any] | None,
+    previous: PlannedWeek | None,
+    note: str | None,
+    config: RunnableConfig,
+) -> tuple[PlannedWeek, list[str]]:
     structured = deps.model.with_structured_output(PlannedWeek)
+    cfg = merge_configs(
+        config, {"tags": [f"week_start:{target.week_start}", f"phase:{target.phase}"]}
+    )
 
-    async def design_one(prompt: str, config: RunnableConfig) -> PlannedWeek:
+    async def one(prompt: str) -> PlannedWeek:
         out = await structured.ainvoke(
-            [SystemMessage(DESIGN_SYSTEM), HumanMessage(prompt)], config=config
+            [SystemMessage(DESIGN_SYSTEM), HumanMessage(prompt)], config=cfg
         )
         assert isinstance(out, PlannedWeek)
         return out
 
+    week = await one(render_design_prompt(goal, target, thresholds, previous, note, None, None))
+    violations = validate.week(week, target, goal)
+    if violations:
+        week = await one(
+            render_design_prompt(goal, target, thresholds, previous, note, violations, week)
+        )
+        violations = validate.week(week, target, goal)
+    return week, violations
+
+
+def session_changes(week: PlannedWeek, phase: str) -> list[CalendarChange]:
+    return [
+        CalendarChange(
+            op="create",
+            workout_date=s.date,
+            workout=s,
+            reason=f"{phase} week of {week.week_start}: {week.coach_note}",
+        )
+        for s in week.sessions
+        if s.sport != "rest"
+    ]
+
+
+def make_design_node(deps: GraphDeps) -> Any:
     async def design(state: PlanningState, config: RunnableConfig) -> dict[str, Any]:
         goal_id, plan_id = state.get("goal_id"), state.get("plan_id")
         assert goal_id is not None and plan_id is not None
@@ -61,32 +102,13 @@ def make_design_node(deps: GraphDeps) -> Any:
         notes: list[str] = []
         for row in todo:
             target = next(t for t in plan.targets if t.week_start == row.week_start)
-            tags = [f"week_start:{row.week_start}", f"phase:{target.phase}"]
-            cfg = merge_configs(config, {"tags": tags})
-            week = await design_one(
-                render_design_prompt(goal, target, thresholds, previous, note, None, None), cfg
+            week, violations = await design_week(
+                deps, goal, target, thresholds, previous, note, config
             )
-            violations = validate.week(week, target, goal)
-            if violations:
-                retry = render_design_prompt(
-                    goal, target, thresholds, previous, note, violations, week
-                )
-                week = await design_one(retry, cfg)
-                violations = validate.week(week, target, goal)
             with deps.connect() as conn:
                 repo.set_week_designed(conn, plan_id, row.week_start, week)
                 conn.commit()
-            for s in week.sessions:
-                if s.sport == "rest":
-                    continue
-                changes.append(
-                    CalendarChange(
-                        op="create",
-                        workout_date=s.date,
-                        workout=s,
-                        reason=f"{target.phase} week of {row.week_start}: {week.coach_note}",
-                    )
-                )
+            changes.extend(session_changes(week, target.phase))
             line = (
                 f"{row.week_start} ({target.phase}, target {target.target_tss:.0f} TSS): "
                 f"{len(week.sessions)} sessions, {week.total_tss:.0f} TSS, {week.total_hours:.1f} h"
