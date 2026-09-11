@@ -32,7 +32,7 @@ EditFn = Callable[[list[CalendarChange]], Awaitable[list[CalendarChange] | None]
 REVIEW_PROMPT = "approve / reject <note> / edit"
 # Nodes that host a sub-agent: their text was already streamed token by token, so the
 # parent update that carries the same messages is not echoed again.
-STREAMED_NODES = frozenset({"intake"})
+STREAMED_NODES = frozenset({"intake", "adjust"})
 
 
 def _text_of(msg: BaseMessage) -> str:

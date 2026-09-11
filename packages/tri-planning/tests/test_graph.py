@@ -48,7 +48,9 @@ async def test_intake_to_review_pauses_before_any_write(nocommit, make_deps, fak
 
 
 async def test_approve_applies_and_activates(nocommit, make_deps, fake_tp):
-    model = ScriptedChatModel(script=[*intake_script(), week_call(300)])
+    model = ScriptedChatModel(
+        script=[*intake_script(), week_call(300), AIMessage(content="All on track.")]
+    )
     graph = build_graph(make_deps(model, tp=fake_tp), InMemorySaver())
     await graph.ainvoke({"messages": [HumanMessage("Olympic Dec 13")]}, CFG)
     out = await graph.ainvoke(APPROVE, CFG)
@@ -56,9 +58,9 @@ async def test_approve_applies_and_activates(nocommit, make_deps, fake_tp):
     assert [c[0] for c in fake_tp.calls] == ["tp_create_workout"] * 3
     assert isinstance(out["messages"][-1], AIMessage)
     assert "applied 3" in out["messages"][-1].content
-    # a later turn goes to the adjust placeholder
+    # a later turn goes to the adjust sub-agent
     out = await graph.ainvoke({"messages": [HumanMessage("how's it going")]}, CFG)
-    assert "milestone 4" in out["messages"][-1].content
+    assert "All on track." in out["messages"][-1].content
 
 
 async def test_reject_routes_back_to_design_with_note(nocommit, make_deps, fake_tp):
