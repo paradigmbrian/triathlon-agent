@@ -22,7 +22,13 @@ from langchain_core.messages import (
 )
 from langgraph.types import Command
 
-from tri_nutrition.nutrition.models import DayTarget, NutritionChange, ReviewDecision
+from tri_nutrition.nutrition.models import (
+    DayTarget,
+    NutritionChange,
+    RaceFuelPlan,
+    ReviewDecision,
+    SessionFuel,
+)
 
 Out = Callable[[str], None]
 CommandFn = Callable[[], Awaitable[str]]
@@ -42,6 +48,41 @@ def render_targets(targets: list[DayTarget]) -> str:
             f"{t.day.isoformat():10}  {t.day_type:9}  {t.total_kcal:>5}  {macros:>13}  "
             f"{t.session_kcal:>5}  {', '.join(t.notes)}"
         )
+    return "\n".join(lines)
+
+
+def render_fuel(fuels: list[SessionFuel], violations: dict[str, list[str]]) -> str:
+    if not fuels:
+        return "No sessions in the horizon need a fueling plan."
+    lines = [f"{'day':10}  {'workout':10}  {'carbs':>8}  {'fluid':>7}  {'sodium':>7}  products"]
+    for f in fuels:
+        lines.append(
+            f"{f.day.isoformat():10}  {f.tp_workout_id:10.10}  {f.carbs_g_per_h:>4} g/h  "
+            f"{f.fluid_ml_per_h:>4} ml  {f.sodium_mg_per_h:>4} mg  {', '.join(f.products)}"
+        )
+        v = violations.get(f.tp_workout_id)
+        if v:
+            lines.append(f"    VIOLATIONS: {'; '.join(v)}")
+    return "\n".join(lines)
+
+
+def render_race(plan: RaceFuelPlan, violations: list[str]) -> str:
+    lines = [f"Race fuel {plan.event_date}:"]
+    for s in plan.timeline:
+        prod = f" [{', '.join(s.products)}]" if s.products else ""
+        lines.append(
+            f"  {s.offset_min:>5} min  {s.leg:5}  {s.what}{prod}: {s.carbs_g} g carbs, "
+            f"{s.fluid_ml} ml, {s.sodium_mg} mg Na, {s.caffeine_mg} mg caffeine"
+        )
+    t = plan.totals_per_h
+    lines.append(
+        f"  per hour: bike {t.get('bike_carbs', '-')} g/h carbs, {t.get('bike_fluid', '-')} ml, "
+        f"{t.get('bike_sodium', '-')} mg Na; run {t.get('run_carbs', '-')} g/h carbs, "
+        f"{t.get('run_fluid', '-')} ml, {t.get('run_sodium', '-')} mg Na"
+    )
+    lines += [f"  if: {c}" for c in plan.contingencies]
+    if violations:
+        lines.append("  VIOLATIONS: " + "; ".join(violations))
     return "\n".join(lines)
 
 

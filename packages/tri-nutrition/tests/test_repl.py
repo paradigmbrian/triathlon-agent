@@ -139,3 +139,18 @@ async def test_chat_loop_edit_uses_editor_callback():
     await chat_loop(graph, read=read, out=lambda s: None, edit=edit)
     resume = graph.inputs[1].resume
     assert resume["action"] == "edit" and resume["changes"][0]["reason"] == "edited"
+
+
+def test_render_fuel_and_race():
+    from tri_nutrition.nutrition.models import RaceFuelPlan, SessionFuel
+    from tri_nutrition.repl import render_fuel, render_race
+    from tri_nutrition.testing import race_plan_json, session_fuel_json
+
+    fuel = SessionFuel.model_validate(session_fuel_json("w1", MONDAY))
+    text = render_fuel([fuel], {"w1": ["too much"]})
+    assert "2026-09-14" in text and "60 g/h" in text and "Gel" in text
+    assert "VIOLATIONS: too much" in text
+    plan = RaceFuelPlan.model_validate(race_plan_json(date(2026, 10, 4)))
+    text = render_race(plan, [])
+    assert "-180" in text and "pre" in text and "bike" in text and "60 g/h" in text
+    assert "If the gut turns" in text

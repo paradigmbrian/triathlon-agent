@@ -21,7 +21,7 @@ from langgraph.store.base import BaseStore
 from tri_nutrition.graph.deps import GraphDeps
 from tri_nutrition.graph.nodes.apply import make_apply_node
 from tri_nutrition.graph.nodes.checkin import make_checkin_node
-from tri_nutrition.graph.nodes.fuel import fuel_node
+from tri_nutrition.graph.nodes.fuel import make_fuel_node
 from tri_nutrition.graph.nodes.intake import make_intake_node
 from tri_nutrition.graph.nodes.review import review_node
 from tri_nutrition.graph.nodes.route import route_node
@@ -63,7 +63,7 @@ def build_graph(deps: GraphDeps, checkpointer: BaseCheckpointSaver[Any], store: 
     g.add_node("intake", make_intake_node(deps))
     g.add_node("checkin", make_checkin_node(deps))
     g.add_node("targets", make_targets_node(deps))
-    g.add_node("fuel", fuel_node)
+    g.add_node("fuel", make_fuel_node(deps))
     g.add_node("review", review_node)
     g.add_node("apply", make_apply_node(deps))
 
