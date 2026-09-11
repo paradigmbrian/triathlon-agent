@@ -49,3 +49,25 @@ def seed_workouts(conn: Conn, rows: list[dict[str, Any]]) -> None:
 def seed_daily_metrics(conn: Conn, rows: list[dict[str, Any]]) -> None:
     """rows: dicts with metric_date and any other DailyMetricsRow field."""
     upsert_daily_metrics(conn, [DailyMetricsRow(**r) for r in rows])
+
+
+class NoCommit:
+    """The rolled-back test connection; commit/close are no-ops so nodes can call them."""
+
+    def __init__(self, conn: Any) -> None:
+        self._conn = conn
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._conn, name)
+
+    def commit(self) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+    def __enter__(self) -> NoCommit:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        return None

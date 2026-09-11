@@ -148,3 +148,27 @@ class PanelSummary(BaseModel):
     result_count: int
     unmapped_count: int
     has_report: bool
+
+
+IngestKind = Literal["pdf", "export"]
+
+
+class ExtractedPanel(BaseModel):
+    """What extraction returns for one file. Nothing inferred: a missing draw date stays None."""
+
+    drawn_on: date | None = None
+    lab_name: str | None = None
+    results: list[RawResult] = Field(default_factory=list)
+
+
+class IngestDecision(BaseModel):
+    """The athlete's answer at review. approve carries the panel context; edit carries every
+    field it replaced; reject carries a note."""
+
+    action: Literal["approve", "edit", "reject"]
+    context: PanelContext | None = None
+    note: str | None = None
+    results: list[LabResult] | None = None
+    unmapped: list[Unmapped] | None = None
+    drawn_on: date | None = None
+    lab_name: str | None = None
