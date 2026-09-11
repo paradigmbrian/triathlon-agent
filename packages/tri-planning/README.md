@@ -58,6 +58,8 @@ there is no edge into `apply` except from `review`.
 ```bash
 uv run tri-planning chat [--no-live]   # intake -> targets -> design -> review -> apply
 uv run tri-planning reset [--yes]      # abandon goal and plan, clear the thread; TrainingPeaks untouched
+uv run tri-planning check-in [--yes] [--no-sync] [--no-live]   # sync, review last 7 days, propose; exit 3 when paused, 1 on a model error
+uv run python scripts/design_eval.py --prompt-version v1         # LangSmith pass rate for the design prompt
 ```
 
 In chat: `/status` (goal, phase, this week's target vs actual, designed weeks left), `/pending`
@@ -66,6 +68,19 @@ In chat: `/status` (goal, phase, this week's target vs actual, designed weeks le
 
 One-time setup after the migrations: `uv run python scripts/setup_checkpointer.py <DATABASE_URL>`
 for both databases (creates LangGraph's checkpoint tables).
+
+## Adjusting
+
+Once the plan is active every chat turn goes to the adjust sub-agent, which sees this week's and
+next week's targets, the last 7 days planned versus actual (RPE >= 8 and feeling <= 3 flagged),
+3-day readiness and HRV against a 30-day baseline, TSB, and the list of agent-authored workouts.
+It may call `get_training_readiness`, `get_hrv_data`, `tp_get_workouts`, `query_training_db`,
+`design_next_week` (when fewer than two designed weeks remain) and finally
+`propose_calendar_changes`. Every proposal goes through the same review and apply as the first plan.
+`check-in` runs the same review with a fixed prompt; exit code 3 means it is waiting for you.
+Exit code 1 means the model call failed; nothing was changed.
+For a cron job: `uv run tri-planning check-in --yes` applies without asking; leave `--yes` off
+to review in the next `chat`.
 
 ## How a turn flows
 

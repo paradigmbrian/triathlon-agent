@@ -70,6 +70,7 @@ Deeper context lives next to the code:
 uv run tri sync [--since YYYY-MM-DD] [--source trainingpeaks|garmin|all] [--full]
 uv run tri-analyze chat [--no-live]     # --no-live binds only the database tool
 uv run tri-planning chat [--no-live]    # plan; every TrainingPeaks write is approved first
+uv run tri-planning check-in [--yes] [--no-sync] [--no-live]   # sync, review last 7 days, propose; exit 3 when paused, 1 on a model error
 uv run tri-planning reset [--yes]       # abandon goal and plan, clear the thread
 ```
 
@@ -142,3 +143,6 @@ Module-level READMEs: `packages/tri-core/src/tri_core/{mcp,db,sync}/README.md`,
   streaming REPL, and live MCP tools.
 - Workspace (2026-09-07): monorepo with tri-core extracted; tri-planning milestones tracked in
   `docs/superpowers/plans/2026-09-07-tri-planning-0*.md`.
+- tri-planning milestones 2-4 (2026-09): targets, graph with review interrupt, adjust and
+  check-in; design-prompt validator pass rate: not yet measured (run
+  `scripts/design_eval.py --prompt-version v1` and record the `validator_pass` mean here).

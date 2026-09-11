@@ -358,3 +358,8 @@ Resolved in milestone 3 (first real conversation, 2026-09-10):
 - `AsyncPostgresSaver.from_conn_string` already sets autocommit, `prepare_threshold=0` and `dict_row`; no custom connection handling needed. The saver is built with `JsonPlusSerializer(allowed_msgpack_modules=...)` listing the Pydantic models that live in state, otherwise every load logs an "unregistered type" warning.
 - `tp_apply_training_plan` returns only counts; ownership needs the follow-up `tp_get_workouts` (targets node).
 - `tp_create_workout` returns `{"success", "workout_id", ...}`. Its MCP input schema names the date field `date`, not `date_str` as in the Python signature; the server's dispatch maps one to the other. Plan 3's global constraints had this wrong and `tp_calls.to_tp_call` was corrected.
+
+Resolved in milestone 4 (2026-09-11):
+
+- `uv` workspace scripts: the virtual root (`package = false`) depending on every member installs all console scripts with a plain `uv sync`; the `--all-packages` fallback was not needed (root README Setup step 1 documents this).
+- `tp_get_workouts` id type: the sync module already coerces ids with `str(...)` (`tri_core/sync/trainingpeaks.py`) and `FakeTp` returns integers for `tp_create_workout`, so both types are handled; the live round-trip test (`tests/test_live_tp.py`, run by Brian with `--live`) confirms the real server's type — record its result here after the first run.
