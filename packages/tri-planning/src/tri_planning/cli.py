@@ -1,4 +1,4 @@
-"""Command-line entry points for the planning agent: chat, reset (check-in arrives in Plan 4)."""
+"""Command-line entry points for the planning agent: chat, check-in, reset."""
 
 from __future__ import annotations
 
@@ -6,6 +6,8 @@ import asyncio
 import os
 import subprocess
 import tempfile
+from collections.abc import AsyncIterator
+from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import date, timedelta
 from typing import Any
 
@@ -34,29 +36,16 @@ def _out(s: str) -> None:
     console.print(s, end="", markup=False, highlight=False, soft_wrap=True)
 
 
-@app.command()
-def chat(
-    no_live: bool = typer.Option(False, "--no-live", help="Do not start the TrainingPeaks server"),
-) -> None:
-    """Plan and adjust training in conversation; every calendar write is approved first."""
-    asyncio.run(_chat(no_live=no_live))
-
-
-async def _chat(*, no_live: bool) -> None:
-    from contextlib import AsyncExitStack
-
-    from tri_core.db.connection import connect
+@asynccontextmanager
+async def _open_graph(*, no_live: bool) -> AsyncIterator[Any]:
     from tri_core.mcp.client import McpToolClient
-    from tri_core.mcp.servers import trainingpeaks_spec
-    from tri_core.sync.runner import run_sync
-    from tri_planning import repo
+    from tri_core.mcp.live_tools import open_live_tools
+    from tri_core.mcp.servers import garmin_spec, trainingpeaks_spec
+    from tri_planning.allowlist import GARMIN_LIVE_TOOLS
     from tri_planning.graph.checkpointer import SETUP_HINT, checkpointer_ready, open_checkpointer
     from tri_planning.graph.deps import make_deps
     from tri_planning.graph.graph import build_graph
     from tri_planning.graph.llm import make_model
-    from tri_planning.planning.models import CalendarChange
-    from tri_planning.planning.targets import week_monday
-    from tri_planning.repl import changes_from_yaml, changes_to_yaml, chat_loop
 
     settings = get_planning_settings()
     if not settings.anthropic_api_key:
@@ -65,9 +54,9 @@ async def _chat(*, no_live: bool) -> None:
     if not checkpointer_ready(settings.database_url):
         console.print(SETUP_HINT, style="red")
         raise typer.Exit(code=2)
-
     async with AsyncExitStack() as stack:
         tp = None
+        garmin_tools: list[Any] = []
         if not no_live:
             try:
                 tp = await asyncio.wait_for(
@@ -80,8 +69,36 @@ async def _chat(*, no_live: bool) -> None:
                     f"warning: trainingpeaks MCP server unavailable ({type(exc).__name__}: {exc}); "
                     "apply will refuse to write\n"
                 )
+            garmin_tools = await stack.enter_async_context(
+                open_live_tools(
+                    {"garmin": (garmin_spec(settings), GARMIN_LIVE_TOOLS)}, lambda m: _out(m + "\n")
+                )
+            )
         saver = await stack.enter_async_context(open_checkpointer(settings.database_url))
-        graph = build_graph(make_deps(settings, make_model(settings), tp), saver)
+        deps = make_deps(settings, make_model(settings), tp)
+        deps.garmin_tools = garmin_tools
+        yield build_graph(deps, saver)
+
+
+@app.command()
+def chat(
+    no_live: bool = typer.Option(False, "--no-live", help="Do not start the MCP servers"),
+) -> None:
+    """Plan and adjust training in conversation; every calendar write is approved first."""
+    asyncio.run(_chat(no_live=no_live))
+
+
+async def _chat(*, no_live: bool) -> None:
+    from tri_core.db.connection import connect
+    from tri_core.sync.runner import run_sync
+    from tri_planning import repo
+    from tri_planning.planning.models import CalendarChange
+    from tri_planning.planning.targets import week_monday
+    from tri_planning.repl import changes_from_yaml, changes_to_yaml, chat_loop
+
+    settings = get_planning_settings()
+
+    async with _open_graph(no_live=no_live) as graph:
         cfg = {"configurable": {"thread_id": THREAD_ID}}
 
         async def read() -> str | None:
@@ -152,6 +169,28 @@ async def _chat(*, no_live: bool) -> None:
             commands={"status": cmd_status, "sync": cmd_sync},
             edit=edit_in_editor,
         )
+
+
+@app.command("check-in")
+def check_in(
+    yes: bool = typer.Option(False, "--yes", help="Approve the proposed changes without asking"),
+    no_sync: bool = typer.Option(False, "--no-sync", help="Skip `tri sync` first"),
+    no_live: bool = typer.Option(False, "--no-live", help="Do not start the MCP servers"),
+) -> None:
+    """Sync, review the last week against plan, propose changes; pause at review unless --yes."""
+    raise typer.Exit(code=asyncio.run(_check_in(yes=yes, no_sync=no_sync, no_live=no_live)))
+
+
+async def _check_in(*, yes: bool, no_sync: bool, no_live: bool) -> int:
+    from tri_core.sync.runner import run_sync
+    from tri_planning.checkin import run_checkin
+
+    if not no_sync:
+        report = await run_sync(get_planning_settings(), log=lambda m: _out(m + "\n"))
+        if not report.ok:
+            _out("check-in: sync had errors; continuing with existing data\n")
+    async with _open_graph(no_live=no_live) as graph:
+        return await run_checkin(graph, yes=yes, out=_out, thread_id=THREAD_ID)
 
 
 @app.command()
