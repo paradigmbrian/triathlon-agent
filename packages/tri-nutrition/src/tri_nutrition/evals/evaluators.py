@@ -69,7 +69,8 @@ animal food), every restriction (gluten: no oats unless labelled gluten-free, no
 bars), every dislike, and the GI history (reflux: no large, fatty or acidic pre-session meal;
 caffeine_mg_per_day 0: no caffeine anywhere). only_library_products is true only when every
 named sports product (gel, chew, drink mix, bar, or brand) is in the library; plain foods and
-water never count against it. Be literal: judge the text, not the intent."""
+water never count against it, and neither does an optional pre-race beetroot or nitrate shot,
+which the race prompt permits. Be literal: judge the text, not the intent."""
 
 
 def render_judge_prompt(inputs: dict[str, Any], outputs: dict[str, Any]) -> str:

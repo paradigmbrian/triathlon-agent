@@ -34,7 +34,9 @@ Hard rules (a validator rejects the plan otherwise):
   and {C.FUEL_SODIUM_MAX_MG_PER_H} mg/h per leg.
 - Total race caffeine at most {C.CAFFEINE_MAX_MG_PER_KG_DAY:g} mg per kg; none if the athlete
   takes none.
-- Only products from the library, named exactly.
+- Only products from the library, named exactly. That includes on-course nutrition: name a
+  course sports drink, electrolyte drink or salt caps only when the library holds it; otherwise
+  the plan uses water plus the library's products.
 Nitrate (beetroot) may be mentioned as an optional pre-race item; no other supplements."""
 
 

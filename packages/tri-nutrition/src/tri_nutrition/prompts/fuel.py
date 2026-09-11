@@ -14,7 +14,7 @@ from tri_nutrition.nutrition.models import (
     SessionFuel,
 )
 
-PROMPT_VERSION = "1"  # bump when FUEL_SYSTEM or RACE_SYSTEM changes; names the eval experiment
+PROMPT_VERSION = "3"  # bump when FUEL_SYSTEM or RACE_SYSTEM changes; names the eval experiment
 
 FUEL_SYSTEM = f"""\
 You are an endurance sports nutritionist writing the fueling plan for one training session of
@@ -37,6 +37,8 @@ Hard rules (a validator rejects the plan otherwise):
 - No caffeine when the athlete takes none; total caffeine for the day at most
   {C.CAFFEINE_MAX_MG_PER_KG_DAY:g} mg per kg.
 - Only products from the library. Name them exactly.
+- Fuel on the bike must be realistic to carry on race day: no big meals, only small, calorically
+  dense items that can be eaten quickly.
 Respect restrictions, dislikes and GI history. Sessions under 90 minutes at endurance intensity
 need little or nothing during; say so rather than inventing intake."""
 
