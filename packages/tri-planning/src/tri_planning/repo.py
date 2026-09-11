@@ -252,3 +252,57 @@ def athlete_thresholds(conn: Conn) -> dict[str, Any] | None:
         "select ftp_watts, run_threshold_pace_sec_per_km, swim_css_sec_per_100m, lthr_bpm, "
         "max_hr_bpm, hr_zones, power_zones, pace_zones from athlete_profile where id = 1"
     ).fetchone()
+
+
+def owned_workouts(conn: Conn, plan_id: int) -> list[dict[str, Any]]:
+    rows = conn.execute(
+        "select operation, tp_workout_id, workout_date, payload from plan_changes "
+        "where plan_id = %s and tp_workout_id is not null order by applied_at, id",
+        (plan_id,),
+    ).fetchall()
+    deleted = {r["tp_workout_id"] for r in rows if r["operation"] == "delete"}
+    out: dict[str, dict[str, Any]] = {}
+    for r in rows:
+        if r["operation"] not in ("create", "apply_plan") or r["tp_workout_id"] in deleted:
+            continue
+        w = (r["payload"] or {}).get("workout") or {}
+        out[r["tp_workout_id"]] = {
+            "tp_workout_id": r["tp_workout_id"],
+            "workout_date": r["workout_date"],
+            "sport": w.get("sport"),
+            "title": w.get("title"),
+        }
+    return sorted(out.values(), key=lambda d: (d["workout_date"] or date.min, d["tp_workout_id"]))
+
+
+def recent_sessions(conn: Conn, start: date, end: date) -> list[dict[str, Any]]:
+    return conn.execute(
+        "select workout_date, sport, title, completed, planned_tss, actual_tss, "
+        "planned_duration_sec, actual_duration_sec, rpe, feeling from workouts "
+        "where workout_date between %s and %s order by workout_date, tp_workout_id",
+        (start, end),
+    ).fetchall()
+
+
+def _avg(conn: Conn, col: str, start: date, end: date) -> float | None:
+    row = conn.execute(
+        f"select avg({col}) as v from daily_metrics where metric_date between %s and %s",
+        (start, end),
+    ).fetchone()
+    return float(row["v"]) if row and row["v"] is not None else None
+
+
+def recovery_baseline(conn: Conn, as_of: date) -> dict[str, float | None]:
+    d1, d3, d30 = as_of - timedelta(days=1), as_of - timedelta(days=3), as_of - timedelta(days=30)
+    tsb_row = conn.execute(
+        "select tsb from daily_metrics where metric_date <= %s and tsb is not null "
+        "order by metric_date desc limit 1",
+        (as_of,),
+    ).fetchone()
+    return {
+        "readiness_3d": _avg(conn, "training_readiness", d3, d1),
+        "readiness_30d": _avg(conn, "training_readiness", d30, d1),
+        "hrv_3d": _avg(conn, "hrv_overnight_avg", d3, d1),
+        "hrv_30d": _avg(conn, "hrv_overnight_avg", d30, d1),
+        "tsb": float(tsb_row["tsb"]) if tsb_row else None,
+    }
