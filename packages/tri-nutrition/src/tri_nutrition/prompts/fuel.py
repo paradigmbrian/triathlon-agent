@@ -14,6 +14,8 @@ from tri_nutrition.nutrition.models import (
     SessionFuel,
 )
 
+PROMPT_VERSION = "1"  # bump when FUEL_SYSTEM or RACE_SYSTEM changes; names the eval experiment
+
 FUEL_SYSTEM = f"""\
 You are an endurance sports nutritionist writing the fueling plan for one training session of
 one athlete. You return a SessionFuel: tp_workout_id and day copied from the session; pre (what

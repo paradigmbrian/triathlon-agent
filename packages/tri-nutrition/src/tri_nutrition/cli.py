@@ -1,5 +1,4 @@
-"""Command-line entry points for the nutrition agent: chat, today, check-in, reset (eval
-arrives in Task 5)."""
+"""Command-line entry points for the nutrition agent: chat, today, check-in, eval, reset."""
 
 from __future__ import annotations
 
@@ -291,6 +290,45 @@ async def _check_in(*, yes: bool, no_sync: bool, no_live: bool) -> int:
         store = await stack.enter_async_context(S.open_store(settings.database_url))
         graph = build_graph(make_deps(settings, make_model(settings), garmin, tp), saver, store)
         return await checkin_run(graph, thread_id=THREAD_ID, out=_out, approve=yes)
+
+
+@app.command(name="eval")
+def eval_cmd(
+    judge: bool = typer.Option(True, "--judge/--no-judge", help="Also run the LLM judge"),
+    prefix: str | None = typer.Option(
+        None, "--prefix", help="Experiment name prefix (default fuel-v<PROMPT_VERSION>)"
+    ),
+    recreate: bool = typer.Option(
+        False,
+        "--recreate-dataset",
+        help="Delete and re-create the LangSmith dataset from the cases in code",
+    ),
+) -> None:
+    """Run the fueling prompts over the LangSmith dataset and print the pass rate per evaluator
+    (exit 1 when any evaluator is below 100%)."""
+    raise typer.Exit(code=asyncio.run(_eval(judge=judge, prefix=prefix, recreate=recreate)))
+
+
+async def _eval(*, judge: bool, prefix: str | None, recreate: bool) -> int:
+    from tri_nutrition.evals.run import run_eval
+    from tri_nutrition.graph.llm import make_model
+
+    settings = get_nutrition_settings()
+    if not settings.langsmith_api_key:
+        console.print("LANGSMITH_API_KEY is not set in .env", style="red")
+        return 2
+    if not settings.anthropic_api_key:
+        console.print("ANTHROPIC_API_KEY is not set in .env", style="red")
+        return 2
+    rates = await run_eval(
+        settings,
+        make_model(settings),
+        judge=judge,
+        prefix=prefix,
+        recreate=recreate,
+        log=lambda m: _out(m + "\n"),
+    )
+    return 0 if rates and all(r == 1.0 for r in rates.values()) else 1
 
 
 @app.command()
