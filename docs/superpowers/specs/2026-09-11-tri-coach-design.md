@@ -1,7 +1,7 @@
 # tri-coach — The Coaching Orchestrator (package `tri_coach`)
 
 **Date:** 2026-09-11
-**Status:** Approved design, pending implementation plan
+**Status:** Approved design, pending implementation plan; revised 2026-09-11 against `main` at d66a54b after planning plan 4 landed (see §1, §7.3, §8, §13)
 **Purpose:** The agent the athlete talks to. It answers questions by consulting the analyst, decides on its own authority when a change to the training plan or the nutrition targets is warranted, briefs the planning and nutrition agents to produce that change, and presents one change set for approval. It is the sole decider: sub-agents never initiate a change under the coach.
 
 Companion specs: `tri-analyze` (2026-09-06), `tri-planning` (2026-09-07), `tri-nutrition` (2026-09-10). Both the planning and nutrition specs deferred "an orchestrator composing the agents as subgraphs" to this spec. The `tri-wellness` spec (2026-09-10) is not composed here; see §14.
@@ -15,7 +15,7 @@ Companion specs: `tri-analyze` (2026-09-06), `tri-planning` (2026-09-07), `tri-n
 | Entry points | The coach is the front door. Per-agent chats stay for debugging and inspection; nothing is removed. | Working tools are kept; the coach adds a layer. |
 | Memory | Coach-owned athlete memory in the LangGraph Store under `("athlete", "coach")`. | What the athlete says in conversation (injuries, travel, preferences, how they like to be coached) must shape later decisions and is stored by no sub-agent. |
 | Composition | Sub-graphs run in a propose mode that ends with `pending_changes` and has no review or apply; the coach owns review and dispatches apply. | The coach reads every proposal before the athlete sees it. Subgraph composition, interrupt handling and supervisor handoffs are all exercised. |
-| Planning milestone 4 | Plan 4 continues as written (in progress 2026-09-11). Its adjust sub-agent gains a *directed* mode: when the message is a brief from the head coach it satisfies that brief and nothing else; the self-directed weekly checklist and `tri-planning check-in` stay as the standalone path. | Same treatment as nutrition's check-in: the standalone command is a debugging path, and under the coach only the coach decides what to change. |
+| Planning milestone 4 | Plan 4 is complete on `main` (adjust sub-agent, `propose_calendar_changes`, `design_next_week`, `tri-planning check-in`, the design-prompt evaluator, the live TrainingPeaks test). This spec adds a *directed* mode to its adjust sub-agent: when the message is a brief from the head coach it satisfies that brief and nothing else; the self-directed weekly checklist and `tri-planning check-in` stay as the standalone path. | Same treatment as nutrition's check-in: the standalone command is a debugging path, and under the coach only the coach decides what to change. |
 | Proactive path | One `tri-coach check-in [--yes]` command syncs, runs the merged checklist and pauses at one gate. `tri-nutrition today` stays the daily Garmin write. | Replaces running the per-agent check-ins separately. |
 | Sub-agent patterns | The analyst is a tool (agent-as-tool). Planning and nutrition are handoffs (`Command(goto=..., graph=Command.PARENT)` from a tool inside `create_agent`). | A tool fits when the result is text; a handoff fits when the sub-graph's output must land in the parent state and drive routing. Having both side by side is a learning goal. |
 | Interface | Terminal REPL and CLI | Same as the other agents. |
@@ -26,12 +26,12 @@ Companion specs: `tri-analyze` (2026-09-06), `tri-planning` (2026-09-07), `tri-n
 
 Installed: langgraph 1.2.11, langgraph-prebuilt 1.1.0, langchain 1.4.0, langchain-anthropic 1.7.1, langchain-mcp-adapters 0.3.2, langsmith 0.12.2.
 
-- `langgraph.prebuilt.tool_node` forwards a `Command` returned by a tool; when `command.graph is Command.PARENT` it re-emits a parent-level `Command(goto=...)`. A handoff tool inside a `create_agent` loop can therefore route the outer `StateGraph`. `create_agent` is compiled with `checkpointer=False` by `make_subagent`, as in the existing conversational nodes.
-- A compiled graph invoked from a node function is a subgraph: its state is checkpointed under the parent thread's namespace for that superstep only, so a fresh invocation sees only what the parent passes in. This is why consultations are stateless (§6.2) and why long-lived planning state must come from the database (§7.1).
+- `langgraph.prebuilt.tool_node` forwards a `Command` returned by a tool; when `command.graph is Command.PARENT` it re-emits a parent-level `Command(goto=...)`. A handoff tool inside a `create_agent` loop can therefore route the outer `StateGraph`. `create_agent` is compiled with `checkpointer=False` by `make_subagent`, as in the existing conversational nodes. Re-verified 2026-09-11: the parent command travels as a `ParentCommand` exception, and `langgraph/pregel/_retry.py` retargets a `Command.PARENT` command to the enclosing namespace as it bubbles, so it should reach the coach graph even when the sub-agent is invoked from inside a node function rather than added as a node (§15 keeps the test).
+- A compiled graph invoked from a node function is a subgraph: its checkpoint namespace is `<node>:<task_id>` and the task id is minted per superstep (`langgraph/pregel/main.py`), so a fresh invocation sees only what the parent passes in. This is why consultations are stateless (§6.2) and why long-lived planning state must come from the database (§7.1).
 - `Command(resume=...)` accepts a single value or a mapping of interrupt ids to values. The coach uses a single `review` interrupt, so the single-value form suffices.
 - Nutrition's `apply.py` already has a standalone `write_change(deps, thread_id, change)`; planning's apply is inline in the node closure and is lifted (§7.1). Planning's `repo` exposes `get_active_goal` and `get_active_plan(goal_id)`, enough to derive phase.
 - Nutrition targets are built from `plan_weeks.designed` and `workouts`, i.e. from the *stored* plan. A nutrition regeneration is only correct after a plan change has been applied. The coach therefore presents a plan change and its nutrition consequence as two sequential gates in one command (§6.5), never as one.
-- `McpToolClient.list_tool_names()` exists; the underlying `ClientSession.list_tools()` returns each tool's input schema, which is what `tools_from_client` (§7.3) wraps.
+- `tri_core.mcp.live_tools.open_live_tools(specs, log)` (added to `main` after this spec was first written) opens one adapters session per server, converts each server tool's input schema to a `BaseTool`, and keeps the allow-listed ones; planning's `chat` already binds Garmin through it. The `ToolCaller` protocol the graphs' deps hold (`tri_core.sync.ToolCaller`, one method `call_json(tool, args)`) can be satisfied over those same tools, so one process needs one session per server (§7.3).
 
 ## 3. System overview
 
@@ -62,8 +62,10 @@ packages/tri-coach/
     cli.py                       chat, check-in, memory, reset
     config.py                    TRI_COACH_LANGSMITH_PROJECT (tri_coach), consult limits
     allowlist.py                 union of the sub-agents' Garmin server tools; analyst read tools
-    servers.py                   open_sessions(stack, settings, no_live) -> (garmin, tp);
-                                 builds each package's GraphDeps from the two sessions
+    servers.py                   open_servers(stack, settings, no_live) -> Servers: the Garmin and
+                                 TrainingPeaks tools from one open_live_tools call over the union
+                                 allow-list, plus a ToolsCaller per server (§7.3); builds each
+                                 package's GraphDeps from them
     memory.py                    MemoryEntry; NAMESPACE = ("athlete", "coach"); get/put/forget;
                                  render(entries, today)
     context.py                   CoachContext loaded from the database and the Stores;
@@ -71,7 +73,7 @@ packages/tri-coach/
     models.py                    Brief, Proposal, ChangeSet, ReviewDecision, ApplyReport
     graph/
       state.py                   CoachState TypedDict
-      deps.py                    CoachDeps: model, connect, db_url, garmin, tp, store,
+      deps.py                    CoachDeps: model, connect, db_url, servers, store,
                                  planning_deps, nutrition_deps, analyst_tools, today
       llm.py                     make_model, make_subagent (copied from nutrition)
       checkpointer.py            open_checkpointer with the state's Pydantic types registered
@@ -92,7 +94,7 @@ packages/tri-coach/
     evals/
       cases.py, evaluators.py, run.py
     repl.py                      streaming loop with nested namespaces, review dialogue,
-                                 combined YAML edit, /status /memory /pending
+                                 combined YAML edit, /status /memory /pending /tools /prompt
   tests/
 ```
 
@@ -107,13 +109,13 @@ Namespace `("athlete", "coach")`, one key `memory`, value `{"entries": [MemoryEn
 ```python
 class MemoryEntry(BaseModel):
     id: str                                # short random id, printed by /memory
-    kind: Literal["injury", "constraint", "preference", "event", "coaching_style", "note"]
+    kind: Literal["injury", "constraint", "preference", "event", "coaching_style", "note", "checkin"]
     text: str
     created: date
     until: date | None = None              # an injury or event with a known end
 ```
 
-`remember` appends; `forget` removes by id; rendering drops entries whose `until` is before today. The whole list is rendered into the coach prompt, so there is no recall tool. The prompt tells the coach what to remember: anything the athlete says that should shape a future decision and is not already stored by planning (goal, availability, constraints) or nutrition (profile). `reset --forget-memory` deletes the key. Nutrition's namespace `("athlete", "nutrition")` is read by the context loader and never written by the coach.
+`remember` appends; `forget` removes by id; rendering drops entries whose `until` is before today. A `checkin` entry is one paragraph the coach writes at the end of each check-in (what was found, what was decided, what to watch) with `until` fourteen days out, so the next check-in and a chat after `reset` both know what the last one decided; the check-in checklist (§8) ends with writing it. The whole list is rendered into the coach prompt, so there is no recall tool. The prompt tells the coach what to remember: anything the athlete says that should shape a future decision and is not already stored by planning (goal, availability, constraints) or nutrition (profile). `reset --forget-memory` deletes the key. Nutrition's namespace `("athlete", "nutrition")` is read by the context loader and never written by the coach.
 
 ### 5.2 Tables
 
@@ -226,10 +228,10 @@ After `apply` sets `regenerate_after_apply`, the nutrition node runs with a rege
 
 ### 7.1 tri-planning
 
-- **`route` node.** `START -> route` derives `phase` each run from the database: no active goal is `intake`; an active goal without an active plan is `planning`; an active plan is `active`. The thread no longer carries phase. `route_start` keeps its `pending_changes -> review` rule. Standalone `tri-planning chat` behaves as before.
+- **`route` node.** `START -> route` derives `phase`, `goal_id` and `plan_id` each run from the database: no active goal is `intake`; an active goal without an active plan is `planning`; an active plan is `active`. All three are needed because a stateless consultation starts with empty state and the `adjust` node asserts `plan_id` while `apply` reads both ids. The thread no longer carries them. `route_start` keeps its `pending_changes -> review` rule. Standalone `tri-planning chat` behaves as before.
 - **Embedded mode.** `build_graph(deps, checkpointer, *, embedded=False)`. When `embedded` is true the `review` and `apply` nodes are not added and each conditional edge's path map sends `"review"` to `END`, leaving `pending_changes`, `pending_summary` and `changes_from` in the output state.
 - **`apply_changes`.** `apply.py` becomes `apply_changes(deps, changes, thread_id, *, plan_id, goal_id, tp_plan_applied) -> ApplyResult` plus a thin node that reads those from state and calls it. `ApplyResult` carries applied, skipped, remaining, error, `tp_plan_applied` and `sessions_changed`. The coach passes `plan_id` and `goal_id` from the active rows.
-- **Directed adjust (added to plan 4).** Plan 4 builds the `adjust` sub-agent, `propose_calendar_changes`, `design_next_week`, `tri-planning check-in` and the design-prompt evaluator as written. This spec adds one thing: the adjust prompt gains a directed section. When the message is a brief from the head coach, the sub-agent satisfies that instruction with the minimal change set and nothing else; obeys `validate.week`, the lever order (swap days, shorten, downgrade intensity, drop, re-plan the week) and ownership (`athlete_requested` only when the brief says the athlete asked); and, when the instruction is ambiguous, asks one question and stops. The self-directed weekly checklist applies only to the fixed check-in request from `tri-planning check-in`. `adjust -> review` when changes were proposed, or `END` in embedded mode.
+- **Directed adjust.** Plan 4 is complete: the `adjust` sub-agent, `propose_calendar_changes` (ops restricted to create, update, move, delete), `design_next_week`, `tri-planning check-in` and the design-prompt evaluator are on `main`. This spec adds one thing: the adjust prompt gains a directed section. When the message is a brief from the head coach, the sub-agent satisfies that instruction with the minimal change set and nothing else; obeys `validate.week`, the lever order (swap days, shorten, downgrade intensity, drop, re-plan the week) and ownership (`athlete_requested` only when the brief says the athlete asked); and, when the instruction is ambiguous, asks one question and stops. The self-directed weekly checklist applies only to the fixed check-in request from `tri-planning check-in`. `adjust -> review` when changes were proposed, or `END` in embedded mode.
 
 ### 7.2 tri-nutrition
 
@@ -240,12 +242,12 @@ After `apply` sets `regenerate_after_apply`, the nutrition node runs with a rege
 
 ### 7.3 tri-core
 
-- `tri_core.mcp.tools.tools_from_client(client: McpToolClient, allow: Sequence[str]) -> list[BaseTool]` lists the session's tools, keeps those in `allow`, and wraps each as a `StructuredTool` whose schema is the server's input schema and whose call goes through `client.call_json`. The analyst inside the coach binds these over the coach's two sessions, so no second server process starts. `tri-analyze chat` keeps its adapters-based `open_live_tools`.
+- `tri_core.mcp.live_tools.open_live_tools` gains a sibling `open_live_servers(specs, log) -> dict[str, list[BaseTool]]` that returns the bound tools per server name over the same sessions (`open_live_tools` becomes the flattened view of it). `tri_core.mcp.caller.ToolsCaller(tools)` implements `ToolCaller` over a list of adapter tools: `call_json` finds the tool by name, awaits `tool.ainvoke(args)`, and passes the text through `parse_tool_text`, raising `McpToolError` exactly as `McpToolClient.call_json` does. The coach opens Garmin (with `enabled_tools` set to the union of the three packages' Garmin lists) and TrainingPeaks once, hands the tools to the analyst and to planning's `garmin_tools`, and hands a `ToolsCaller` per server to planning's `tp` and nutrition's `garmin` and `tp` deps. One process per server; the adapters already own schema conversion, so nothing is re-wrapped. Every existing CLI keeps its current binding.
 
 ## 8. Commands
 
-- `tri-coach chat [--no-live]`: the REPL. Streams tokens and prints `→ tool(args)` and `← tool: N chars` as the other agents do; nested namespaces show which sub-graph is running. At review: the narration, then the changes grouped by domain (planning's week table, nutrition's day table and fueling lines, reusing each package's renderers), then `approve / reject <note> / edit`. `edit` opens one YAML document with both domains in `$EDITOR`. `/status` prints one line per domain (plan phase and this week; nutrition targets through; memory entries; next node). `/memory` prints memory as YAML. `/pending` re-prints a paused change set. `/sync` runs `tri sync`. `/prompt` prints the rendered system prompt. `/quit`.
-- `tri-coach check-in [--yes] [--no-sync] [--no-live]`: runs `tri sync`, sends the fixed check-in request on thread `coach`, prints the report and any proposed change set, and exits 3 while paused at review; `--yes` approves. The checklist, in the coach prompt: last seven days planned versus actual; sessions with RPE at or above 8 or feeling at or below 3; 3-day readiness and HRV against the 30-day baseline; TSB entering the week; fewer than 2 designed weeks remaining (extend); logged intake versus targets by day type; weight and body fat trend against the goal rate; fewer than 7 days of targets remaining (extend). The coach reads through `ask_analyst`, decides, briefs, proposes. A clean week ends with a short report and no gate.
+- `tri-coach chat [--no-live]`: the REPL. Streams tokens and prints `→ tool(args)` and `← tool: N chars` as the other agents do; nested namespaces show which sub-graph is running. At review: the narration, then the changes grouped by domain (planning's week table, nutrition's day table and fueling lines, reusing each package's renderers), then `approve / reject <note> / edit`. `edit` opens one YAML document with both domains in `$EDITOR`. `/status` prints one line per domain (plan phase and this week; nutrition targets through; memory entries; next node). `/memory` prints memory as YAML. `/pending` re-prints a paused change set. `/sync` runs `tri sync`. `/tools` lists the bound tools. `/prompt` prints the rendered system prompt. `/quit`.
+- `tri-coach check-in [--yes] [--no-sync] [--no-live]`: runs `tri sync`, sends the fixed check-in request on thread `coach`, prints the report and any proposed change set, and exits 3 while paused at review; `--yes` approves. Before sending, it reads the thread: if the graph is paused or `pending` is set it refuses with exit 3 and points to `/pending` in chat, the rule `tri-planning check-in` already enforces; if there is neither an active plan nor a nutrition profile it exits 2 with a message, matching planning's `EXIT_NO_PLAN`. Exit 1 on a model or API error. The checklist, in the coach prompt: last seven days planned versus actual; sessions with RPE at or above 8 or feeling at or below 3; 3-day readiness and HRV against the 30-day baseline; TSB entering the week; fewer than 2 designed weeks remaining (extend); logged intake versus targets by day type; weight and body fat trend against the goal rate; fewer than 7 days of targets remaining (extend); finally `remember(kind="checkin", ...)` with the one-paragraph summary (§5.1). The coach reads through `ask_analyst`, decides, briefs, proposes. A clean week ends with a short report, the memory entry, and no gate.
 - `tri-coach memory [--forget ID]`: print memory, or remove one entry.
 - `tri-coach reset [--yes] [--forget-memory]`: clears the coach thread. Never touches Garmin, TrainingPeaks, or the sub-agents' threads, tables or Store keys.
 - Unchanged: `tri-nutrition today` remains the daily Garmin write. `tri-analyze chat`, `tri-planning chat`, `tri-planning check-in`, `tri-nutrition chat` and `tri-nutrition check-in` stay for debugging.
@@ -269,7 +271,7 @@ After `apply` sets `regenerate_after_apply`, the nutrition node runs with a rege
 
 ## 11. Testing
 
-- **Unit, no database, no model:** memory entry expiry and rendering; prompt rendering from a fixed context (byte-stable for a fixed input); proposal id assignment and selection; combined YAML edit round trip across both domains; `ApplyReport` from each package's `ApplyResult`; `tools_from_client` schema wrapping against a fake session.
+- **Unit, no database, no model:** memory entry expiry and rendering; prompt rendering from a fixed context (byte-stable for a fixed input); proposal id assignment and selection; combined YAML edit round trip across both domains; `ApplyReport` from each package's `ApplyResult`; `ToolsCaller` over fake tools, including the empty-result and error text conventions `parse_tool_text` handles; the check-in refusal and exit codes against a scripted thread state.
 - **Planning and nutrition, `ScriptedChatModel`:** embedded mode ends with `pending_changes` and the compiled graph has no `review` node; nutrition's regenerate entry routes to `targets`; planning's `route` derives all three phases from the database; the existing apply tests pass unchanged through the thin node and again through `apply_changes` directly; the directed adjust sub-agent ends on `propose_calendar_changes` and merges `design_next_week` output.
 - **Coach graph, `ScriptedChatModel` at every level, sub-graphs scripted too, `InMemoryStore`:** a pure question calls `ask_analyst` and ends without a handoff; a handoff runs the planning node and its proposal lands in `proposals`; `propose_changes` reaches the review interrupt with the narration; approve dispatches to fakes in order and each package records its audit row with `thread_id = "coach"`; reject returns to the coach with the note in messages; a planning apply that changed sessions triggers the regenerate brief and a second gate; a sub-agent question returns as a proposal with `question`; `remember` writes the Store and the next rendered prompt contains the entry; a second process resumes the paused review from Postgres.
 - **Database tests** use `tri_analyze_test` and the rolled-back `db` fixture. **Live, opt-in:** one coach turn with both servers up that answers a question through the analyst and consults nothing.
@@ -283,10 +285,9 @@ Dataset `tri_coach_routing`: single-turn cases whose inputs hold prior messages 
 
 ## 13. Milestones
 
-1. **Sub-package preparation.** Planning `route` node with database-derived phase; embedded mode and `apply_changes` in planning and nutrition; nutrition regenerate entry; `tools_from_client` in tri-core. No coach yet; every existing CLI behaves as before.
-2. **Plan 4 completed, plus directed mode.** Plan 4 finishes as written (adjust sub-agent, `propose_calendar_changes`, `design_next_week`, `tri-planning check-in`, the design-prompt evaluator); the adjust prompt's directed section and its test are added at the end.
-3. **Coach v1.** Package, state, coach node with memory, the analyst tool and the handoffs, review, dispatching apply, REPL, `chat`, `memory`, `reset`. First adjustment made through the coach.
-4. **Check-in and follow-on.** `tri-coach check-in`, the post-apply nutrition regeneration and second gate, the routing dataset, evaluators and `eval`.
+1. **Sub-package preparation.** Planning `route` node with database-derived phase and ids; embedded mode and `apply_changes` in planning and nutrition; nutrition regenerate entry; the directed sections in planning's adjust prompt and nutrition's check-in prompt with their tests; `open_live_servers` and `ToolsCaller` in tri-core. No coach yet; every existing CLI behaves as before.
+2. **Coach v1.** Package, state, coach node with memory, the analyst tool and the handoffs, review, dispatching apply, REPL, `chat`, `memory`, `reset`. First adjustment made through the coach.
+3. **Check-in and follow-on.** `tri-coach check-in` with its refusal and exit codes, the `checkin` memory entry, the post-apply nutrition regeneration and second gate, the routing dataset, evaluators and `eval`. Root `README.md` gains the package row, run lines and a status entry.
 
 ## 14. Out of scope
 
@@ -294,7 +295,7 @@ Dataset `tri_coach_routing`: single-turn cases whose inputs hold prior messages 
 
 ## 15. Open items to verify in milestone 1
 
-- That a `Command(graph=Command.PARENT)` emitted from a tool inside `create_agent` compiled with `checkpointer=False` reaches the coach `StateGraph` when the agent is invoked from a node function rather than added as a node directly; if not, the coach node is added as a subgraph node and `messages` are mapped explicitly.
-- Whether the subgraph checkpoint namespace for the planning and nutrition nodes is renewed per superstep as expected, so a consultation never sees a previous consultation's state.
+- That a `Command(graph=Command.PARENT)` emitted from a tool inside `create_agent` compiled with `checkpointer=False` reaches the coach `StateGraph` when the agent is invoked from a node function rather than added as a node directly. The `_retry.py` reading in §2 says it should; one graph test settles it. If not, the coach node is added as a subgraph node and `messages` are mapped explicitly.
+- Whether the subgraph checkpoint namespace for the planning and nutrition nodes is renewed per superstep as expected, so a consultation never sees a previous consultation's state. The `main.py` reading in §2 says it is; one test with two consecutive consultations settles it.
 - The exact stream event shapes for nested namespaces two levels deep (coach thread, planning node, its intake sub-agent) so the REPL labels them.
-- Whether `ClientSession.list_tools()` input schemas for the Garmin server are complete enough for `StructuredTool` arguments, or whether a small per-tool override table is needed.
+- That `tool.ainvoke(args)` on an adapter tool returns the server's text verbatim (not a content-block list) for both servers, so `ToolsCaller` can hand it to `parse_tool_text` unchanged.
