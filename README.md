@@ -73,6 +73,7 @@ uv run tri-analyze chat [--no-live]     # --no-live binds only the database tool
 uv run tri-planning chat [--no-live]    # plan; every TrainingPeaks write is approved first
 uv run tri-planning check-in [--yes] [--no-sync] [--no-live]   # sync, review last 7 days, propose; exit 3 when paused, 1 on a model error
 uv run tri-planning reset [--yes]       # abandon goal and plan, clear the thread
+uv run tri-wellness ingest <file.pdf|csv> [--kind pdf|export] [--drawn-on YYYY-MM-DD]   # extract, review, store a lab panel
 ```
 
 In chat: `/tools` lists bound tools, `/prompt` prints the system prompt, `/sync` refreshes
@@ -131,7 +132,7 @@ packages/tri-core/      src/tri_core/{config,cli,mcp,db,sync,testing}
 packages/tri-analyze/   src/tri_analyze/{cli,allowlist,agent}
 packages/tri-planning/  src/tri_planning/{config,cli,repo,repl,testing,planning,graph,tools,prompts}
 packages/tri-nutrition/ src/tri_nutrition/{config,cli,repo,repl,store,plan_loader,testing,nutrition,graph,tools,prompts,evals}
-packages/tri-wellness/  src/tri_wellness/{config,cli,repo,testing,ranges,labs}
+packages/tri-wellness/  src/tri_wellness/{config,cli,repo,repl,testing,ranges,labs,graph,prompts}
 docs/superpowers/       specs and implementation plans
 ```
 
@@ -149,3 +150,4 @@ Module-level READMEs: `packages/tri-core/src/tri_core/{mcp,db,sync}/README.md`,
   check-in; design-prompt validator pass rate: not yet measured (run
   `scripts/design_eval.py --prompt-version v1` and record the `validator_pass` mean here).
 - tri-wellness milestone 1 (2026-09-11): ranges table, registry, normalize, evaluate, training context, lab tables; tracked in docs/superpowers/plans/2026-09-11-tri-wellness-0*.md.
+- tri-wellness milestone 2 (2026-09): PDF and export ingest with a checkpointed review; first real panel stored.
