@@ -700,7 +700,7 @@ markers:
     system: iron
     unit: ug/dL
     aliases: [iron, "iron, serum", "serum iron", "iron, total", "total iron"]
-    conversions: {"µg/dL": 1.0, "umol/L": 5.585, "µmol/L": 5.585}
+    conversions: {"µg/dL": 1.0, "umol/L": 5.585, "µmol/L": 5.585, "mcg/dL": 1.0}
     conventional: {low: 38, high: 169}
     functional: {low: 85, high: 130}
     direction: both
@@ -714,7 +714,7 @@ markers:
     system: iron
     unit: ug/dL
     aliases: [tibc, "total iron binding capacity", "iron binding capacity, total", "iron bind.cap.(tibc)"]
-    conversions: {"µg/dL": 1.0, "umol/L": 5.585, "µmol/L": 5.585}
+    conversions: {"µg/dL": 1.0, "umol/L": 5.585, "µmol/L": 5.585, "mcg/dL": 1.0}
     conventional: {low: 250, high: 450}
     functional: {low: 250, high: 350}
     direction: both
@@ -839,7 +839,7 @@ markers:
     system: vitamins_minerals
     unit: ug/dL
     aliases: [zinc, "zinc, plasma", "zinc, serum", "zinc, rbc", "plasma zinc", zn]
-    conversions: {"µg/dL": 1.0, "umol/L": 6.538, "µmol/L": 6.538, "mg/L": 100.0}
+    conversions: {"µg/dL": 1.0, "umol/L": 6.538, "µmol/L": 6.538, "mg/L": 100.0, "mcg/dL": 1.0}
     conventional: {low: 60, high: 130}
     functional: {low: 90, high: 120}
     direction: both

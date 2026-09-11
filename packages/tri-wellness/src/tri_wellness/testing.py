@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
+
+from langchain_core.messages import BaseMessage
+from langchain_core.outputs import ChatResult
 
 from tri_core.db.models import DailyMetricsRow, WorkoutRow
 from tri_core.db.repo import Conn, upsert_daily_metrics, upsert_workouts
+from tri_core.testing import ScriptedChatModel
+
+FIXTURES = Path(__file__).resolve().parents[2] / "tests" / "fixtures"
 
 
 def seed_workouts(conn: Conn, rows: list[dict[str, Any]]) -> None:
@@ -71,3 +79,25 @@ class NoCommit:
 
     def __exit__(self, *exc: object) -> None:
         return None
+
+
+def load_extracted(name: str) -> dict[str, Any]:
+    """A recorded ExtractedPanel from tests/fixtures/extract/<name>.json."""
+    with (FIXTURES / "extract" / f"{name}.json").open(encoding="utf-8") as fh:
+        return dict(json.load(fh))
+
+
+class RecordingScriptedModel(ScriptedChatModel):
+    """ScriptedChatModel that also keeps every message list it was called with."""
+
+    received: list[list[BaseMessage]] = []
+
+    def _generate(
+        self,
+        messages: list[BaseMessage],
+        stop: Any = None,
+        run_manager: Any = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        self.received = [*self.received, list(messages)]
+        return super()._generate(messages, stop, run_manager, **kwargs)

@@ -1,0 +1,12 @@
+{
+  "drawn_on": "2026-08-20",
+  "lab_name": "Quest Diagnostics",
+  "results": [
+    {"name": "Ferritin", "value": "42", "unit": "furlongs", "ref_low": "30", "ref_high": "400", "flag": null, "page": 1},
+    {"name": "Iron, Total", "value": "95", "unit": "mcg/dL", "ref_low": "50", "ref_high": "180", "flag": null, "page": 1},
+    {"name": "hs-CRP", "value": "<0.3", "unit": "mg/L", "ref_low": null, "ref_high": "3.0", "flag": null, "page": 1},
+    {"name": "Glucose", "value": "92", "unit": "mg/dL", "ref_low": "65", "ref_high": "99", "flag": null, "page": 2},
+    {"name": "TSH", "value": "1.52", "unit": "mIU/L", "ref_low": "0.40", "ref_high": "4.50", "flag": null, "page": 2},
+    {"name": "Sed Rate, Westergren", "value": "4", "unit": "mm/h", "ref_low": "0", "ref_high": "15", "flag": null, "page": 2}
+  ]
+}

@@ -1,0 +1,5 @@
+name,value,unit,ref_low,ref_high,flag,collected,lab
+Ferritin,42,ng/mL,30,400,,2026-08-20,Function Health
+hs-CRP,<0.3,mg/L,,3.0,,2026-08-20,Function Health
+Glucose,92,mg/dL,65,99,,2026-08-20,Function Health
+Vitamin D,38,ng/mL,30,100,L,2026-08-20,Function Health
