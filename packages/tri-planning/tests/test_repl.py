@@ -1,5 +1,7 @@
 from datetime import date
 
+import anthropic
+import httpx
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from langgraph.types import Command, Interrupt
 
@@ -11,6 +13,7 @@ from tri_planning.repl import (
     chat_loop,
     parse_decision,
     render_changes,
+    run_turn,
 )
 
 
@@ -80,6 +83,21 @@ def test_turn_printer_handles_subgraph_events_and_interrupt():
     assert "Hello" in text and "← set_training_goal" in text and "Targets: 14 weeks" in text
     assert text.count("Hello") == 1 and "[intake]" not in text
     assert p.interrupt == {"summary": "s", "changes": []}
+
+
+async def test_run_turn_sets_error_on_api_connection_failure():
+    class RaisingGraph:
+        async def astream(self, payload, config=None, stream_mode=None, subgraphs=False):
+            raise anthropic.APIConnectionError(
+                request=httpx.Request("POST", "https://api.anthropic.com")
+            )
+            yield  # pragma: no cover - makes this an async generator
+
+    buf = []
+    printer = await run_turn(RaisingGraph(), {"messages": []}, "planning", buf.append)
+    assert printer.error is not None and "connection error" in printer.error
+    assert "connection error" in "".join(buf)
+    assert printer.interrupt is None
 
 
 class StubGraph:

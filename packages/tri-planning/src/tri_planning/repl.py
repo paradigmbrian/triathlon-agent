@@ -53,6 +53,7 @@ class TurnPrinter:
         self.out = out
         self.final_text = ""
         self.interrupt: dict[str, Any] | None = None
+        self.error: str | None = None
 
     def on_event(self, namespace: tuple[str, ...], mode: str, data: Any) -> None:
         if mode == "messages":
@@ -101,11 +102,14 @@ async def run_turn(
         ):
             printer.on_event(tuple(namespace), mode, data)
     except anthropic.RateLimitError as exc:
-        out(f"\n[rate limited: {exc}. Wait a moment and try again.]\n")
+        printer.error = f"\n[rate limited: {exc}. Wait a moment and try again.]\n"
+        out(printer.error)
     except anthropic.APIStatusError as exc:
-        out(f"\n[Anthropic API error {exc.status_code}: {exc.message}]\n")
+        printer.error = f"\n[Anthropic API error {exc.status_code}: {exc.message}]\n"
+        out(printer.error)
     except anthropic.APIConnectionError as exc:
-        out(f"\n[connection error talking to Anthropic: {exc}]\n")
+        printer.error = f"\n[connection error talking to Anthropic: {exc}]\n"
+        out(printer.error)
     return printer
 
 

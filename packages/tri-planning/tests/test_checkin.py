@@ -1,3 +1,5 @@
+import anthropic
+import httpx
 from langchain_core.messages import AIMessage
 from langgraph.types import Command, Interrupt
 
@@ -72,3 +74,21 @@ async def test_checkin_no_changes_exits_zero():
         [[((), "updates", {"adjust": {"messages": [AIMessage(content="All on track.")]}})]]
     )
     assert await run_checkin(g, yes=False, out=lambda s: None) == 0
+
+
+class RaisingStubGraph(StubGraph):
+    """A graph whose astream raises instead of yielding, simulating a failed model call."""
+
+    async def astream(self, payload, config=None, stream_mode=None, subgraphs=False):
+        self.inputs.append(payload)
+        raise anthropic.APIConnectionError(
+            request=httpx.Request("POST", "https://api.anthropic.com")
+        )
+        yield  # pragma: no cover - makes this an async generator
+
+
+async def test_checkin_returns_error_code_on_model_failure():
+    g = RaisingStubGraph([])
+    buf = []
+    assert await run_checkin(g, yes=False, out=buf.append) == 1
+    assert "connection error" in "".join(buf)
