@@ -1430,6 +1430,9 @@ git commit -m "docs(nutrition): plan 3 execution notes"
 - Spec §15 items 3 and 4: Task 6.
 - Type consistency: `make_fuel_node(deps)` replaces `fuel_node` in `graph.py`; `write_change(deps, thread_id, change)` keeps its signature so `daily.py` is unchanged; `FakeTp` mirrors `FakeGarmin`; `make_deps(model, *, garmin, tp, horizon, today)` in the conftest; `repo.mark_fuel_written` (Plan 1, by id) stays for tests, `mark_fuel_written_for` is what apply uses.
 
-## Execution notes
+## Execution notes (2026-09-10, for Plan 4 to pick up)
 
-(Filled in during execution; Plan 4 reads these first.)
+- Executed inline on branch `feat/tri-nutrition-03`, Tasks 1 to 5 committed (Tasks 2 and 3 together). Every module matched the plan; the only edits were line wrapping and one message-text assertion (`Applied 1 of 1`, capitalised in the new apply summary).
+- **Suite:** 386 passed, 2 skipped (the two live tests). New tests: workout-id matching (2), TP call translation (3), fuel node (6), apply TP cases (5), repo helpers (1), end-to-end intake -> targets -> fuel -> review -> apply across both fakes (1), renderers (1).
+- **Task 6 is Brian's:** a real conversation that writes one session note and the race note, then a look at the TrainingPeaks web calendar and mobile app to settle spec §15 item 3 (is the private workout note visible enough?) and confirm item 4 (`tp_create_note` returns `note_id`, as the pinned source shows). Record here; if the private note is hidden, switch `tp_calls.to_tp_call` to `tp_update_workout(description=...)` as the module docstring describes.
+- **For Plan 4:** `FuelLogEntry` writes (`record_fuel_feedback`) go to the Store key `fuel_log` as `{"entries": [...]}`; `store.get_fuel_log` already reads it. `GARMIN_CHECKIN_TOOLS` is declared in `allowlist.py`. The checkin node in `graph/nodes/checkin.py` keeps the Plan 2 prompt and tool set; Plan 4 replaces `prompts/checkin.py` and adds `tools/checkin.py` (`record_fuel_feedback`, `propose_target_changes`). `profile_overrides` and `regenerate_from = "checkin"` are already honored by targets, review and apply.

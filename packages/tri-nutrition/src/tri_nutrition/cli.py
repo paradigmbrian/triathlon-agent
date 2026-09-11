@@ -24,7 +24,7 @@ os.environ["LANGSMITH_PROJECT"] = get_nutrition_settings().tri_nutrition_langsmi
 app = typer.Typer(help="Endurance nutrition agent", no_args_is_help=True)
 console = Console()
 THREAD_ID = "nutrition"
-GARMIN_START_TIMEOUT_S = 120
+SERVER_START_TIMEOUT_S = 120
 
 
 @app.callback()
@@ -38,7 +38,9 @@ def _out(s: str) -> None:
 
 @app.command()
 def chat(
-    no_live: bool = typer.Option(False, "--no-live", help="Do not start the Garmin server"),
+    no_live: bool = typer.Option(
+        False, "--no-live", help="Do not start the Garmin and TrainingPeaks servers"
+    ),
 ) -> None:
     """Set up the nutrition profile and daily targets in conversation; every Garmin write is
     approved first."""
@@ -50,7 +52,7 @@ async def _chat(*, no_live: bool) -> None:
 
     from tri_core.db.connection import connect
     from tri_core.mcp.client import McpToolClient
-    from tri_core.mcp.servers import garmin_spec
+    from tri_core.mcp.servers import garmin_spec, trainingpeaks_spec
     from tri_core.sync.runner import run_sync
     from tri_nutrition import repo
     from tri_nutrition import store as S
@@ -81,7 +83,7 @@ async def _chat(*, no_live: bool) -> None:
                     stack.enter_async_context(
                         McpToolClient(garmin_spec(settings, enabled_tools=GARMIN_SERVER_TOOLS))
                     ),
-                    timeout=GARMIN_START_TIMEOUT_S,
+                    timeout=SERVER_START_TIMEOUT_S,
                 )
                 _out("garmin: connected (writes happen only after you approve)\n")
             except Exception as exc:  # the chat still works; apply holds changes pending
@@ -89,9 +91,22 @@ async def _chat(*, no_live: bool) -> None:
                     f"warning: garmin MCP server unavailable ({type(exc).__name__}: {exc}); "
                     "intake will ask for weight and age, and apply will hold Garmin writes\n"
                 )
+        tp = None
+        if not no_live:
+            try:
+                tp = await asyncio.wait_for(
+                    stack.enter_async_context(McpToolClient(trainingpeaks_spec(settings))),
+                    timeout=SERVER_START_TIMEOUT_S,
+                )
+                _out("trainingpeaks: connected (notes are written only after you approve)\n")
+            except Exception as exc:  # note changes are held pending until the server is back
+                _out(
+                    f"warning: trainingpeaks MCP server unavailable ({type(exc).__name__}: {exc}); "
+                    "note changes will be held pending\n"
+                )
         saver = await stack.enter_async_context(open_checkpointer(settings.database_url))
         store = await stack.enter_async_context(S.open_store(settings.database_url))
-        graph = build_graph(make_deps(settings, make_model(settings), garmin), saver, store)
+        graph = build_graph(make_deps(settings, make_model(settings), garmin, tp), saver, store)
         cfg = {"configurable": {"thread_id": THREAD_ID}}
 
         async def read() -> str | None:
@@ -109,12 +124,16 @@ async def _chat(*, no_live: bool) -> None:
             today = date.today()
             with connect(settings.database_url) as conn:
                 stored = repo.list_targets(conn, today, today + timedelta(days=365))
+                plans = repo.list_fuel_plans(conn, today, today + timedelta(days=365))
                 last = repo.last_change_at(conn)
             written = [s for s in stored if s.written_to_garmin]
+            plans_written = [p for p in plans if p.written]
             body_fat = profile.body_fat_pct if profile.body_fat_pct is not None else "-"
             lines = [
                 f"goal: {profile.goal}; weight {profile.weight_kg:g} kg; body fat {body_fat} %",
                 f"targets from today: {len(stored)} days ({len(written)} written to Garmin)",
+                f"fuel plans from today: {len(plans)} "
+                f"({len(plans_written)} written to TrainingPeaks)",
                 f"last write: {last.isoformat(timespec='minutes') if last else 'never'}",
                 f"next node: {snap.next or '-'}",
             ]
@@ -190,7 +209,7 @@ async def _today(*, yes: bool, no_live: bool) -> int:
                     stack.enter_async_context(
                         McpToolClient(garmin_spec(settings, enabled_tools=GARMIN_SERVER_TOOLS))
                     ),
-                    timeout=GARMIN_START_TIMEOUT_S,
+                    timeout=SERVER_START_TIMEOUT_S,
                 )
             except Exception as exc:
                 _out(f"garmin MCP server unavailable ({type(exc).__name__}: {exc})\n")

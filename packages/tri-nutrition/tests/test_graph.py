@@ -10,7 +10,17 @@ from tri_nutrition import repo
 from tri_nutrition import store as S
 from tri_nutrition.graph.graph import after_review, build_graph, route_start
 from tri_nutrition.nutrition.models import NutritionProfile, ReviewDecision
-from tri_nutrition.testing import MONDAY, PROFILE_ARGS, FakeGarmin
+from tri_nutrition.testing import (
+    MONDAY,
+    PROFILE_ARGS,
+    FakeGarmin,
+    FakeTp,
+    race_plan_json,
+    seed_goal_and_plan,
+    seed_workouts,
+    session_fuel_json,
+    session_json,
+)
 
 pytestmark = pytest.mark.db
 CFG = {"configurable": {"thread_id": "nutrition"}}
@@ -131,3 +141,54 @@ def test_route_functions():
     assert after_review({"review_decision": reject, "regenerate_from": "intake"}) == "intake"
     assert after_review({"review_decision": reject}) == "__end__"
     assert after_review({"review_decision": None}) == "__end__"
+
+
+async def test_intake_to_review_with_fuel_and_approve_writes_both_servers(
+    ndb, make_deps, mem_store
+):
+    if ndb.execute("select to_regclass('plan_weeks') as t").fetchone()["t"] is None:
+        pytest.skip("planning migrations not applied")
+    race = MONDAY + timedelta(days=6)
+    week = [session_json(MONDAY, "bike", 120, "endurance", 100)]
+    seed_goal_and_plan(ndb, MONDAY, [("race", week)], event_date=race)
+    seed_workouts(
+        ndb,
+        [
+            {
+                "tp_workout_id": "w1",
+                "workout_date": MONDAY,
+                "sport": "bike",
+                "planned_duration_sec": 7200,
+                "title": "bike 120",
+            }
+        ],
+    )
+    model = ScriptedChatModel(
+        script=[
+            *intake_script(),
+            tool_call("SessionFuel", session_fuel_json("w1", MONDAY)),
+            tool_call("RaceFuelPlan", race_plan_json(race)),
+        ]
+    )
+    g, tp = FakeGarmin(), FakeTp()
+    deps = make_deps(model, garmin=g, tp=tp, horizon=7)
+    graph = build_graph(deps, InMemorySaver(), mem_store)
+    out = await graph.ainvoke({"messages": [HumanMessage("set up my nutrition")]}, CFG)
+    payload = out["__interrupt__"][0].value
+    assert [c["op"] for c in payload["changes"]] == [
+        "set_day_targets",
+        "set_session_note",
+        "set_race_note",
+    ]
+    assert "Race fuel" in payload["summary"]
+    out = await graph.ainvoke(APPROVE, CFG)
+    assert out["pending_changes"] == [] and out["last_error"] is None
+    assert [c[0] for c in g.calls] == ["set_nutrition_daily_settings"]
+    assert [c[0] for c in tp.calls] == [
+        "tp_get_workout_note",
+        "tp_set_workout_note",
+        "tp_create_note",
+    ]
+    plans = repo.list_fuel_plans(ndb, MONDAY, race)
+    assert all(p.written for p in plans)
+    assert next(p for p in plans if p.kind == "race").tp_note_id == "n3"

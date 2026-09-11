@@ -54,7 +54,7 @@ flowchart TD
     intake["intake\ncreate_agent sub-agent\nreads Garmin, asks, calls save_nutrition_profile"]
     checkin["checkin\ncreate_agent sub-agent\nquestions and profile edits (Plan 4: the check-in)"]
     targets["targets\npure Python\nprofile + plan -> DayTargets, Garmin change set"]
-    fuel["fuel\n(Plan 3)"]
+    fuel["fuel\nwith_structured_output(SessionFuel | RaceFuelPlan)\none call per qualifying session, validated"]
     review["review\ninterrupt()\napprove / reject / edit"]
     apply["apply\nthe only Garmin writer\none call per day, each recorded"]
     intake -->|profile saved| targets
@@ -74,6 +74,10 @@ flowchart TD
 
 - `tri-nutrition chat [--no-live]`: the REPL. `/status`, `/profile`, `/pending`, `/sync`, `/quit`.
   At review: `approve`, `reject <note>`, or `edit` (YAML in `$EDITOR`).
+- At review the table is followed by the session fueling lines and the race timeline.
+  `set_session_note` writes the workout's private note; `set_race_note` creates or updates the
+  calendar note titled `Race fuel: <event> <date>`. A note is only overwritten when the agent
+  wrote it (or the workout's private note is empty).
 - `tri-nutrition today [--yes] [--no-live]`: the daily write. Regenerates the horizon from the
   stored profile and plan (no model call), stores it, and writes today's target to Garmin after a
   `y/N`. Garmin holds only the current day's goal (a future date is rejected by Garmin), so run
