@@ -13,3 +13,6 @@ GARMIN_CHECKIN_TOOLS = [
 ]
 GARMIN_WRITE_TOOLS = ["set_nutrition_daily_settings"]
 GARMIN_SERVER_TOOLS = sorted(set(GARMIN_INTAKE_TOOLS + GARMIN_CHECKIN_TOOLS + GARMIN_WRITE_TOOLS))
+
+TP_WRITE_TOOLS = ["tp_set_workout_note", "tp_create_note", "tp_update_note"]
+TP_READ_TOOLS = ["tp_get_workout_note", "tp_get_note", "tp_list_notes"]

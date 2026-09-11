@@ -120,6 +120,8 @@ class PlanContext(BaseModel):
     ftp_watts: int | None = None
     event_date: date | None = None
     event_priority: Literal["A", "B", "C"] | None = None
+    event_name: str | None = None
+    goal_type: str | None = None
     phases: dict[date, Phase] = Field(default_factory=dict)  # keyed by week Monday
     weekly_hours: float | None = None  # from the active goal; the profile_hours fallback
 

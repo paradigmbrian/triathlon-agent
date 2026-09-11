@@ -23,12 +23,16 @@ class GraphDeps:
     connect: ConnectFactory
     db_url: str  # for the read-only SQL tool, which opens its own connections
     garmin: ToolCaller | None = None  # live Garmin session; None when the server is down
+    tp: ToolCaller | None = None  # live TrainingPeaks session; None when down
     horizon_days: int = 14
     today: Callable[[], date] = date.today
 
 
 def make_deps(
-    settings: NutritionSettings, model: BaseChatModel, garmin: ToolCaller | None
+    settings: NutritionSettings,
+    model: BaseChatModel,
+    garmin: ToolCaller | None,
+    tp: ToolCaller | None = None,
 ) -> GraphDeps:
     url = settings.database_url
     return GraphDeps(
@@ -36,5 +40,6 @@ def make_deps(
         connect=lambda: core_connect(url),
         db_url=url,
         garmin=garmin,
+        tp=tp,
         horizon_days=settings.tri_nutrition_horizon_days,
     )

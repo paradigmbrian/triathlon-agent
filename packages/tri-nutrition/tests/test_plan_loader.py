@@ -132,3 +132,45 @@ def test_load_horizon_nothing_at_all(pdb):
     sessions, ctx = L.load_horizon(pdb, MONDAY, 14)
     assert sessions == [] and ctx.source == "profile_hours" and ctx.weekly_hours is None
     assert ctx.phases == {} and ctx.event_date is None
+
+
+def test_attach_workout_ids_matches_day_and_sport_then_title():
+    a = session_json(MONDAY, "bike", 90)
+    b = session_json(MONDAY, "bike", 30)
+    b["title"] = "Openers"
+    designed = {"week_start": MONDAY.isoformat(), "coach_note": "", "sessions": [a, b]}
+    sessions = L.sessions_from_designed(designed, MONDAY, MONDAY)
+    rows = [
+        {"tp_workout_id": "w2", "workout_date": MONDAY, "sport": "bike", "title": "Openers"},
+        {"tp_workout_id": "w1", "workout_date": MONDAY, "sport": "bike", "title": "bike 90"},
+        {"tp_workout_id": "w9", "workout_date": MONDAY, "sport": "run", "title": "x"},
+    ]
+    out = L.attach_workout_ids(sessions, rows)
+    assert [(s.title, s.tp_workout_id) for s in out] == [("bike 90", "w1"), ("Openers", "w2")]
+    kept = sessions[0].model_copy(update={"tp_workout_id": "kept"})
+    assert L.attach_workout_ids([kept], rows)[0].tp_workout_id == "kept"
+    assert L.attach_workout_ids(sessions, [])[0].tp_workout_id is None
+
+
+def test_load_horizon_attaches_ids_and_goal_fields(pdb):
+    seed_goal_and_plan(
+        pdb,
+        MONDAY,
+        [("build", [session_json(MONDAY, "bike", 90)])],
+        event_date=MONDAY + timedelta(days=10),
+    )
+    seed_workouts(
+        pdb,
+        [
+            {
+                "tp_workout_id": "w1",
+                "workout_date": MONDAY,
+                "sport": "bike",
+                "planned_duration_sec": 5400,
+                "title": "bike 90",
+            }
+        ],
+    )
+    sessions, ctx = L.load_horizon(pdb, MONDAY, 7)
+    assert ctx.source == "plan" and sessions[0].tp_workout_id == "w1"
+    assert ctx.event_name == "City Tri" and ctx.goal_type == "olympic"

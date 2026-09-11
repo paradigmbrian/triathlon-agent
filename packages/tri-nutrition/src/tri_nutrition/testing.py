@@ -205,3 +205,110 @@ def seed_ftp(conn: Conn, ftp_watts: int) -> None:
             raw={},
         ),
     )
+
+
+class FakeTp:
+    """Records every call; answers like the TrainingPeaks server. `fail_on_call` raises on the
+    nth call. Override any tool's answer through `responses`."""
+
+    def __init__(
+        self, *, responses: dict[str, Any] | None = None, fail_on_call: int | None = None
+    ) -> None:
+        self.calls: list[tuple[str, dict[str, Any]]] = []
+        self.responses = responses or {}
+        self.fail_on_call = fail_on_call
+
+    async def call_json(self, tool: str, args: dict[str, Any] | None = None) -> Any:
+        a = dict(args or {})
+        self.calls.append((tool, a))
+        if self.fail_on_call is not None and len(self.calls) == self.fail_on_call:
+            raise McpToolError(tool, "API_ERROR: boom")
+        if tool in self.responses:
+            return self.responses[tool]
+        if tool == "tp_set_workout_note":
+            return {"success": True, "note": a.get("note")}
+        if tool == "tp_get_workout_note":
+            return {"note": ""}
+        if tool == "tp_create_note":
+            return {
+                "success": True,
+                "note_id": f"n{len(self.calls)}",
+                "title": a.get("title"),
+                "date": a.get("date"),
+            }
+        if tool == "tp_update_note":
+            return {"success": True, "note_id": a.get("note_id")}
+        if tool == "tp_get_note":
+            return {"note": {"id": a.get("note_id"), "title": "", "description": "", "date": ""}}
+        if tool == "tp_list_notes":
+            return {"notes": [], "count": 0}
+        return {}
+
+
+def session_fuel_json(workout_id: str, day: date, **over: Any) -> dict[str, Any]:
+    """A SessionFuel as the model would return it, valid for PROFILE_ARGS's library."""
+    base: dict[str, Any] = {
+        "tp_workout_id": workout_id,
+        "day": day.isoformat(),
+        "pre": "Oats and a banana 2 h before.",
+        "carbs_g_per_h": 60,
+        "fluid_ml_per_h": 600,
+        "sodium_mg_per_h": 500,
+        "caffeine_mg": None,
+        "products": ["Gel"],
+        "post": "Shake within 30 min, then a meal.",
+        "gut_training": False,
+        "note_text": "Fuel: 60 g/h (2 Gel per hour), 600 ml/h, 500 mg sodium/h.",
+    }
+    base.update(over)
+    return base
+
+
+def race_plan_json(event_date: date, **over: Any) -> dict[str, Any]:
+    base: dict[str, Any] = {
+        "event_date": event_date.isoformat(),
+        "timeline": [
+            {
+                "offset_min": -180,
+                "leg": "pre",
+                "what": "Oats, banana, coffee",
+                "carbs_g": 120,
+                "fluid_ml": 500,
+                "sodium_mg": 300,
+                "caffeine_mg": 100,
+                "products": [],
+            },
+            {
+                "offset_min": 20,
+                "leg": "bike",
+                "what": "Gel",
+                "carbs_g": 25,
+                "fluid_ml": 250,
+                "sodium_mg": 200,
+                "caffeine_mg": 0,
+                "products": ["Gel"],
+            },
+            {
+                "offset_min": 130,
+                "leg": "run",
+                "what": "Gel",
+                "carbs_g": 25,
+                "fluid_ml": 200,
+                "sodium_mg": 150,
+                "caffeine_mg": 0,
+                "products": ["Gel"],
+            },
+        ],
+        "totals_per_h": {
+            "bike_carbs": 60,
+            "run_carbs": 50,
+            "bike_fluid": 700,
+            "run_fluid": 500,
+            "bike_sodium": 600,
+            "run_sodium": 400,
+        },
+        "contingencies": ["If the gut turns: water and one gel per 30 min."],
+        "note_text": "Race fuel plan: pre-race meal 3 h out; 60 g/h bike, 50 g/h run.",
+    }
+    base.update(over)
+    return base

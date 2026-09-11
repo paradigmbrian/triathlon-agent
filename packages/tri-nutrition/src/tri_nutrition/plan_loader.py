@@ -63,9 +63,46 @@ def sessions_from_designed(designed: dict[str, Any], start: date, end: date) -> 
     return out
 
 
+def attach_workout_ids(sessions: list[Session], rows: list[dict[str, Any]]) -> list[Session]:
+    """Give plan-designed sessions the id of the synced TrainingPeaks workout on the same day
+    and sport (title breaks ties). Sessions that already carry an id keep it."""
+    used: set[str] = set()
+    out: list[Session] = []
+    for s in sessions:
+        if s.tp_workout_id is not None:
+            used.add(s.tp_workout_id)
+            out.append(s)
+            continue
+        candidates = [
+            r
+            for r in rows
+            if r["workout_date"] == s.day
+            and r["sport"] == s.sport
+            and str(r["tp_workout_id"]) not in used
+        ]
+        exact = [r for r in candidates if (r.get("title") or "") == s.title]
+        pool = exact or candidates
+        if not pool:
+            out.append(s)
+            continue
+        wid = str(pool[0]["tp_workout_id"])
+        used.add(wid)
+        out.append(s.model_copy(update={"tp_workout_id": wid}))
+    return out
+
+
+def _workouts_between(conn: Conn, start: date, end: date) -> list[dict[str, Any]]:
+    return conn.execute(
+        "select tp_workout_id, workout_date, sport, title from workouts "
+        "where workout_date between %s and %s order by workout_date, tp_workout_id",
+        (start, end),
+    ).fetchall()
+
+
 def _active_goal(conn: Conn) -> dict[str, Any] | None:
     return conn.execute(
-        "select id, event_date, priority, weekly_hours_max from training_goals "
+        "select id, goal_type, event_name, event_date, priority, weekly_hours_max "
+        "from training_goals "
         "where status = 'active' order by created_at desc, id desc limit 1"
     ).fetchone()
 
@@ -107,6 +144,7 @@ def load_horizon(conn: Conn, today: date, horizon_days: int) -> tuple[list[Sessi
                 sessions += sessions_from_designed(w["designed"], today, end)
         if sessions:
             source = "plan"
+            sessions = attach_workout_ids(sessions, _workouts_between(conn, today, end))
     if not sessions:
         for row in _planned_workouts(conn, today, end):
             s = session_from_workout(row)
@@ -124,6 +162,8 @@ def load_horizon(conn: Conn, today: date, horizon_days: int) -> tuple[list[Sessi
         ftp_watts=_ftp(conn),
         event_date=goal["event_date"] if goal is not None else None,
         event_priority=goal["priority"] if goal is not None else None,
+        event_name=goal["event_name"] if goal is not None else None,
+        goal_type=goal["goal_type"] if goal is not None else None,
         phases=phases,
         weekly_hours=weekly_hours if source == "profile_hours" else None,
     )
@@ -136,6 +176,8 @@ def describe(sessions: list[Session], ctx: PlanContext) -> dict[str, Any]:
         "source": ctx.source,
         "event_date": ctx.event_date.isoformat() if ctx.event_date else None,
         "event_priority": ctx.event_priority,
+        "event_name": ctx.event_name,
+        "goal_type": ctx.goal_type,
         "ftp_watts": ctx.ftp_watts,
         "weekly_hours": ctx.weekly_hours,
         "phases": {d.isoformat(): p for d, p in sorted(ctx.phases.items())},
