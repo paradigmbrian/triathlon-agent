@@ -29,9 +29,12 @@ async def test_create_update_delete_roundtrip():
             CalendarChange(op="create", workout_date=day, workout=session, reason="test")
         )
         created = await tp.call_json(name, args)
-        wid = result_workout_id(CalendarChange(op="create", workout=session, reason="t"), created)
-        assert wid, created
+        wid: str | None = None
         try:
+            wid = result_workout_id(
+                CalendarChange(op="create", workout=session, reason="t"), created
+            )
+            assert wid, created
             name, args = to_tp_call(
                 CalendarChange(
                     op="update",
@@ -48,9 +51,23 @@ async def test_create_update_delete_roundtrip():
             )
             assert any(w["id"] == wid and "updated" in w["title"] for w in listed["workouts"])
         finally:
-            name, args = to_tp_call(CalendarChange(op="delete", tp_workout_id=wid, reason="t"))
-            assert (await tp.call_json(name, args))["success"] is True
+            if wid:
+                name, args = to_tp_call(CalendarChange(op="delete", tp_workout_id=wid, reason="t"))
+                assert (await tp.call_json(name, args))["success"] is True
+            else:
+                listed = await tp.call_json(
+                    "tp_get_workouts",
+                    {"start_date": day.isoformat(), "end_date": day.isoformat()},
+                )
+                for w in listed["workouts"]:
+                    if str(w["title"]).startswith("tri-planning live test"):
+                        name, args = to_tp_call(
+                            CalendarChange(op="delete", tp_workout_id=str(w["id"]), reason="t")
+                        )
+                        await tp.call_json(name, args)
         listed = await tp.call_json(
             "tp_get_workouts", {"start_date": day.isoformat(), "end_date": day.isoformat()}
         )
-        assert all(w["id"] != wid for w in listed["workouts"])
+        assert all(
+            not str(w["title"]).startswith("tri-planning live test") for w in listed["workouts"]
+        )

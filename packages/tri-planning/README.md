@@ -25,7 +25,7 @@ flowchart TD
     design["design\nwith_structured_output(PlannedWeek)\none call per window week, validated"]
     review["review\ninterrupt()\nwaits for approve / reject / edit"]
     apply["apply\nthe only TrainingPeaks writer\none call per change, each recorded"]
-    adjust["adjust\nplaceholder until milestone 4"]
+    adjust["adjust\ncreate_agent sub-agent"]
 
     intake -->|goal saved| targets
     intake -->|still asking| END1([END])
@@ -34,11 +34,13 @@ flowchart TD
     targets -->|bought plan adopted| END2([END])
     design --> review
     review -->|approve / edit| apply
-    review -->|reject| design
+    review -->|reject, from design| design
+    review -->|reject, from adjust| adjust
     review -->|nothing to review| END3([END])
     apply -->|after apply_plan| targets
     apply --> END4([END])
-    adjust --> END5([END])
+    adjust -->|changes proposed| review
+    adjust -->|nothing to propose| END5([END])
 ```
 
 | Node | Model call | Writes | Reads | Returns |
@@ -48,7 +50,7 @@ flowchart TD
 | `design` | one structured-output call per week in the horizon, plus one retry per week when the validator objects | `plan_weeks.designed` | goal, plan, thresholds | `pending_changes` (one `create` per session), `pending_summary` |
 | `review` | none | nothing before the interrupt | `pending_changes` | `review_decision`; a reject note as a `HumanMessage`; edited changes on edit |
 | `apply` | none | TrainingPeaks, `plan_changes`, `plan_weeks.written_to_tp` | `plan_changes` (ownership) | remaining changes, `last_error`, report message, `phase: active` when clean |
-| `adjust` | none yet | nothing | nothing | a placeholder message |
+| `adjust` | sub-agent loop with `query_training_db`, `get_training_readiness`, `get_hrv_data`, `tp_get_workouts`, `design_next_week`, `propose_calendar_changes` | `plan_weeks.designed` (when `design_next_week` runs) | this/next week targets, last 7 days planned vs actual, 3-day readiness/HRV vs 30-day baseline, TSB, owned workouts | new messages; `pending_changes`/`pending_summary`/`changes_from: adjust` when changes are proposed, cleared otherwise |
 
 Two invariants hold by construction: no TrainingPeaks write tool is ever bound to a model, and
 there is no edge into `apply` except from `review`.
