@@ -200,3 +200,8 @@ def session_note_owned(conn: Conn, workout_id: str) -> bool:
         (workout_id,),
     ).fetchone()
     return row is not None
+
+
+def last_target_day(conn: Conn) -> date | None:
+    row = conn.execute("select max(day) as d from nutrition_targets").fetchone()
+    return row["d"] if row else None

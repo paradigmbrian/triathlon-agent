@@ -116,3 +116,9 @@ def test_mark_fuel_written_for_and_session_ownership(ndb):
     change = NutritionChange(op="set_session_note", target_key="w1", day=MON, payload={}, reason="")
     repo.insert_change(ndb, "nutrition", change, {"success": True})
     assert repo.session_note_owned(ndb, "w1") is True
+
+
+def test_last_target_day(ndb):
+    assert repo.last_target_day(ndb) is None
+    repo.upsert_targets(ndb, [target(MON), target(MON + timedelta(days=3))])
+    assert repo.last_target_day(ndb) == MON + timedelta(days=3)

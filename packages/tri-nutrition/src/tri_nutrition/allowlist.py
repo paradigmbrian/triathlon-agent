@@ -8,11 +8,18 @@ GARMIN_INTAKE_TOOLS = ["get_user_profile", "get_body_composition", "get_nutritio
 GARMIN_CHECKIN_TOOLS = [
     "get_body_composition",
     "get_nutrition_daily_food_log",
-    "get_nutrition_daily_meals",
     "get_hydration_data",
 ]
 GARMIN_WRITE_TOOLS = ["set_nutrition_daily_settings"]
 GARMIN_SERVER_TOOLS = sorted(set(GARMIN_INTAKE_TOOLS + GARMIN_CHECKIN_TOOLS + GARMIN_WRITE_TOOLS))
+
+# LangChain tool names (tools/garmin.py builds every read tool; each node picks its set).
+INTAKE_READ_TOOLS = (
+    "read_garmin_profile",
+    "read_body_composition",
+    "read_garmin_nutrition_settings",
+)
+CHECKIN_READ_TOOLS = ("read_body_composition", "read_hydration")
 
 TP_WRITE_TOOLS = ["tp_set_workout_note", "tp_create_note", "tp_update_note"]
 TP_READ_TOOLS = ["tp_get_workout_note", "tp_get_note", "tp_list_notes"]

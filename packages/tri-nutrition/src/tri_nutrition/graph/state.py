@@ -14,6 +14,7 @@ class NutritionState(TypedDict, total=False):
     messages: Annotated[list[AnyMessage], add_messages]
     has_profile: bool  # set by the route node from the Store each run
     profile_saved: bool  # set by intake/checkin when save_nutrition_profile succeeded this run
+    targets_requested: bool  # set by checkin when propose_target_changes succeeded this run
     profile_overrides: dict[str, Any] | None  # from propose_target_changes; persisted on approve
     regenerate_from: Literal["intake", "checkin"] | None
     pending_changes: list[NutritionChange]

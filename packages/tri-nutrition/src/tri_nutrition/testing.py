@@ -4,8 +4,11 @@ a canned profile, and SQL seeds for planning's tables. Imported by tests only.""
 from __future__ import annotations
 
 from datetime import date, timedelta
-from typing import Any
+from typing import Any, TypedDict
 
+from langchain_core.tools import BaseTool
+from langgraph.graph import END, START, StateGraph
+from langgraph.store.base import BaseStore
 from psycopg.types.json import Jsonb
 
 from tri_core.db.models import AthleteProfileRow, WorkoutRow
@@ -55,13 +58,14 @@ class FakeGarmin:
         self.fail_on_call = fail_on_call
 
     async def call_json(self, tool: str, args: dict[str, Any] | None = None) -> Any:
-        self.calls.append((tool, dict(args or {})))
+        a = dict(args or {})
+        self.calls.append((tool, a))
         if self.fail_on_call is not None and len(self.calls) == self.fail_on_call:
             raise McpToolError(tool, "Error updating nutrition settings: boom")
         if tool in self.responses:
-            return self.responses[tool]
+            r = self.responses[tool]
+            return r(a) if callable(r) else r
         if tool == "set_nutrition_daily_settings":
-            a = args or {}
             return {
                 "status": "updated",
                 "date": a.get("date"),
@@ -72,6 +76,35 @@ class FakeGarmin:
             }
         if tool == "get_nutrition_daily_settings":
             return {"weightChangeType": "NO_GOAL", "macroGoals": {}}
+        if tool == "get_hydration_data":
+            return {
+                "calendarDate": a.get("date"),
+                "valueInML": 1500.0,
+                "goalInML": 2800.0,
+                "sweatLossInML": None,
+            }
+        if tool == "get_nutrition_daily_food_log":
+            return {
+                "mealDate": a.get("date"),
+                "dailyNutritionContent": {
+                    "calories": 2400,
+                    "carbs": 300.0,
+                    "protein": 150.0,
+                    "fat": 70.0,
+                },
+                "mealDetails": [
+                    {
+                        "meal": {"mealName": "BREAKFAST"},
+                        "mealNutritionContent": {
+                            "calories": 600,
+                            "carbs": 80.0,
+                            "protein": 30.0,
+                            "fat": 15.0,
+                        },
+                        "loggedFoods": [{"foodMetaData": {"foodName": "Oats"}, "servingQty": 1.0}],
+                    }
+                ],
+            }
         return None
 
 
@@ -312,3 +345,21 @@ def race_plan_json(event_date: date, **over: Any) -> dict[str, Any]:
     }
     base.update(over)
     return base
+
+
+class _ToolState(TypedDict, total=False):
+    out: str
+
+
+async def call_tool_in_graph(store: BaseStore, tool: BaseTool, args: dict[str, Any]) -> str:
+    """Run one tool inside a compiled graph so langgraph.config.get_store() resolves to `store`."""
+
+    async def node(state: _ToolState) -> dict[str, Any]:
+        return {"out": await tool.ainvoke(args)}
+
+    g: StateGraph[_ToolState] = StateGraph(_ToolState)
+    g.add_node("n", node)
+    g.add_edge(START, "n")
+    g.add_edge("n", END)
+    result = await g.compile(store=store).ainvoke({})
+    return str(result["out"])

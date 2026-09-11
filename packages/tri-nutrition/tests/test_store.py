@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 
 import pytest
 from langgraph.store.memory import InMemoryStore
@@ -54,3 +55,29 @@ async def test_postgres_store_round_trip():
             assert await S.get_profile(pg, ns=ns) == profile()
         finally:
             await S.forget_all(pg, ns=ns)
+
+
+async def test_fuel_log_append_and_product_add():
+    from tri_nutrition.nutrition.models import FuelLogEntry
+
+    mem = InMemoryStore()
+    assert await S.get_fuel_log(mem) == []
+    e1 = FuelLogEntry(
+        day=date(2026, 9, 7), sport="bike", duration_min=150, carbs_g_per_h=70, outcome="ok"
+    )
+    e2 = FuelLogEntry(
+        day=date(2026, 9, 9),
+        sport="run",
+        duration_min=60,
+        carbs_g_per_h=40,
+        outcome="gi_upset",
+        note="side stitch",
+    )
+    assert await S.append_fuel_entry(mem, e1) == 1
+    assert await S.append_fuel_entry(mem, e2) == 2
+    assert [e.outcome for e in await S.get_fuel_log(mem)] == ["ok", "gi_upset"]
+    gel = Product(name="Gel", form="gel", carbs_g=25)
+    assert await S.add_product(mem, gel) is True
+    assert await S.add_product(mem, Product(name="Gel", form="gel", carbs_g=30)) is False
+    assert await S.add_product(mem, Product(name="Chews", form="chew", carbs_g=24)) is True
+    assert [p.name for p in await S.get_product_library(mem)] == ["Gel", "Chews"]

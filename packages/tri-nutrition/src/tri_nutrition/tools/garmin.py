@@ -1,13 +1,13 @@
 """Garmin reads for the sub-agents, as LangChain tools over the one live server session.
 
 Hand-written schemas keep the model's view small and make the allow-list structural: only these
-three read tools exist. Payloads are trimmed to what the nutrition conversation needs.
+four read tools exist. Payloads are trimmed to what the nutrition conversation needs.
 """
 
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from datetime import date, timedelta
 from typing import Any
 
@@ -22,6 +22,10 @@ UNAVAILABLE = json.dumps({"error": "Garmin server unavailable this session"})
 
 class BodyCompositionArgs(BaseModel):
     days: int = Field(default=28, ge=1, le=365, description="how many days back to read")
+
+
+class RecentDaysArgs(BaseModel):
+    days: int = Field(default=7, ge=1, le=28, description="how many days back, ending yesterday")
 
 
 class NoArgs(BaseModel):
@@ -79,7 +83,73 @@ def trim_settings(payload: Any) -> dict[str, Any]:
     }
 
 
-def make_garmin_read_tools(garmin: ToolCaller | None, today: Callable[[], date]) -> list[BaseTool]:
+_EMPTY_LOG: dict[str, Any] = {
+    "logged": False,
+    "kcal": 0,
+    "carbs_g": 0,
+    "protein_g": 0,
+    "fat_g": 0,
+    "meals": {},
+    "items": [],
+}
+
+
+def _int(value: Any) -> int:
+    return int(round(float(value))) if value is not None else 0
+
+
+def parse_food_log(payload: Any) -> dict[str, Any]:
+    """One day's logged intake: totals (kcal and grams), kcal per meal, item names."""
+    if not isinstance(payload, dict):
+        return dict(_EMPTY_LOG)
+    total = payload.get("dailyNutritionContent") or {}
+    meals: dict[str, int] = {}
+    items: list[str] = []
+    for detail in payload.get("mealDetails") or []:
+        name = str((detail.get("meal") or {}).get("mealName") or "meal").lower()
+        content = detail.get("mealNutritionContent") or {}
+        if content.get("calories") is not None:
+            meals[name] = _int(content["calories"])
+        for food in detail.get("loggedFoods") or []:
+            fname = (food.get("foodMetaData") or {}).get("foodName")
+            if not fname:
+                continue
+            qty = food.get("servingQty")
+            label = str(fname)
+            if isinstance(qty, int | float) and float(qty) != 1.0:
+                label += f" x{float(qty):g}"
+            items.append(label)
+    return {
+        "logged": bool(items),
+        "kcal": _int(total.get("calories")),
+        "carbs_g": _int(total.get("carbs")),
+        "protein_g": _int(total.get("protein")),
+        "fat_g": _int(total.get("fat")),
+        "meals": meals,
+        "items": items,
+    }
+
+
+def parse_hydration(payload: Any) -> dict[str, Any]:
+    data = payload if isinstance(payload, dict) else {}
+
+    def ml(key: str) -> int | None:
+        value = data.get(key)
+        return int(round(float(value))) if value is not None else None
+
+    return {
+        "date": data.get("calendarDate"),
+        "intake_ml": ml("valueInML"),
+        "goal_ml": ml("goalInML"),
+        "sweat_loss_ml": ml("sweatLossInML"),
+    }
+
+
+def make_garmin_read_tools(
+    garmin: ToolCaller | None,
+    today: Callable[[], date],
+    only: Collection[str] | None = None,
+) -> list[BaseTool]:
     async def _call(tool: str, args: dict[str, Any]) -> Any:
         return await garmin.call_json(tool, args) if garmin is not None else None
 
@@ -118,7 +188,23 @@ def make_garmin_read_tools(garmin: ToolCaller | None, today: Callable[[], date])
         except McpToolError as exc:
             return json.dumps({"error": str(exc)})
 
-    return [
+    async def read_hydration(days: int = 7) -> str:
+        """Garmin hydration for the last `days` days ending yesterday: date, intake_ml, goal_ml,
+        sweat_loss_ml per day (null when nothing was logged that day)."""
+        if garmin is None:
+            return UNAVAILABLE
+        end = today() - timedelta(days=1)
+        rows = []
+        try:
+            for i in range(days):
+                day = end - timedelta(days=days - 1 - i)
+                payload = await _call("get_hydration_data", {"date": day.isoformat()})
+                rows.append({**parse_hydration(payload), "date": day.isoformat()})
+        except McpToolError as exc:
+            return json.dumps({"error": str(exc)})
+        return json.dumps(rows)
+
+    tools = [
         StructuredTool.from_function(
             coroutine=read_garmin_profile,
             name="read_garmin_profile",
@@ -137,4 +223,11 @@ def make_garmin_read_tools(garmin: ToolCaller | None, today: Callable[[], date])
             description=read_garmin_nutrition_settings.__doc__ or "",
             args_schema=NoArgs,
         ),
+        StructuredTool.from_function(
+            coroutine=read_hydration,
+            name="read_hydration",
+            description=read_hydration.__doc__ or "",
+            args_schema=RecentDaysArgs,
+        ),
     ]
+    return [t for t in tools if only is None or t.name in only]

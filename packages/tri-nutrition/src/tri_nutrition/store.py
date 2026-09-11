@@ -83,3 +83,22 @@ async def forget_all(store: BaseStore, ns: tuple[str, ...] = NAMESPACE) -> int:
             await store.adelete(ns, key)
             n += 1
     return n
+
+
+async def append_fuel_entry(
+    store: BaseStore, entry: FuelLogEntry, ns: tuple[str, ...] = NAMESPACE
+) -> int:
+    """Add one entry to the fuel log; returns the log's new length."""
+    entries = await get_fuel_log(store, ns)
+    entries.append(entry)
+    await store.aput(ns, KEY_FUEL_LOG, {"entries": [e.model_dump(mode="json") for e in entries]})
+    return len(entries)
+
+
+async def add_product(store: BaseStore, product: Product, ns: tuple[str, ...] = NAMESPACE) -> bool:
+    """Add a product to the library unless one with that name exists; True when added."""
+    library = await get_product_library(store, ns)
+    if any(p.name == product.name for p in library):
+        return False
+    await put_product_library(store, [*library, product], ns)
+    return True
