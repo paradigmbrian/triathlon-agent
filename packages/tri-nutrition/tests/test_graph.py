@@ -3,13 +3,15 @@ from datetime import timedelta
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.graph import END
 from langgraph.types import Command
 
 from tri_core.testing import ScriptedChatModel, tool_call
-from tri_nutrition import repo
+from tri_nutrition import plan_loader, repo
 from tri_nutrition import store as S
-from tri_nutrition.graph.graph import after_review, build_graph, route_start
+from tri_nutrition.graph.graph import after_checkin, after_review, build_graph, route_start
 from tri_nutrition.nutrition.models import NutritionProfile, ReviewDecision
+from tri_nutrition.nutrition.targets import build
 from tri_nutrition.testing import (
     MONDAY,
     PROFILE_ARGS,
@@ -192,3 +194,75 @@ async def test_intake_to_review_with_fuel_and_approve_writes_both_servers(
     plans = repo.list_fuel_plans(ndb, MONDAY, race)
     assert all(p.written for p in plans)
     assert next(p for p in plans if p.kind == "race").tp_note_id == "n3"
+
+
+def proposal_script(overrides, reason="evidence"):
+    call = tool_call("propose_target_changes", {"overrides": overrides, "reason": reason})
+    return [call, AIMessage(content="Proposed.")]
+
+
+def baseline_kcal(ndb, horizon=3):
+    sessions, ctx = plan_loader.load_horizon(ndb, MONDAY, horizon)
+    return build(NutritionProfile(**PROFILE_ARGS), sessions, ctx, MONDAY, horizon)[0].total_kcal
+
+
+async def test_checkin_proposal_regenerates_and_approve_persists_overrides(
+    ndb, make_deps, mem_store
+):
+    await S.put_profile(mem_store, NutritionProfile(**PROFILE_ARGS))
+    g = FakeGarmin()
+    model = ScriptedChatModel(script=proposal_script({"activity_factor": 1.5}, "on my feet"))
+    graph = make_graph(make_deps, mem_store, model, g, horizon=3)
+    out = await graph.ainvoke({"messages": [HumanMessage("check in")]}, CFG)
+    payload = out["__interrupt__"][0].value
+    assert payload["changes"][0]["payload"]["calorie_goal"] > baseline_kcal(ndb)
+    snap = await graph.aget_state(CFG)
+    assert snap.values["profile_overrides"] == {"activity_factor": 1.5}
+    assert snap.values["regenerate_from"] == "checkin"
+    assert snap.values["targets_requested"] is False
+    out = await graph.ainvoke(APPROVE, CFG)
+    assert len(g.calls) == 1 and out["pending_changes"] == []
+    assert out["profile_overrides"] is None
+    assert (await S.get_profile(mem_store)).activity_factor == 1.5
+    assert "profile updated" in out["messages"][-1].content
+
+
+async def test_checkin_proposal_reject_discards_overrides(ndb, make_deps, mem_store):
+    await S.put_profile(mem_store, NutritionProfile(**PROFILE_ARGS))
+    model = ScriptedChatModel(
+        script=[
+            *proposal_script({"activity_factor": 1.5}),
+            AIMessage(content="Understood, the targets stand."),
+        ]
+    )
+    g = FakeGarmin()
+    graph = make_graph(make_deps, mem_store, model, g, horizon=3)
+    await graph.ainvoke({"messages": [HumanMessage("check in")]}, CFG)
+    reject = Command(resume={"action": "reject", "note": "I sit most of the day"})
+    out = await graph.ainvoke(reject, CFG)
+    assert "__interrupt__" not in out and g.calls == [] and model.calls == 3
+    assert out["profile_overrides"] is None and out["pending_changes"] == []
+    assert (await S.get_profile(mem_store)).activity_factor == 1.35
+    assert any(isinstance(m, HumanMessage) and "I sit most" in m.content for m in out["messages"])
+    assert out["messages"][-1].content.startswith("Understood")
+
+
+async def test_checkin_extend_horizon_reproposes_today_only_when_changed(ndb, make_deps, mem_store):
+    await S.put_profile(mem_store, NutritionProfile(**PROFILE_ARGS))
+    g = FakeGarmin()
+    script = [*proposal_script({}, "extend horizon"), *proposal_script({}, "extend horizon")]
+    graph = make_graph(make_deps, mem_store, ScriptedChatModel(script=script), g, horizon=3)
+    out = await graph.ainvoke({"messages": [HumanMessage("check in")]}, CFG)
+    assert len(out["__interrupt__"][0].value["changes"]) == 1
+    await graph.ainvoke(APPROVE, CFG)
+    assert repo.list_targets(ndb, MONDAY, MONDAY)[0].written_to_garmin is True
+    out = await graph.ainvoke({"messages": [HumanMessage("check in again")]}, CFG)
+    assert "__interrupt__" not in out and len(g.calls) == 1  # today already on Garmin
+    assert "No nutrition changes to review" in out["messages"][-1].content
+
+
+def test_after_checkin_routes_on_either_flag():
+    assert after_checkin({"profile_saved": True}) == "targets"
+    assert after_checkin({"targets_requested": True}) == "targets"
+    assert after_checkin({"profile_saved": False, "targets_requested": False}) == END
+    assert after_checkin({}) == END

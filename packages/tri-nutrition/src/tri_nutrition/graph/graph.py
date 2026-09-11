@@ -7,7 +7,7 @@ targets -> fuel     | END (bounds violated, or no profile)
 fuel    -> review
 review  -> apply    (approve or edit) | intake or checkin (reject) | END
 apply   -> END
-checkin -> targets  (save_nutrition_profile was called) | END
+checkin -> targets  (save_nutrition_profile or propose_target_changes was called) | END
 """
 
 from __future__ import annotations
@@ -40,7 +40,9 @@ def after_intake(state: NutritionState) -> str:
 
 
 def after_checkin(state: NutritionState) -> str:
-    return "targets" if state.get("profile_saved") else END
+    if state.get("profile_saved") or state.get("targets_requested"):
+        return "targets"
+    return END
 
 
 def after_targets(state: NutritionState) -> str:

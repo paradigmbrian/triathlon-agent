@@ -97,10 +97,14 @@ def make_targets_node(deps: GraphDeps) -> Any:
     ) -> dict[str, Any]:
         h = await build_horizon(deps, store, state.get("profile_overrides"))
         if h.error or h.violations:
+            # A checkin proposal that breaks a bound is discarded with the violations shown;
+            # the athlete adjusts the profile in chat.
             return {
                 "pending_changes": [],
                 "pending_summary": None,
                 "profile_saved": False,
+                "targets_requested": False,
+                "profile_overrides": None,
                 "last_error": h.error or "; ".join(h.violations),
                 "messages": [AIMessage(h.summary())],
             }
@@ -108,6 +112,7 @@ def make_targets_node(deps: GraphDeps) -> Any:
             "pending_changes": h.changes,
             "pending_summary": h.summary(),
             "profile_saved": False,
+            "targets_requested": False,
             "last_error": None,
         }
 
