@@ -9,8 +9,9 @@ TrainingPeaks data, synced into a local Postgres store.
 | `packages/tri-analyze` | `tri_analyze` | `tri-analyze chat` | Analyst agent: feedback on completed sessions, trends. |
 | `packages/tri-planning` | `tri_planning` | `tri-planning chat` | Planning agent: goal intake, periodized plan, approved writes to the TrainingPeaks calendar. |
 | `packages/tri-nutrition` | `tri_nutrition` | `tri-nutrition chat \| today \| check-in \| eval` | Nutrition agent: profile intake, periodized daily targets and fueling plans, approved writes to Garmin Connect and TrainingPeaks. |
+| `packages/tri-wellness` | `tri_wellness` | `tri-wellness ingest \| report \| chat \| panels` | Lab interpreter: PDF and export ingest with review, functional-range evaluation, written interpretation grounded in training data. |
 
-`tri-analyze`, `tri-planning` and `tri-nutrition` depend on `tri-core`; no agent depends on another.
+`tri-analyze`, `tri-planning`, `tri-nutrition` and `tri-wellness` depend on `tri-core`; no agent depends on another.
 Repo: github.com/paradigmbrian/triathlon-agent.
 
 ## How it fits together
@@ -125,11 +126,12 @@ uv run python scripts/spike_mcp.py   # re-record packages/tri-core/tests/fixture
 ```
 pyproject.toml          workspace root: members, shared ruff/mypy/pytest config
 conftest.py             pytest options and the shared `db` fixture plugin
-migrations/             001_initial.sql (sync tables), 002_planning.sql and 003_rename_skeleton_to_targets.sql (planning tables), 004_nutrition.sql (nutrition tables)
+migrations/             001_initial.sql (sync tables), 002_planning.sql and 003_rename_skeleton_to_targets.sql (planning tables), 004_nutrition.sql (nutrition tables), 005_wellness.sql (lab tables)
 packages/tri-core/      src/tri_core/{config,cli,mcp,db,sync,testing}
 packages/tri-analyze/   src/tri_analyze/{cli,allowlist,agent}
 packages/tri-planning/  src/tri_planning/{config,cli,repo,repl,testing,planning,graph,tools,prompts}
 packages/tri-nutrition/ src/tri_nutrition/{config,cli,repo,repl,store,plan_loader,testing,nutrition,graph,tools,prompts,evals}
+packages/tri-wellness/  src/tri_wellness/{config,cli,repo,testing,ranges,labs}
 docs/superpowers/       specs and implementation plans
 ```
 
@@ -146,3 +148,4 @@ Module-level READMEs: `packages/tri-core/src/tri_core/{mcp,db,sync}/README.md`,
 - tri-planning milestones 2-4 (2026-09): targets, graph with review interrupt, adjust and
   check-in; design-prompt validator pass rate: not yet measured (run
   `scripts/design_eval.py --prompt-version v1` and record the `validator_pass` mean here).
+- tri-wellness milestone 1 (2026-09-11): ranges table, registry, normalize, evaluate, training context, lab tables; tracked in docs/superpowers/plans/2026-09-11-tri-wellness-0*.md.
