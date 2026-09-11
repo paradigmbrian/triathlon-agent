@@ -7,7 +7,7 @@ sleep and recovery data tri-core syncs to Postgres. Design:
 `docs/superpowers/specs/2026-09-10-tri-wellness-design.md`. Plans:
 `docs/superpowers/plans/2026-09-11-tri-wellness-0*.md`.
 
-## After Plan 1
+## After Plan 2
 
 Pure layer, no model, no commands yet:
 
@@ -46,8 +46,6 @@ for f in evaluate(n.results, reg, {}, ctx, tr):
     print(f.display, f.value, f.unit, f.conventional_status, f.functional_status, f.functional_range, f.active_confounders)
 "
 ```
-
-## After Plan 2
 
 Extract, normalize, review, store:
 
