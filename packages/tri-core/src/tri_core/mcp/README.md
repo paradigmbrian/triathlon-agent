@@ -11,7 +11,10 @@ the agent is allowed to call live. See also: [`../sync/README.md`](../sync/READM
 mcp/
   servers.py     ServerSpec + garmin_spec()/trainingpeaks_spec(): command, args, env
   client.py      McpToolClient (async ctx manager) + parse_tool_text(): programmatic calls
-  allowlist.py   GARMIN_LIVE_TOOLS / TP_LIVE_TOOLS: what the agent may call
+  live_tools.py  Bind allow-listed MCP tools as LangChain tools over persistent sessions;
+                 the generic opener used by tri-analyze and tri-planning
+  (allowlist.py) GARMIN_LIVE_TOOLS / TP_LIVE_TOOLS: what an agent may call live; one per
+                 agent package (tri_analyze, tri_planning)
 ```
 
 ## The servers
@@ -39,9 +42,9 @@ on start. `ServerSpec.env` is merged over `os.environ` when launching, because `
 the process, opens an MCP `ClientSession`, and exposes `call_json(tool, args)`. It exists so
 the ETL can call tools deterministically with no model in the loop.
 
-**Agent path (`agent/live_tools.py`).** `langchain-mcp-adapters` opens its own session per
-server and converts tools into LangChain `BaseTool`s. Same servers, same specs, different
-consumer.
+**Agent path (`live_tools.py`).** `langchain-mcp-adapters` opens its own session per server
+and converts tools into LangChain `BaseTool`s. Same servers, same specs, different consumer.
+Each agent package wraps `open_live_tools` with its own allow-lists.
 
 ## Result conventions (`parse_tool_text`)
 
@@ -79,5 +82,5 @@ when to use it.
 ## Bumping a server version
 
 Change the ref in `.env.example` and `config.py` defaults, rerun the spike, diff the fixtures,
-run `uv run pytest --live`. Parser changes go in `sync/`; tool-name changes go in
-`allowlist.py` and `servers.py` (`GARMIN_ENABLED_TOOLS`).
+run `uv run pytest --live`. Parser changes go in `sync/`; tool-name changes go in each
+agent's `allowlist.py` and in `servers.py` (`GARMIN_ENABLED_TOOLS`).

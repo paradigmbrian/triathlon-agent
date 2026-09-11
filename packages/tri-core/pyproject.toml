@@ -6,7 +6,7 @@ authors = [{ name = "Brian Flannery", email = "brian@paradigmshiftdev.io" }]
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "mcp>=1.29,<2",
-    "langchain-mcp-adapters==0.3.2",
+    "langchain-mcp-adapters==0.3.2",  # only for tri_core.mcp.live_tools
     "psycopg[binary]==3.3.5",
     "pydantic-settings>=2.6",
     "python-dotenv>=1.0",

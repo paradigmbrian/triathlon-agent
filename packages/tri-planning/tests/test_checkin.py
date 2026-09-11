@@ -1,29 +1,50 @@
+from types import SimpleNamespace
+
 import anthropic
 import httpx
 from langchain_core.messages import AIMessage
 from langgraph.types import Command, Interrupt
 
 from tri_planning.checkin import run_checkin
+from tri_planning.planning.models import CalendarChange
 from tri_planning.prompts.checkin import CHECKIN_PROMPT
 
 
 class StubGraph:
-    def __init__(self, turns, phase="active"):
+    """A graph whose turns are scripted stream events and whose state is a plain dict.
+
+    `state_after_approve`, when given, is the state returned once the approval turn has run,
+    so a test can show a failed or partial apply.
+    """
+
+    def __init__(
+        self,
+        turns,
+        phase="active",
+        next=(),
+        pending_changes=(),
+        state_after_approve=None,
+    ):
         self.turns = list(turns)
         self.inputs = []
         self.phase = phase
+        self.next = tuple(next)
+        self.pending_changes = list(pending_changes)
+        self.state_after_approve = state_after_approve
+        self.approved = False
 
     async def astream(self, payload, config=None, stream_mode=None, subgraphs=False):
         self.inputs.append(payload)
+        if isinstance(payload, Command):
+            self.approved = True
         for ev in self.turns.pop(0):
             yield ev
 
     async def aget_state(self, config):
-        class S:
-            values = {"phase": self.phase, "pending_changes": []}
-            next = ()
-
-        return S()
+        if self.approved and self.state_after_approve is not None:
+            return SimpleNamespace(values=dict(self.state_after_approve), next=())
+        values = {"phase": self.phase, "pending_changes": list(self.pending_changes)}
+        return SimpleNamespace(values=values, next=self.next)
 
 
 INTERRUPT = (
@@ -92,3 +113,27 @@ async def test_checkin_returns_error_code_on_model_failure():
     buf = []
     assert await run_checkin(g, yes=False, out=buf.append) == 1
     assert "connection error" in "".join(buf)
+
+
+async def test_checkin_refuses_a_review_it_did_not_produce():
+    pending = [CalendarChange(op="delete", tp_workout_id="w1", reason="sick")]
+    g = StubGraph([], next=("review",), pending_changes=pending)
+    buf = []
+    assert await run_checkin(g, yes=True, out=buf.append) == 3
+    text = "".join(buf)
+    assert g.inputs == []  # no turn was run
+    assert "a review is already pending" in text and "w1" in text
+
+
+async def test_checkin_yes_reports_a_failed_apply():
+    g = StubGraph(
+        [[INTERRUPT], [APPLIED]],
+        state_after_approve={
+            "phase": "active",
+            "last_error": "TrainingPeaks server unavailable",
+            "pending_changes": [CalendarChange(op="delete", tp_workout_id="w1", reason="sick")],
+        },
+    )
+    buf = []
+    assert await run_checkin(g, yes=True, out=buf.append) == 1
+    assert "apply did not complete: TrainingPeaks server unavailable" in "".join(buf)

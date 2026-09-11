@@ -115,9 +115,9 @@ def test_load_context_counts_designed_weeks_and_extension(nocommit):
     assert ctx.this_week.week_start == MONDAY and ctx.next_week.week_start == MONDAY + timedelta(
         weeks=1
     )
-    assert ctx.designed_remaining == 2 and ctx.extension_needed is False
+    assert ctx.weeks_on_calendar == 2 and ctx.extension_needed is False
     ctx2 = load_adjust_context(nocommit, MONDAY + timedelta(weeks=1, days=1), pid, horizon=3)
-    assert ctx2.designed_remaining == 1 and ctx2.extension_needed is True
+    assert ctx2.weeks_on_calendar == 1 and ctx2.extension_needed is True
 
 
 def test_render_flags_rpe_and_feeling_and_lists_owned_ids():
@@ -157,7 +157,7 @@ def test_render_flags_rpe_and_feeling_and_lists_owned_ids():
                 "title": "Long ride",
             }
         ],
-        designed_remaining=1,
+        weeks_on_calendar=1,
         horizon=3,
         extension_needed=True,
         checkin=False,
@@ -166,5 +166,6 @@ def test_render_flags_rpe_and_feeling_and_lists_owned_ids():
     assert "FLAG" in text and "rpe 9" in text and "feeling 2" in text
     assert "w9" in text and "Long ride" in text
     assert "swap days" in text and "re-plan the week" in text
+    assert "Weeks already on the calendar from this week: 1 (horizon 3)." in text
     assert "Window extension needed: yes" in text and "design_next_week" in text
     assert text.index("Lever order") < text.index("Today is")  # stable rules first, data after

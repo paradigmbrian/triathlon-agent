@@ -52,7 +52,7 @@ class AdjustContext:
     sessions: list[dict[str, Any]]
     baseline: dict[str, float | None]
     owned: list[dict[str, Any]]
-    designed_remaining: int
+    weeks_on_calendar: int
     horizon: int
     extension_needed: bool
     checkin: bool = False
@@ -73,7 +73,7 @@ def load_adjust_context(conn: Conn, today: date, plan_id: int, horizon: int) -> 
         "where metric_date between %s and %s",
         (monday, today),
     ).fetchone()
-    designed_remaining = sum(1 for w in weeks if w.written_to_tp and w.week_start >= monday)
+    weeks_on_calendar = sum(1 for w in weeks if w.written_to_tp and w.week_start >= monday)
     return AdjustContext(
         today=today,
         goal=stored.goal,
@@ -83,9 +83,9 @@ def load_adjust_context(conn: Conn, today: date, plan_id: int, horizon: int) -> 
         sessions=repo.recent_sessions(conn, today - timedelta(days=7), today),
         baseline=repo.recovery_baseline(conn, today),
         owned=repo.owned_workouts(conn, plan_id),
-        designed_remaining=designed_remaining,
+        weeks_on_calendar=weeks_on_calendar,
         horizon=horizon,
-        extension_needed=designed_remaining < MIN_DESIGNED_WEEKS,
+        extension_needed=weeks_on_calendar < MIN_DESIGNED_WEEKS,
         constraints=stored.goal.constraints,
     )
 
@@ -147,7 +147,7 @@ def render_adjust_prompt(ctx: AdjustContext) -> str:
         for o in ctx.owned
     ] or ["  none"]
     lines.append(
-        f"Designed weeks remaining from this week: {ctx.designed_remaining} "
+        f"Weeks already on the calendar from this week: {ctx.weeks_on_calendar} "
         f"(horizon {ctx.horizon}). "
         f"Window extension needed: {'yes' if ctx.extension_needed else 'no'}."
     )

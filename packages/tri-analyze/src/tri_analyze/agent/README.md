@@ -24,7 +24,7 @@ agent/
   (sql_tool.py)   query_training_db lives in tri_core/db/sql_tool.py; shared with tri-planning
   prompt.py       Athlete context + system prompt rendering + feedback rules
   agent.py        make_model (ChatAnthropic) + build_agent (create_agent graph)
-  live_tools.py   MCP server tools bound as LangChain tools over persistent sessions
+  live_tools.py   Thin wrapper over tri_core.mcp.live_tools with this agent's allow-lists
   repl.py         Streaming terminal loop; prints every tool call
 ```
 
@@ -96,14 +96,18 @@ errors (rate limit, status, connection) are caught per turn and printed; the loo
 
 ### `live_tools.py`: MCP tools become LangChain tools
 
-`langchain-mcp-adapters` does the conversion. `MultiServerMCPClient.session(name)` launches a
-server over stdio and keeps the session open; `load_mcp_tools(session)` fetches the server's
-tool list and turns each JSON schema into a `BaseTool`. From the model's point of view a Garmin
-tool and `query_training_db` are the same kind of thing.
+The mechanics live in `tri_core.mcp.live_tools`, shared with tri-planning; this module is a
+thin wrapper that supplies this agent's allow-lists (`tri_analyze/allowlist.py`) and the
+Garmin and TrainingPeaks server specs.
 
-`filter_tools` applies `../mcp/allowlist.py`. The servers expose about 190 tools between them.
-Binding all of them would inflate every request and give the model more wrong choices, so the
-agent sees five: Garmin `get_activity`, `get_activity_splits`, `get_training_readiness`,
+In the shared opener, `langchain-mcp-adapters` does the conversion. `client.session(name)`
+launches a server over stdio and keeps the session open; `load_mcp_tools(session)` fetches the
+server's tool list and turns each JSON schema into a `BaseTool`. From the model's point of view
+a Garmin tool and `query_training_db` are the same kind of thing.
+
+`filter_tools` applies the allow-list it is handed. The servers expose about 190 tools between
+them. Binding all of them would inflate every request and give the model more wrong choices, so
+the agent sees five: Garmin `get_activity`, `get_activity_splits`, `get_training_readiness`,
 `get_hrv_data`, and TrainingPeaks `tp_get_workout`. Sessions live inside an `AsyncExitStack`
 for the whole chat, so a tool call is a fast round-trip rather than a `uvx` relaunch. A server
 that fails to start is logged and skipped; the chat still opens with the tools that did bind.
@@ -147,6 +151,6 @@ and token counts (look for `cache_read_input_tokens` on the second turn).
   example query shaped like the question that failed.
 - **Feedback is vague or misses something:** edit `FEEDBACK_RULES` in `prompt.py`.
 - **The model ignores a live tool or picks the wrong one:** edit `_tools_block` in
-  `prompt.py` (how the tools are described) or `../mcp/allowlist.py` (which are bound).
+  `prompt.py` (how the tools are described) or `../allowlist.py` (which are bound).
 - **Model or cost:** `TRI_MODEL` in `.env`; `MAX_TOKENS` in `agent.py`.
 - **How much context the prompt carries:** the date windows in `load_athlete_context`.

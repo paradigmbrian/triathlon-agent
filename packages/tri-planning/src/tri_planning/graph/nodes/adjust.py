@@ -31,11 +31,14 @@ def _json(msg: ToolMessage) -> dict[str, Any] | None:
 def changes_from_messages(
     messages: Sequence[AnyMessage],
 ) -> tuple[list[CalendarChange], str | None]:
-    """Changes from the last `propose_calendar_changes` result plus every `design_next_week`
-    result, in message order; the proposal's summary, or a generated one when only designed
-    weeks were added."""
-    designed: list[CalendarChange] = []
-    designed_weeks: list[str] = []
+    """Changes from the last `propose_calendar_changes` result plus the last `design_next_week`
+    result per week, in week order of first appearance; the proposal's summary, or a generated
+    one when only designed weeks were added.
+
+    A week designed twice in one turn would otherwise be created twice, so a repeat replaces
+    the earlier result instead of adding to it.
+    """
+    designed: dict[str, list[CalendarChange]] = {}
     proposed: list[CalendarChange] = []
     summary: str | None = None
     for msg in messages:
@@ -46,12 +49,12 @@ def changes_from_messages(
             continue
         changes = [CalendarChange.model_validate(c) for c in data["changes"]]
         if msg.name == "design_next_week":
-            designed.extend(changes)
-            designed_weeks.append(str(data.get("week_start")))
+            designed[str(data.get("week_start"))] = changes
         elif msg.name == "propose_calendar_changes":
             proposed = changes
-            summary = str(data.get("summary") or "")
-    all_changes = designed + proposed
+            summary = data.get("summary") or None
+    designed_weeks = list(designed)
+    all_changes = [c for week in designed_weeks for c in designed[week]] + proposed
     if summary is None and designed_weeks:
         summary = (
             "Designed week(s) " + ", ".join(designed_weeks) + " added to the calendar proposal."

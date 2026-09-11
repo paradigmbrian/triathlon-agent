@@ -3,9 +3,11 @@ from datetime import timedelta
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.tools import tool
 
 from tri_core.testing import ScriptedChatModel, tool_call
 from tri_planning import repo
+from tri_planning.graph.nodes import adjust as adjust_node
 from tri_planning.graph.nodes.adjust import changes_from_messages, make_adjust_node
 from tri_planning.planning.models import (
     CalendarChange,
@@ -46,24 +48,20 @@ def seed(conn):
     return gid, pid, targets
 
 
-def test_changes_from_messages_merges_tool_results():
-    proposal = {
-        "summary": "lighter",
-        "changes": [{"op": "delete", "tp_workout_id": "w1", "reason": "sick"}],
-    }
-    designed = {
-        "week_start": "2026-09-21",
+def design_result(week_start="2026-09-21", title="S"):
+    return {
+        "week_start": week_start,
         "coach_note": "n",
         "violations": [],
         "changes": [
             {
                 "op": "create",
-                "workout_date": "2026-09-21",
+                "workout_date": week_start,
                 "reason": "next week",
                 "workout": {
-                    "date": "2026-09-21",
+                    "date": week_start,
                     "sport": "swim",
-                    "title": "S",
+                    "title": title,
                     "description": "",
                     "duration_minutes": 45,
                     "tss_planned": 40,
@@ -72,8 +70,23 @@ def test_changes_from_messages_merges_tool_results():
             }
         ],
     }
+
+
+def design_message(week_start="2026-09-21", title="S", call_id="1"):
+    return ToolMessage(
+        content=json.dumps(design_result(week_start, title)),
+        name="design_next_week",
+        tool_call_id=call_id,
+    )
+
+
+def test_changes_from_messages_merges_tool_results():
+    proposal = {
+        "summary": "lighter",
+        "changes": [{"op": "delete", "tp_workout_id": "w1", "reason": "sick"}],
+    }
     msgs = [
-        ToolMessage(content=json.dumps(designed), name="design_next_week", tool_call_id="1"),
+        design_message(),
         ToolMessage(
             content=json.dumps(proposal), name="propose_calendar_changes", tool_call_id="2"
         ),
@@ -82,6 +95,34 @@ def test_changes_from_messages_merges_tool_results():
     changes, summary = changes_from_messages(msgs)
     assert [c.op for c in changes] == ["create", "delete"] and summary == "lighter"
     assert changes_from_messages([AIMessage(content="no changes")]) == ([], None)
+
+
+def test_changes_from_messages_keeps_only_the_last_design_of_a_week():
+    msgs = [
+        design_message(title="first try", call_id="1"),
+        design_message(title="second try", call_id="2"),
+        design_message(week_start="2026-09-28", title="week after", call_id="3"),
+        AIMessage(content="done"),
+    ]
+    changes, summary = changes_from_messages(msgs)
+    assert [c.workout.title for c in changes] == ["second try", "week after"]
+    assert summary.count("2026-09-21") == 1 and "2026-09-28" in summary
+
+
+def test_changes_from_messages_notes_designed_weeks_when_the_proposal_has_no_summary():
+    proposal = {
+        "summary": "",
+        "changes": [{"op": "delete", "tp_workout_id": "w1", "reason": "sick"}],
+    }
+    msgs = [
+        design_message(),
+        ToolMessage(
+            content=json.dumps(proposal), name="propose_calendar_changes", tool_call_id="2"
+        ),
+    ]
+    changes, summary = changes_from_messages(msgs)
+    assert [c.op for c in changes] == ["create", "delete"]
+    assert summary is not None and "2026-09-21" in summary
 
 
 async def test_turn_without_proposal_clears_pending_changes(nocommit, make_deps):
@@ -151,3 +192,53 @@ async def test_design_next_week_extends_window(nocommit, make_deps):
     )
     assert repo.list_weeks(nocommit, pid)[1].designed is not None
     assert "2026-09-21" in out["pending_summary"]
+
+
+async def test_adjust_binds_only_read_and_propose_tools(nocommit, make_deps, monkeypatch):
+    gid, pid, _ = seed(nocommit)
+
+    @tool
+    def get_training_readiness(day: str) -> str:
+        """Today's training readiness."""
+        return "{}"
+
+    @tool
+    def get_hrv_data(day: str) -> str:
+        """Today's HRV."""
+        return "{}"
+
+    bound: list[list[str]] = []
+    real = adjust_node.make_subagent
+
+    def record(model, tools, system_prompt):
+        bound.append([t.name for t in tools])
+        return real(model, tools, system_prompt)
+
+    monkeypatch.setattr(adjust_node, "make_subagent", record)
+    model = ScriptedChatModel(script=[AIMessage(content="All on track.")])
+    node = make_adjust_node(
+        make_deps(
+            model,
+            tp=FakeTp(),
+            today=MONDAY + timedelta(days=3),
+            garmin_tools=[get_training_readiness, get_hrv_data],
+        )
+    )
+    await node(
+        {"goal_id": gid, "plan_id": pid, "phase": "active", "messages": [HumanMessage("check in")]},
+        CFG,
+    )
+    assert bound == [
+        [
+            "query_training_db",
+            "get_training_readiness",
+            "get_hrv_data",
+            "tp_get_workouts",
+            "design_next_week",
+            "propose_calendar_changes",
+        ]
+    ]
+    # Writing to TrainingPeaks happens in the apply node, never from inside the sub-agent.
+    assert not any(
+        name.startswith(("tp_create", "tp_update", "tp_delete", "tp_apply")) for name in bound[0]
+    )

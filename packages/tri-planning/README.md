@@ -64,7 +64,7 @@ uv run tri-planning check-in [--yes] [--no-sync] [--no-live]   # sync, review la
 uv run python scripts/design_eval.py --prompt-version v1         # LangSmith pass rate for the design prompt
 ```
 
-In chat: `/status` (goal, phase, this week's target vs actual, designed weeks left), `/pending`
+In chat: `/status` (goal, phase, this week's target vs actual, weeks on the calendar), `/pending`
 (re-show a paused change set), `/sync`, `/quit`. At review: `approve`, `reject <note>`, or
 `edit` (opens the change set as YAML in `$EDITOR`).
 

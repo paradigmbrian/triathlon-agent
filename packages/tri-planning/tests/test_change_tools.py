@@ -57,6 +57,25 @@ def test_propose_rejects_incomplete_changes_without_proposing():
     assert "error" in out and "delete" in out["error"][0] and "changes" not in out
 
 
+def test_propose_rejects_ops_outside_the_review_vocabulary():
+    tool = make_change_tool()
+    out = json.loads(
+        tool.invoke(
+            {
+                "summary": "s",
+                "changes": [{"op": "apply_plan", "payload": {"plan_id": "p1"}, "reason": "x"}],
+            }
+        )
+    )
+    assert "error" in out and "apply_plan" in out["error"] and "changes" not in out
+
+
+def test_propose_schema_hides_apply_ops_and_payload():
+    schema = json.dumps(make_change_tool().args_schema.model_json_schema())
+    assert "apply_plan" not in schema and "create_event" not in schema
+    assert "payload" not in schema
+
+
 async def test_tp_get_workouts_wrapper():
     (tool,) = make_tp_read_tools(
         FakeTp(responses={"tp_get_workouts": {"workouts": [{"id": "1"}], "count": 1}})

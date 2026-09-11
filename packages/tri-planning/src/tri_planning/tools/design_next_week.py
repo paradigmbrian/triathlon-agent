@@ -20,9 +20,9 @@ def make_design_next_week_tool(
     deps: GraphDeps, plan_id_getter: Callable[[], int | None]
 ) -> BaseTool:
     async def design_next_week(config: Annotated[RunnableConfig, InjectedToolArg]) -> str:
-        """Design the next week of the plan not yet on the calendar (sessions, TSS, structure) so
-        the calendar keeps at least two designed weeks ahead. Its sessions join the proposal
-        automatically. Re-designs a week that was designed but never approved."""
+        """Design the next plan week that is not yet on the calendar (sessions, TSS, structure)
+        so at least two weeks ahead stay covered. Its sessions join the proposal automatically.
+        Re-designs a week that was designed but never approved."""
         plan_id = plan_id_getter()
         if plan_id is None:
             return json.dumps({"error": "no active plan"})

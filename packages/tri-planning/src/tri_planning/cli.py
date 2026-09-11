@@ -136,8 +136,12 @@ async def _chat(*, no_live: bool) -> None:
                             f"this week ({this.phase}): target {target} TSS, "
                             f"actual so far {so_far:.0f}"
                         )
-                    remaining = sum(1 for w in weeks if w.designed and w.week_start >= monday)
-                    lines.append(f"designed weeks remaining: {remaining} of {len(weeks)}")
+                    on_calendar = sum(
+                        1 for w in weeks if w.written_to_tp and w.week_start >= monday
+                    )
+                    lines.append(
+                        f"weeks on the calendar from this week: {on_calendar} of {len(weeks)}"
+                    )
                 if values.get("last_error"):
                     lines.append(f"last error: {values['last_error']}")
                 return "\n".join(lines)
