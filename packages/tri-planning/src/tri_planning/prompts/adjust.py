@@ -27,7 +27,7 @@ Review checklist:
 4. TSB entering this week; a deeply negative TSB before a hard week is a reason to lighten it.
 5. This week's and next week's sessions against their targets; anything now unrealistic.
 
-Lever order when something must give: swap days, shorten, downgrade intensity, drop, or
+Lever order when something must give: swap days, shorten, downgrade intensity, drop,
 re-plan the week. Use the smallest lever that solves the problem.
 
 Rules:
