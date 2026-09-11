@@ -8,7 +8,7 @@ TrainingPeaks data, synced into a local Postgres store.
 | `packages/tri-core` | `tri_core` | `tri sync` | Settings, MCP client, Postgres store, the ETL, test helpers. No LLM code. |
 | `packages/tri-analyze` | `tri_analyze` | `tri-analyze chat` | Analyst agent: feedback on completed sessions, trends. |
 | `packages/tri-planning` | `tri_planning` | `tri-planning chat` | Planning agent: goal intake, periodized plan, approved writes to the TrainingPeaks calendar. |
-| `packages/tri-nutrition` | `tri_nutrition` | `tri-nutrition chat` | Nutrition agent: profile intake, periodized daily targets and fueling plans, approved writes to Garmin Connect and TrainingPeaks. |
+| `packages/tri-nutrition` | `tri_nutrition` | `tri-nutrition chat \| today \| check-in \| eval` | Nutrition agent: profile intake, periodized daily targets and fueling plans, approved writes to Garmin Connect and TrainingPeaks. |
 
 `tri-analyze`, `tri-planning` and `tri-nutrition` depend on `tri-core`; no agent depends on another.
 Repo: github.com/paradigmbrian/triathlon-agent.
@@ -128,7 +128,7 @@ migrations/             001_initial.sql (sync tables), 002_planning.sql and 003_
 packages/tri-core/      src/tri_core/{config,cli,mcp,db,sync,testing}
 packages/tri-analyze/   src/tri_analyze/{cli,allowlist,agent}
 packages/tri-planning/  src/tri_planning/{config,cli,repo,repl,testing,planning,graph,tools,prompts}
-packages/tri-nutrition/ src/tri_nutrition/{config,cli,repo,repl,store,plan_loader,testing,nutrition,graph,tools,prompts}
+packages/tri-nutrition/ src/tri_nutrition/{config,cli,repo,repl,store,plan_loader,testing,nutrition,graph,tools,prompts,evals}
 docs/superpowers/       specs and implementation plans
 ```
 

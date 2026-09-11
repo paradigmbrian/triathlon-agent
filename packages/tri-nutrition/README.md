@@ -15,6 +15,7 @@ Plans: `docs/superpowers/plans/2026-09-10-tri-nutrition-0*.md`.
   per day. Pure.
 - `nutrition/bounds.py`: `validate_targets`, `validate_fuel`, `validate_race` -> violations. Pure.
 - `repo.py`: the three nutrition tables (`migrations/004_nutrition.sql`).
+- `evals/`: cases, target, evaluators, runner for the LangSmith evaluation (no database).
 
 Try the targets builder without a database:
 
@@ -52,14 +53,14 @@ flowchart TD
     route -->|no profile in the Store| intake
     route -->|profile exists| checkin
     intake["intake\ncreate_agent sub-agent\nreads Garmin, asks, calls save_nutrition_profile"]
-    checkin["checkin\ncreate_agent sub-agent\nquestions and profile edits (Plan 4: the check-in)"]
+    checkin["checkin\ncreate_agent sub-agent\nthe check-in: intake vs targets, body, recovery, fuel log;\nsave_nutrition_profile or propose_target_changes"]
     targets["targets\npure Python\nprofile + plan -> DayTargets, Garmin change set"]
     fuel["fuel\nwith_structured_output(SessionFuel | RaceFuelPlan)\none call per qualifying session, validated"]
     review["review\ninterrupt()\napprove / reject / edit"]
     apply["apply\nthe only Garmin writer\none call per day, each recorded"]
     intake -->|profile saved| targets
     intake -->|still asking| END1([END])
-    checkin -->|profile saved| targets
+    checkin -->|profile saved or targets proposed| targets
     checkin --> END2([END])
     targets --> fuel
     targets -->|bounds violated| END3([END])
@@ -69,6 +70,14 @@ flowchart TD
     review -->|reject| checkin
     apply --> END4([END])
 ```
+
+The check-in reads through tools only: `read_intake_vs_targets` joins the Garmin food log to
+`nutrition_targets` per day (so the model reads deltas, not two lists), `read_body_composition`
+and `read_hydration` come from the Index scale and the app, and the SQL tool covers
+`daily_metrics` and workout comments. Its commit tools write the Store only:
+`record_fuel_feedback` appends to the fuel log (and adds a product after an ok outcome),
+`propose_target_changes` validates overrides that the graph applies on top of the profile when it
+regenerates targets; approve persists them, reject discards them.
 
 ## Commands
 
@@ -82,6 +91,16 @@ flowchart TD
   stored profile and plan (no model call), stores it, and writes today's target to Garmin after a
   `y/N`. Garmin holds only the current day's goal (a future date is rejected by Garmin), so run
   this each morning; the chat's review only ever proposes today's Garmin write too.
+- `tri-nutrition check-in [--yes] [--no-sync] [--no-live]`: runs `tri sync`, sends the fixed
+  check-in request on the nutrition thread, prints the report and any proposed change set, and
+  exits 3 while it waits at review. `--yes` approves. Run it again (or `chat`) to resume a
+  paused review rather than start a second one.
+- `tri-nutrition eval [--judge/--no-judge] [--prefix NAME] [--recreate-dataset]`: creates the
+  LangSmith dataset `tri_nutrition_fueling` from `evals/cases.py` when missing, runs the fueling
+  prompts over it as experiment `fuel-v<PROMPT_VERSION>`, and prints the pass rate per
+  evaluator (`targets_within_bounds`, `fuel_within_bounds`, `fuel_respects_profile`). Bump
+  `PROMPT_VERSION` in `prompts/fuel.py` whenever a fueling prompt changes and compare runs in
+  LangSmith.
 - `tri-nutrition reset [--yes] [--forget-profile]`: clears the thread and unwritten rows; only
   `--forget-profile` deletes the Store keys.
 
