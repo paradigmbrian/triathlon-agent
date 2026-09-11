@@ -29,6 +29,7 @@ from tri_nutrition.nutrition.models import (
     ReviewDecision,
     SessionFuel,
 )
+from tri_nutrition.prompts.checkin import CHECKIN_REQUEST
 
 Out = Callable[[str], None]
 CommandFn = Callable[[], Awaitable[str]]
@@ -283,3 +284,34 @@ async def chat_loop(
             continue
         printer = await run_turn(graph, {"messages": [HumanMessage(line)]}, thread_id, out)
         pending = printer.interrupt
+
+
+PAUSED_HINT = (
+    "paused at review; run `tri-nutrition check-in --yes` to approve, or `tri-nutrition chat` "
+    "to answer approve / reject <note> / edit"
+)
+
+
+async def checkin_run(graph: Any, *, thread_id: str, out: Out, approve: bool) -> int:
+    """One unattended check-in. 0: nothing pending or approved; 3: a change set waits at review."""
+    cfg = {"configurable": {"thread_id": thread_id}}
+    snap = await graph.aget_state(cfg)
+    if snap.next == ("review",):
+        values = snap.values or {}
+        pending = {
+            "summary": values.get("pending_summary") or "",
+            "changes": [c.model_dump(mode="json") for c in values.get("pending_changes") or []],
+            "last_error": values.get("last_error"),
+        }
+        out("a change set is already waiting at review:\n" + render_review(pending) + "\n")
+    else:
+        request = {"messages": [HumanMessage(CHECKIN_REQUEST)]}
+        printer = await run_turn(graph, request, thread_id, out)
+        if printer.interrupt is None:
+            return 0
+        out("\n" + render_review(printer.interrupt) + "\n")
+    if not approve:
+        out(PAUSED_HINT + "\n")
+        return 3
+    printer = await run_turn(graph, Command(resume={"action": "approve"}), thread_id, out)
+    return 0 if printer.interrupt is None else 3

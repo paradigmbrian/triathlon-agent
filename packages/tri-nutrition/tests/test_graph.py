@@ -12,6 +12,7 @@ from tri_nutrition import store as S
 from tri_nutrition.graph.graph import after_checkin, after_review, build_graph, route_start
 from tri_nutrition.nutrition.models import NutritionProfile, ReviewDecision
 from tri_nutrition.nutrition.targets import build
+from tri_nutrition.repl import checkin_run
 from tri_nutrition.testing import (
     MONDAY,
     PROFILE_ARGS,
@@ -266,3 +267,25 @@ def test_after_checkin_routes_on_either_flag():
     assert after_checkin({"targets_requested": True}) == "targets"
     assert after_checkin({"profile_saved": False, "targets_requested": False}) == END
     assert after_checkin({}) == END
+
+
+async def test_checkin_run_pauses_then_approves_on_second_run(ndb, make_deps, mem_store):
+    await S.put_profile(mem_store, NutritionProfile(**PROFILE_ARGS))
+    g = FakeGarmin()
+    model = ScriptedChatModel(script=proposal_script({}, "extend horizon"))
+    graph = make_graph(make_deps, mem_store, model, g, horizon=3)
+    printed: list[str] = []
+    assert await checkin_run(graph, thread_id="nutrition", out=printed.append, approve=False) == 3
+    text = "".join(printed)
+    assert "approve / reject" in text and "paused" in text and g.calls == []
+    printed.clear()
+    assert await checkin_run(graph, thread_id="nutrition", out=printed.append, approve=True) == 0
+    assert "already waiting at review" in "".join(printed) and len(g.calls) == 1
+    assert (await graph.aget_state(CFG)).next == ()
+
+
+async def test_checkin_run_returns_zero_when_nothing_proposed(ndb, make_deps, mem_store):
+    await S.put_profile(mem_store, NutritionProfile(**PROFILE_ARGS))
+    model = ScriptedChatModel(script=[AIMessage(content="Targets stand.")])
+    graph = make_graph(make_deps, mem_store, model, FakeGarmin(), horizon=3)
+    assert await checkin_run(graph, thread_id="nutrition", out=lambda s: None, approve=True) == 0

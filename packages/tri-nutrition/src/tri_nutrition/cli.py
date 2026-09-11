@@ -1,5 +1,5 @@
-"""Command-line entry points for the nutrition agent: chat, today, reset (check-in arrives in
-Plan 4)."""
+"""Command-line entry points for the nutrition agent: chat, today, check-in, reset (eval
+arrives in Task 5)."""
 
 from __future__ import annotations
 
@@ -36,6 +36,61 @@ def _out(s: str) -> None:
     console.print(s, end="", markup=False, highlight=False, soft_wrap=True)
 
 
+def _ready(settings: Any) -> int | None:
+    """Exit code when chat or check-in cannot start, else None."""
+    from tri_nutrition import store as S
+    from tri_nutrition.graph.checkpointer import SETUP_HINT, checkpointer_ready
+
+    if not settings.anthropic_api_key:
+        console.print("ANTHROPIC_API_KEY is not set in .env", style="red")
+        return 2
+    if not checkpointer_ready(settings.database_url):
+        console.print(SETUP_HINT, style="red")
+        return 2
+    if not S.store_ready(settings.database_url):
+        console.print(S.STORE_SETUP_HINT, style="red")
+        return 2
+    return None
+
+
+async def _open_servers(stack: Any, settings: Any, *, no_live: bool) -> tuple[Any, Any]:
+    """Start the Garmin and TrainingPeaks MCP servers; a dead server is None and its writes
+    are held pending by apply."""
+    from tri_core.mcp.client import McpToolClient
+    from tri_core.mcp.servers import garmin_spec, trainingpeaks_spec
+    from tri_nutrition.allowlist import GARMIN_SERVER_TOOLS
+
+    if no_live:
+        return None, None
+    garmin = None
+    try:
+        garmin = await asyncio.wait_for(
+            stack.enter_async_context(
+                McpToolClient(garmin_spec(settings, enabled_tools=GARMIN_SERVER_TOOLS))
+            ),
+            timeout=SERVER_START_TIMEOUT_S,
+        )
+        _out("garmin: connected (writes happen only after you approve)\n")
+    except Exception as exc:  # the run still works; apply holds Garmin changes pending
+        _out(
+            f"warning: garmin MCP server unavailable ({type(exc).__name__}: {exc}); "
+            "Garmin reads are unavailable and Garmin writes will be held pending\n"
+        )
+    tp = None
+    try:
+        tp = await asyncio.wait_for(
+            stack.enter_async_context(McpToolClient(trainingpeaks_spec(settings))),
+            timeout=SERVER_START_TIMEOUT_S,
+        )
+        _out("trainingpeaks: connected (notes are written only after you approve)\n")
+    except Exception as exc:  # note changes are held pending until the server is back
+        _out(
+            f"warning: trainingpeaks MCP server unavailable ({type(exc).__name__}: {exc}); "
+            "note changes will be held pending\n"
+        )
+    return garmin, tp
+
+
 @app.command()
 def chat(
     no_live: bool = typer.Option(
@@ -51,13 +106,10 @@ async def _chat(*, no_live: bool) -> None:
     from contextlib import AsyncExitStack
 
     from tri_core.db.connection import connect
-    from tri_core.mcp.client import McpToolClient
-    from tri_core.mcp.servers import garmin_spec, trainingpeaks_spec
     from tri_core.sync.runner import run_sync
     from tri_nutrition import repo
     from tri_nutrition import store as S
-    from tri_nutrition.allowlist import GARMIN_SERVER_TOOLS
-    from tri_nutrition.graph.checkpointer import SETUP_HINT, checkpointer_ready, open_checkpointer
+    from tri_nutrition.graph.checkpointer import open_checkpointer
     from tri_nutrition.graph.deps import make_deps
     from tri_nutrition.graph.graph import build_graph
     from tri_nutrition.graph.llm import make_model
@@ -65,45 +117,12 @@ async def _chat(*, no_live: bool) -> None:
     from tri_nutrition.repl import changes_from_yaml, changes_to_yaml, chat_loop
 
     settings = get_nutrition_settings()
-    if not settings.anthropic_api_key:
-        console.print("ANTHROPIC_API_KEY is not set in .env", style="red")
-        raise typer.Exit(code=2)
-    if not checkpointer_ready(settings.database_url):
-        console.print(SETUP_HINT, style="red")
-        raise typer.Exit(code=2)
-    if not S.store_ready(settings.database_url):
-        console.print(S.STORE_SETUP_HINT, style="red")
-        raise typer.Exit(code=2)
+    code = _ready(settings)
+    if code is not None:
+        raise typer.Exit(code=code)
 
     async with AsyncExitStack() as stack:
-        garmin = None
-        if not no_live:
-            try:
-                garmin = await asyncio.wait_for(
-                    stack.enter_async_context(
-                        McpToolClient(garmin_spec(settings, enabled_tools=GARMIN_SERVER_TOOLS))
-                    ),
-                    timeout=SERVER_START_TIMEOUT_S,
-                )
-                _out("garmin: connected (writes happen only after you approve)\n")
-            except Exception as exc:  # the chat still works; apply holds changes pending
-                _out(
-                    f"warning: garmin MCP server unavailable ({type(exc).__name__}: {exc}); "
-                    "intake will ask for weight and age, and apply will hold Garmin writes\n"
-                )
-        tp = None
-        if not no_live:
-            try:
-                tp = await asyncio.wait_for(
-                    stack.enter_async_context(McpToolClient(trainingpeaks_spec(settings))),
-                    timeout=SERVER_START_TIMEOUT_S,
-                )
-                _out("trainingpeaks: connected (notes are written only after you approve)\n")
-            except Exception as exc:  # note changes are held pending until the server is back
-                _out(
-                    f"warning: trainingpeaks MCP server unavailable ({type(exc).__name__}: {exc}); "
-                    "note changes will be held pending\n"
-                )
+        garmin, tp = await _open_servers(stack, settings, no_live=no_live)
         saver = await stack.enter_async_context(open_checkpointer(settings.database_url))
         store = await stack.enter_async_context(S.open_store(settings.database_url))
         graph = build_graph(make_deps(settings, make_model(settings), garmin, tp), saver, store)
@@ -129,11 +148,16 @@ async def _chat(*, no_live: bool) -> None:
             written = [s for s in stored if s.written_to_garmin]
             plans_written = [p for p in plans if p.written]
             body_fat = profile.body_fat_pct if profile.body_fat_pct is not None else "-"
+            through = stored[-1].target.day.isoformat() if stored else "-"
+            fuel_log = await S.get_fuel_log(store)
+            library = await S.get_product_library(store)
             lines = [
                 f"goal: {profile.goal}; weight {profile.weight_kg:g} kg; body fat {body_fat} %",
-                f"targets from today: {len(stored)} days ({len(written)} written to Garmin)",
+                f"targets from today: {len(stored)} days through {through} "
+                f"({len(written)} written to Garmin)",
                 f"fuel plans from today: {len(plans)} "
                 f"({len(plans_written)} written to TrainingPeaks)",
+                f"fuel log: {len(fuel_log)} entries; product library: {len(library)} products",
                 f"last write: {last.isoformat(timespec='minutes') if last else 'never'}",
                 f"next node: {snap.next or '-'}",
             ]
@@ -229,6 +253,44 @@ async def _today(*, yes: bool, no_live: bool) -> int:
             return 1
         _out(await write_today(deps, h) + "\n")
     return 0
+
+
+@app.command(name="check-in")
+def check_in(
+    yes: bool = typer.Option(False, "--yes", help="Approve the proposed changes without asking"),
+    no_sync: bool = typer.Option(False, "--no-sync", help="Do not run `tri sync` first"),
+    no_live: bool = typer.Option(False, "--no-live", help="Do not start the MCP servers"),
+) -> None:
+    """Sync, run the check-in on the nutrition thread, and pause at review (exit code 3) or
+    approve with --yes."""
+    raise typer.Exit(code=asyncio.run(_check_in(yes=yes, no_sync=no_sync, no_live=no_live)))
+
+
+async def _check_in(*, yes: bool, no_sync: bool, no_live: bool) -> int:
+    from contextlib import AsyncExitStack
+
+    from tri_core.sync.runner import run_sync
+    from tri_nutrition import store as S
+    from tri_nutrition.graph.checkpointer import open_checkpointer
+    from tri_nutrition.graph.deps import make_deps
+    from tri_nutrition.graph.graph import build_graph
+    from tri_nutrition.graph.llm import make_model
+    from tri_nutrition.repl import checkin_run
+
+    settings = get_nutrition_settings()
+    code = _ready(settings)
+    if code is not None:
+        return code
+    if not no_sync and not no_live:
+        report = await run_sync(settings, log=lambda m: _out(m + "\n"))
+        if not report.ok:
+            _out("sync had errors; checking in against what is stored\n")
+    async with AsyncExitStack() as stack:
+        garmin, tp = await _open_servers(stack, settings, no_live=no_live)
+        saver = await stack.enter_async_context(open_checkpointer(settings.database_url))
+        store = await stack.enter_async_context(S.open_store(settings.database_url))
+        graph = build_graph(make_deps(settings, make_model(settings), garmin, tp), saver, store)
+        return await checkin_run(graph, thread_id=THREAD_ID, out=_out, approve=yes)
 
 
 @app.command()
