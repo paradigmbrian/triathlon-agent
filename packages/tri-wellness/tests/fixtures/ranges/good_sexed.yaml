@@ -1,0 +1,23 @@
+version: test.1
+markers:
+  ferritin:
+    display: Ferritin
+    system: iron
+    unit: ng/mL
+    aliases: [ferritin, "ferritin, serum"]
+    conversions: {"µg/L": 1.0, "ug/L": 1.0}
+    conventional: {male: {low: 30, high: 400}, female: {low: 15, high: 150}}
+    functional: {male: {low: 50, high: 150}, female: {low: 50, high: 120}}
+    direction: both
+    athlete_note: Below 50 impairs adaptation.
+    confounders: [recent_hard_session, inflammation]
+    sources: ["Weatherby & Ferguson"]
+  hs_crp:
+    display: hs-CRP
+    system: inflammation
+    unit: mg/L
+    aliases: [hs-crp, "c-reactive protein, high sensitivity", crp hs]
+    conventional: {high: 3.0}
+    functional: {high: 1.0}
+    direction: high
+    sources: ["IFM functional ranges"]

@@ -1,0 +1,20 @@
+version: test.1
+markers:
+  ferritin:
+    display: Ferritin
+    system: iron
+    unit: ng/mL
+    aliases: [ferritin, "Iron (serum)"]
+    conventional: {low: 30, high: 400}
+    functional: {low: 50, high: 150}
+    direction: both
+    sources: ["x"]
+  iron_serum:
+    display: Iron
+    system: iron
+    unit: ug/dL
+    aliases: [iron, "iron, serum"]
+    conventional: {low: 38, high: 169}
+    functional: {low: 85, high: 130}
+    direction: both
+    sources: ["x"]

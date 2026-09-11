@@ -1,0 +1,11 @@
+version: test.1
+markers:
+  ferritin:
+    display: Ferritin
+    system: iron
+    unit: ng/mL
+    aliases: [ferritin]
+    conventional: {low: 30, high: 400}
+    functional: {low: 50, high: 450}
+    direction: both
+    sources: ["x"]
