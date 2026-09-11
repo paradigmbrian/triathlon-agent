@@ -2,7 +2,14 @@ from tri_core.config import Settings
 
 
 def test_defaults_when_env_empty(monkeypatch):
-    for key in ("DATABASE_URL", "TEST_DATABASE_URL", "GARMIN_MCP_REF", "TP_MCP_REF", "TRI_MODEL"):
+    for key in (
+        "DATABASE_URL",
+        "TEST_DATABASE_URL",
+        "GARMIN_MCP_REF",
+        "TP_MCP_REF",
+        "TRI_MODEL",
+        "ANTHROPIC_API_KEY",
+    ):
         monkeypatch.delenv(key, raising=False)
     s = Settings(_env_file=None)
     assert s.database_url.startswith("postgresql://tri_analyze:tri_analyze@localhost:5435/")
