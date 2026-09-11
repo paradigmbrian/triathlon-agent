@@ -1,0 +1,948 @@
+# Curated functional-medicine range table. Reviewed by Brian; every entry cites its sources.
+# Field contract (registry.py): unit, aliases, conversions, conventional, functional, direction,
+# confounders are read by code. display, system, athlete_note, sources are shown to the model.
+# A range block is {low, high} or {male: {low, high}, female: {low, high}}. Either side may be
+# omitted for direction: low | high markers. conversions map a printed unit to the factor that
+# multiplies it into the canonical unit.
+version: 2026-09-11.1
+markers:
+
+  # ---- CBC ---------------------------------------------------------------------------------
+  wbc:
+    display: WBC
+    system: cbc
+    unit: K/uL
+    aliases: [wbc, "white blood cell count", "white blood cells", leukocytes, "wbc count"]
+    conversions: {"10^3/uL": 1.0, "x10E3/uL": 1.0, "10*3/uL": 1.0, "10^9/L": 1.0, "G/L": 1.0}
+    conventional: {low: 3.4, high: 10.8}
+    functional: {low: 5.0, high: 7.5}
+    direction: both
+    athlete_note: >
+      Trained endurance athletes often sit at 4-5 at rest; a value under 5.0 with a normal
+      differential is usually training adaptation, not immune suppression. A rise for 24 h after
+      a hard session is normal (neutrophilia).
+    confounders: [recent_hard_session]
+    sources: ["Weatherby & Ferguson", "LabCorp reference intervals"]
+  rbc:
+    display: RBC
+    system: cbc
+    unit: M/uL
+    aliases: [rbc, "red blood cell count", "red blood cells", erythrocytes, "rbc count"]
+    conversions: {"10^6/uL": 1.0, "x10E6/uL": 1.0, "10*6/uL": 1.0, "10^12/L": 1.0, "T/L": 1.0}
+    conventional: {male: {low: 4.14, high: 5.80}, female: {low: 3.77, high: 5.28}}
+    functional: {male: {low: 4.2, high: 4.9}, female: {low: 3.9, high: 4.5}}
+    direction: both
+    athlete_note: >
+      Plasma volume expands with aerobic training, so RBC, hemoglobin and hematocrit read low
+      by dilution ("sports anemia"). Judge with MCV, ferritin and transferrin saturation.
+    confounders: [high_acute_load]
+    sources: ["Weatherby & Ferguson", "LabCorp reference intervals"]
+  hemoglobin:
+    display: Hemoglobin
+    system: cbc
+    unit: g/dL
+    aliases: [hemoglobin, hgb, hb, haemoglobin]
+    conversions: {"g/L": 0.1, "mmol/L": 1.611}
+    conventional: {male: {low: 13.0, high: 17.7}, female: {low: 11.1, high: 15.9}}
+    functional: {male: {low: 14.0, high: 15.5}, female: {low: 13.5, high: 14.5}}
+    direction: both
+    athlete_note: >
+      Dilutional lowering from plasma volume expansion is common in endurance athletes; a value
+      just under the functional low with normal ferritin and MCV is not iron deficiency. Below the
+      conventional low with low ferritin is iron-deficiency anemia and affects performance.
+    confounders: [high_acute_load]
+    sources: ["Weatherby & Ferguson", "Sim et al. 2019, iron considerations for the athlete"]
+  hematocrit:
+    display: Hematocrit
+    system: cbc
+    unit: "%"
+    aliases: [hematocrit, hct, haematocrit, "packed cell volume", pcv]
+    conversions: {"L/L": 100.0}
+    conventional: {male: {low: 37.5, high: 51.0}, female: {low: 34.0, high: 46.6}}
+    functional: {male: {low: 40.0, high: 48.0}, female: {low: 37.0, high: 44.0}}
+    direction: both
+    athlete_note: >
+      Reads low with plasma volume expansion and high with dehydration; a same-day long session
+      or a hot, unfasted draw can move it 2-3 points either way.
+    confounders: [high_acute_load, recent_hard_session]
+    sources: ["Weatherby & Ferguson", "LabCorp reference intervals"]
+  mcv:
+    display: MCV
+    system: cbc
+    unit: fL
+    aliases: [mcv, "mean corpuscular volume", "mean cell volume"]
+    conventional: {low: 79, high: 97}
+    functional: {low: 85, high: 92}
+    direction: both
+    athlete_note: >
+      Low MCV points to iron deficiency; high MCV to B12 or folate shortfall or alcohol. Read
+      with ferritin, B12 and folate before naming a cause.
+    confounders: []
+    sources: ["Weatherby & Ferguson", "LabCorp reference intervals"]
+  mch:
+    display: MCH
+    system: cbc
+    unit: pg
+    aliases: [mch, "mean corpuscular hemoglobin"]
+    conventional: {low: 26.6, high: 33.0}
+    functional: {low: 28.0, high: 32.0}
+    direction: both
+    confounders: []
+    sources: ["Weatherby & Ferguson"]
+  mchc:
+    display: MCHC
+    system: cbc
+    unit: g/dL
+    aliases: [mchc, "mean corpuscular hemoglobin concentration"]
+    conventional: {low: 31.5, high: 35.7}
+    functional: {low: 32.0, high: 35.0}
+    direction: both
+    confounders: []
+    sources: ["Weatherby & Ferguson"]
+  rdw:
+    display: RDW
+    system: cbc
+    unit: "%"
+    aliases: [rdw, "red cell distribution width", "rdw-cv", "rdw cv"]
+    conventional: {low: 11.7, high: 15.4}
+    functional: {low: 11.7, high: 13.0}
+    direction: high
+    athlete_note: >
+      A rising RDW is often the earliest sign of iron, B12 or folate deficiency, before MCV moves.
+    confounders: []
+    sources: ["Weatherby & Ferguson", "IFM functional ranges"]
+  platelets:
+    display: Platelets
+    system: cbc
+    unit: K/uL
+    aliases: [platelets, "platelet count", plt, thrombocytes]
+    conversions: {"10^3/uL": 1.0, "x10E3/uL": 1.0, "10*3/uL": 1.0, "10^9/L": 1.0, "G/L": 1.0}
+    conventional: {low: 150, high: 450}
+    functional: {low: 175, high: 250}
+    direction: both
+    athlete_note: >
+      Platelets rise transiently after intense exercise and with inflammation.
+    confounders: [recent_hard_session, inflammation]
+    sources: ["Weatherby & Ferguson", "LabCorp reference intervals"]
+  neutrophils_pct:
+    display: Neutrophils %
+    system: cbc
+    unit: "%"
+    aliases: [neutrophils, "neutrophils %", "neutrophils percent", "neutrophil %", neut, "segs", "segmented neutrophils"]
+    conventional: {low: 40, high: 74}
+    functional: {low: 40, high: 60}
+    direction: both
+    athlete_note: >
+      Neutrophils rise for up to 24 h after a hard session; a high value with a recent session
+      and a normal WBC is not an infection signal.
+    confounders: [recent_hard_session]
+    sources: ["Weatherby & Ferguson", "LabCorp reference intervals"]
+  lymphocytes_pct:
+    display: Lymphocytes %
+    system: cbc
+    unit: "%"
+    aliases: [lymphocytes, "lymphocytes %", "lymphocytes percent", "lymphocyte %", lymphs]
+    conventional: {low: 14, high: 46}
+    functional: {low: 24, high: 44}
+    direction: both
+    athlete_note: >
+      Lymphocytes drop for several hours after prolonged intense exercise (the "open window").
+    confounders: [recent_hard_session]
+    sources: ["Weatherby & Ferguson", "LabCorp reference intervals"]
+  monocytes_pct:
+    display: Monocytes %
+    system: cbc
+    unit: "%"
+    aliases: [monocytes, "monocytes %", "monocytes percent", "monocyte %", monos]
+    conventional: {low: 4, high: 13}
+    functional: {high: 7}
+    direction: high
+    athlete_note: Elevated monocytes with a normal WBC suggest recovery from infection or tissue repair.
+    confounders: [recent_hard_session]
+    sources: ["Weatherby & Ferguson"]
+  eosinophils_pct:
+    display: Eosinophils %
+    system: cbc
+    unit: "%"
+    aliases: [eosinophils, "eosinophils %", "eosinophils percent", "eosinophil %", eos]
+    conventional: {low: 0, high: 7}
+    functional: {high: 3}
+    direction: high
+    athlete_note: Allergy, asthma or parasites raise eosinophils; seasonal for many athletes.
+    confounders: []
+    sources: ["Weatherby & Ferguson"]
+  basophils_pct:
+    display: Basophils %
+    system: cbc
+    unit: "%"
+    aliases: [basophils, "basophils %", "basophils percent", "basophil %", basos]
+    conventional: {low: 0, high: 3}
+    functional: {high: 1}
+    direction: high
+    athlete_note: Rarely informative alone; read with eosinophils.
+    confounders: []
+    sources: ["Weatherby & Ferguson"]
+
+  # ---- Metabolic ----------------------------------------------------------------------------
+  glucose:
+    display: Fasting glucose
+    system: metabolic
+    unit: mg/dL
+    aliases: [glucose, "glucose, serum", "glucose, fasting", "fasting glucose", "glucose, plasma", "blood glucose"]
+    conversions: {"mmol/L": 18.0182}
+    conventional: {low: 65, high: 99}
+    functional: {low: 75, high: 86}
+    direction: both
+    athlete_note: >
+      Fasted morning glucose in the low 90s is common in endurance athletes after a heavy
+      training block (cortisol-driven), and after a hard session the previous evening. IFM's
+      optimal upper bound is 90; this table uses Weatherby's 86 and treats 86-90 as a soft flag.
+      Read with insulin and HbA1c before calling it dysglycemia.
+    confounders: [not_fasting, recent_hard_session, poor_sleep]
+    sources: ["Weatherby & Ferguson", "IFM functional ranges (86-90 upper)"]
+  insulin:
+    display: Fasting insulin
+    system: metabolic
+    unit: uIU/mL
+    aliases: [insulin, "insulin, fasting", "fasting insulin", "insulin, serum"]
+    conversions: {"mIU/L": 1.0, "pmol/L": 0.1441}
+    conventional: {low: 2.6, high: 24.9}
+    functional: {high: 5.0}
+    direction: high
+    athlete_note: >
+      The most sensitive marker of insulin resistance; trained athletes are typically 2-4.
+      Meaningless if not fasted.
+    confounders: [not_fasting]
+    sources: ["IFM functional ranges", "Weatherby & Ferguson"]
+  hba1c:
+    display: HbA1c
+    system: metabolic
+    unit: "%"
+    aliases: [hba1c, "hemoglobin a1c", "haemoglobin a1c", a1c, "glycated hemoglobin", "glycohemoglobin"]
+    conventional: {low: 4.8, high: 5.6}
+    functional: {low: 4.8, high: 5.3}
+    direction: high
+    athlete_note: >
+      Endurance training shortens red cell lifespan, which can read HbA1c 0.2-0.3 lower than
+      the true average glucose; iron deficiency reads it higher. Read with fasting glucose and
+      insulin.
+    confounders: []
+    sources: ["IFM functional ranges", "Weatherby & Ferguson"]
+  uric_acid:
+    display: Uric acid
+    system: metabolic
+    unit: mg/dL
+    aliases: [uric acid, "uric acid, serum", urate]
+    conversions: {"umol/L": 0.01681, "µmol/L": 0.01681}
+    conventional: {male: {low: 3.7, high: 8.6}, female: {low: 2.5, high: 7.1}}
+    functional: {male: {low: 3.7, high: 5.9}, female: {low: 3.0, high: 5.5}}
+    direction: both
+    athlete_note: >
+      Rises for 24-48 h after long or very hard sessions (purine turnover) and with
+      dehydration and fructose-heavy fueling. Low values can reflect low purine intake or
+      oxidative stress.
+    confounders: [recent_hard_session]
+    sources: ["Weatherby & Ferguson", "LabCorp reference intervals"]
+  ck:
+    display: Creatine kinase (CK)
+    system: metabolic
+    unit: U/L
+    aliases: [ck, "creatine kinase", "creatine kinase, total", "ck, total", cpk, "creatine phosphokinase", "ck total"]
+    conversions: {"IU/L": 1.0, "ukat/L": 60.0}
+    conventional: {male: {low: 39, high: 308}, female: {low: 26, high: 192}}
+    functional: {male: {low: 40, high: 200}, female: {low: 30, high: 150}}
+    direction: high
+    athlete_note: >
+      The clearest training-proximity marker: CK peaks 24-72 h after hard, long or eccentric
+      (running, downhill) sessions and can exceed 1000 U/L without pathology. Resting values in
+      trained athletes are higher than the general population, so the functional high applies
+      only to a draw after 48+ h of easy training. A persistently high CK across rested draws
+      suggests under-recovery. Read with AST, ALT and hs-CRP.
+    confounders: [recent_hard_session, high_acute_load]
+    sources: ["Brancaccio et al. 2007, creatine kinase monitoring in sport medicine", "LabCorp reference intervals"]
+
+  # ---- Kidney -------------------------------------------------------------------------------
+  bun:
+    display: BUN
+    system: kidney
+    unit: mg/dL
+    aliases: [bun, "blood urea nitrogen", "urea nitrogen", "urea nitrogen, serum"]
+    conversions: {"mmol/L": 2.801}
+    conventional: {low: 6, high: 24}
+    functional: {low: 10, high: 16}
+    direction: both
+    athlete_note: >
+      High BUN with normal creatinine follows a high-protein diet, dehydration or catabolic
+      training weeks; low BUN follows low protein intake. Read with the BUN/creatinine ratio.
+    confounders: [recent_hard_session]
+    sources: ["Weatherby & Ferguson", "LabCorp reference intervals"]
+  creatinine:
+    display: Creatinine
+    system: kidney
+    unit: mg/dL
+    aliases: [creatinine, "creatinine, serum", "creatinine, plasma"]
+    conversions: {"umol/L": 0.01131, "µmol/L": 0.01131}
+    conventional: {male: {low: 0.76, high: 1.27}, female: {low: 0.57, high: 1.00}}
+    functional: {male: {low: 0.8, high: 1.1}, female: {low: 0.7, high: 0.9}}
+    direction: both
+    athlete_note: >
+      Tracks muscle mass and creatine supplementation, and rises for 24-48 h after hard sessions
+      and with dehydration. An athlete's stable baseline near the conventional high is normal;
+      the concern is a rise from baseline with a falling eGFR on a rested draw.
+    confounders: [recent_hard_session]
+    sources: ["Weatherby & Ferguson", "LabCorp reference intervals"]
+  egfr:
+    display: eGFR
+    system: kidney
+    unit: mL/min/1.73m2
+    aliases: [egfr, "estimated gfr", "gfr, estimated", "egfr (ckd-epi)", "glomerular filtration rate"]
+    conventional: {low: 60}
+    functional: {low: 90}
+    direction: low
+    athlete_note: >
+      Computed from creatinine, so every creatinine caveat applies. A value between 60 and 90
+      on a rested, hydrated draw deserves a retest; below 60 is a practitioner conversation.
+    confounders: [recent_hard_session]
+    sources: ["KDIGO 2012 CKD staging", "IFM functional ranges"]
+  bun_creatinine_ratio:
+    display: BUN/creatinine ratio
+    system: kidney
+    unit: ratio
+    aliases: ["bun/creatinine ratio", "bun creatinine ratio", "bun/creat ratio", "urea nitrogen/creatinine"]
+    conventional: {low: 9, high: 20}
+    functional: {low: 10, high: 16}
+    direction: both
+    athlete_note: >
+      High with dehydration or a high-protein diet; low with low protein intake or high muscle
+      mass. Adds little when BUN and creatinine are both optimal.
+    confounders: [recent_hard_session]
+    sources: ["Weatherby & Ferguson"]
+
+  # ---- Liver --------------------------------------------------------------------------------
+  alt:
+    display: ALT
+    system: liver
+    unit: U/L
+    aliases: [alt, "alt (sgpt)", sgpt, "alanine aminotransferase", "alanine transaminase"]
+    conversions: {"IU/L": 1.0}
+    conventional: {low: 0, high: 44}
+    functional: {low: 10, high: 26}
+    direction: high
+    athlete_note: >
+      Present in muscle as well as liver; rises for 24-72 h after hard or eccentric sessions
+      alongside CK and AST. A high ALT with a normal CK and GGT points to the liver (fatty
+      liver, alcohol, medication); with a high CK it is muscle.
+    confounders: [recent_hard_session]
+    sources: ["Weatherby & Ferguson", "IFM functional ranges"]
+  ast:
+    display: AST
+    system: liver
+    unit: U/L
+    aliases: [ast, "ast (sgot)", sgot, "aspartate aminotransferase", "aspartate transaminase"]
+    conversions: {"IU/L": 1.0}
+    conventional: {low: 0, high: 40}
+    functional: {low: 10, high: 26}
+    direction: high
+    athlete_note: >
+      More muscle-derived than ALT; an AST above ALT with a high CK is exercise, not liver.
+      Low AST (under 10) can reflect B6 insufficiency.
+    confounders: [recent_hard_session]
+    sources: ["Weatherby & Ferguson", "IFM functional ranges"]
+  alp:
+    display: Alkaline phosphatase
+    system: liver
+    unit: U/L
+    aliases: [alp, "alkaline phosphatase", "alk phos", "alkaline phosphatase, serum"]
+    conversions: {"IU/L": 1.0}
+    conventional: {low: 44, high: 121}
+    functional: {low: 45, high: 100}
+    direction: both
+    athlete_note: >
+      Low ALP suggests zinc or magnesium insufficiency; high ALP points to bone turnover
+      (stress fracture healing) or biliary issues. Read with GGT: GGT normal and ALP high is
+      bone.
+    confounders: []
+    sources: ["Weatherby & Ferguson", "IFM functional ranges"]
+  bilirubin_total:
+    display: Bilirubin, total
+    system: liver
+    unit: mg/dL
+    aliases: [bilirubin, "bilirubin, total", "total bilirubin", "bilirubin total"]
+    conversions: {"umol/L": 0.05848, "µmol/L": 0.05848}
+    conventional: {low: 0.0, high: 1.2}
+    functional: {low: 0.1, high: 0.9}
+    direction: both
+    athlete_note: >
+      Mildly high bilirubin after long sessions reflects red cell breakdown (foot-strike
+      hemolysis in runners); persistently 1.2-3.0 with everything else normal is usually
+      Gilbert's syndrome.
+    confounders: [recent_hard_session]
+    sources: ["Weatherby & Ferguson"]
+  ggt:
+    display: GGT
+    system: liver
+    unit: U/L
+    aliases: [ggt, "gamma-glutamyl transferase", "gamma gt", "gamma glutamyl transpeptidase", "ggtp"]
+    conversions: {"IU/L": 1.0}
+    conventional: {low: 0, high: 65}
+    functional: {low: 10, high: 25}
+    direction: high
+    athlete_note: >
+      The liver-specific enzyme: unaffected by training. Rises with alcohol, fatty liver and
+      glutathione demand; the best discriminator when ALT or AST is high.
+    confounders: []
+    sources: ["Weatherby & Ferguson", "IFM functional ranges"]
+  total_protein:
+    display: Total protein
+    system: liver
+    unit: g/dL
+    aliases: [total protein, "protein, total", "total protein, serum"]
+    conversions: {"g/L": 0.1}
+    conventional: {low: 6.0, high: 8.5}
+    functional: {low: 6.9, high: 7.4}
+    direction: both
+    athlete_note: Reads high with dehydration and low with plasma volume expansion or low protein intake.
+    confounders: [high_acute_load]
+    sources: ["Weatherby & Ferguson"]
+  albumin:
+    display: Albumin
+    system: liver
+    unit: g/dL
+    aliases: [albumin, "albumin, serum"]
+    conversions: {"g/L": 0.1}
+    conventional: {low: 3.8, high: 4.9}
+    functional: {low: 4.0, high: 4.9}
+    direction: both
+    athlete_note: >
+      Falls with inflammation and low protein intake, rises with dehydration. A low albumin
+      with a high hs-CRP is inflammation, not nutrition.
+    confounders: [inflammation, high_acute_load]
+    sources: ["Weatherby & Ferguson", "IFM functional ranges"]
+  globulin:
+    display: Globulin
+    system: liver
+    unit: g/dL
+    aliases: [globulin, "globulin, total", "globulin, calculated"]
+    conversions: {"g/L": 0.1}
+    conventional: {low: 1.5, high: 4.5}
+    functional: {low: 2.4, high: 2.8}
+    direction: both
+    confounders: [inflammation]
+    sources: ["Weatherby & Ferguson"]
+
+  # ---- Electrolytes -------------------------------------------------------------------------
+  sodium:
+    display: Sodium
+    system: electrolytes
+    unit: mmol/L
+    aliases: [sodium, "sodium, serum", na]
+    conversions: {"mEq/L": 1.0}
+    conventional: {low: 134, high: 144}
+    functional: {low: 135, high: 140}
+    direction: both
+    athlete_note: >
+      Low sodium after a long session usually means over-drinking plain water; high sodium
+      means dehydration. Read with the draw's hydration state, not as a diet marker.
+    confounders: [recent_hard_session]
+    sources: ["Weatherby & Ferguson"]
+  potassium:
+    display: Potassium
+    system: electrolytes
+    unit: mmol/L
+    aliases: [potassium, "potassium, serum", k]
+    conversions: {"mEq/L": 1.0}
+    conventional: {low: 3.5, high: 5.2}
+    functional: {low: 4.0, high: 4.5}
+    direction: both
+    athlete_note: >
+      Leaks from muscle after hard sessions and from red cells with a slow or hemolyzed draw,
+      both reading high. Low potassium with low magnesium is a mineral-intake pattern.
+    confounders: [recent_hard_session]
+    sources: ["Weatherby & Ferguson"]
+  chloride:
+    display: Chloride
+    system: electrolytes
+    unit: mmol/L
+    aliases: [chloride, "chloride, serum", cl]
+    conversions: {"mEq/L": 1.0}
+    conventional: {low: 96, high: 106}
+    functional: {low: 100, high: 106}
+    direction: both
+    athlete_note: Tracks sodium and hydration; low with metabolic alkalosis, high with dehydration.
+    confounders: [recent_hard_session]
+    sources: ["Weatherby & Ferguson"]
+  co2:
+    display: CO2 (bicarbonate)
+    system: electrolytes
+    unit: mmol/L
+    aliases: [co2, "carbon dioxide, total", "carbon dioxide", bicarbonate, "co2, total", hco3]
+    conversions: {"mEq/L": 1.0}
+    conventional: {low: 20, high: 29}
+    functional: {low: 25, high: 29}
+    direction: both
+    athlete_note: Low CO2 after a hard session reflects lactate buffering; persistently low suggests a metabolic acidosis pattern.
+    confounders: [recent_hard_session]
+    sources: ["Weatherby & Ferguson"]
+  calcium:
+    display: Calcium
+    system: electrolytes
+    unit: mg/dL
+    aliases: [calcium, "calcium, serum", "calcium, total", ca]
+    conversions: {"mmol/L": 4.008}
+    conventional: {low: 8.7, high: 10.2}
+    functional: {low: 9.2, high: 10.0}
+    direction: both
+    athlete_note: >
+      Serum calcium is tightly regulated and says little about intake or bone; read with
+      vitamin D and albumin (low albumin reads calcium low).
+    confounders: []
+    sources: ["Weatherby & Ferguson", "IFM functional ranges"]
+
+  # ---- Lipids -------------------------------------------------------------------------------
+  total_cholesterol:
+    display: Total cholesterol
+    system: lipids
+    unit: mg/dL
+    aliases: [total cholesterol, "cholesterol, total", cholesterol, "cholesterol total"]
+    conversions: {"mmol/L": 38.67}
+    conventional: {low: 100, high: 200}
+    functional: {low: 160, high: 200}
+    direction: both
+    athlete_note: >
+      Total cholesterol alone says little; ApoB and LDL particle burden carry the risk. Low
+      total cholesterol (under 160) in an endurance athlete can mean under-fueling or low fat
+      intake and travels with low testosterone and cortisol.
+    confounders: [not_fasting]
+    sources: ["Weatherby & Ferguson", "IFM functional ranges"]
+  ldl:
+    display: LDL cholesterol
+    system: lipids
+    unit: mg/dL
+    aliases: [ldl, "ldl cholesterol", "ldl-c", "ldl chol calc (nih)", "ldl cholesterol, calculated", "ldl, calculated", "ldl-cholesterol"]
+    conversions: {"mmol/L": 38.67}
+    conventional: {low: 0, high: 100}
+    functional: {high: 100}
+    direction: high
+    athlete_note: >
+      Calculated LDL is unreliable when triglycerides are high or the draw is not fasted. When
+      LDL is flagged and ApoB is optimal, the particles are large and the risk reading is
+      softer; when ApoB is also high, treat it as real.
+    confounders: [not_fasting]
+    sources: ["IFM functional ranges", "AHA/ACC 2018 cholesterol guideline"]
+  hdl:
+    display: HDL cholesterol
+    system: lipids
+    unit: mg/dL
+    aliases: [hdl, "hdl cholesterol", "hdl-c", "hdl-cholesterol", "hdl chol"]
+    conversions: {"mmol/L": 38.67}
+    conventional: {male: {low: 40}, female: {low: 50}}
+    functional: {male: {low: 55, high: 85}, female: {low: 60, high: 95}}
+    direction: low
+    athlete_note: >
+      Endurance training raises HDL; very high values (over 90) are not extra protective and
+      can reflect alcohol or genetics.
+    confounders: []
+    sources: ["Weatherby & Ferguson", "IFM functional ranges"]
+  triglycerides:
+    display: Triglycerides
+    system: lipids
+    unit: mg/dL
+    aliases: [triglycerides, tg, trig, "triglycerides, serum"]
+    conversions: {"mmol/L": 88.57}
+    conventional: {low: 0, high: 149}
+    functional: {low: 50, high: 90}
+    direction: both
+    athlete_note: >
+      The most fasting-sensitive lipid; a non-fasted value is uninterpretable. Under 50 with
+      low total cholesterol suggests under-fueling. Over 90 fasted with high insulin is the
+      insulin-resistance pattern; over 90 with high HbA1c and normal insulin is the carb-
+      overload pattern.
+    confounders: [not_fasting]
+    sources: ["Weatherby & Ferguson", "IFM functional ranges"]
+  apob:
+    display: ApoB
+    system: lipids
+    unit: mg/dL
+    aliases: [apob, "apolipoprotein b", "apo b", "apolipoprotein b-100", "apo-b"]
+    conversions: {"g/L": 100.0}
+    conventional: {high: 90}
+    functional: {high: 80}
+    direction: high
+    athlete_note: >
+      The particle count that drives atherosclerosis; the number to act on when LDL and ApoB
+      disagree. Many lipidologists target under 80, some under 60 for high genetic risk; this
+      table uses 80 and names 60 as the aggressive target.
+    confounders: []
+    sources: ["Sniderman et al. 2019, ApoB particles and cardiovascular disease", "IFM functional ranges"]
+  lpa:
+    display: Lp(a)
+    system: lipids
+    unit: nmol/L
+    aliases: [lpa, "lp(a)", "lipoprotein (a)", "lipoprotein a", "lipoprotein(a)"]
+    conventional: {high: 75}
+    functional: {high: 75}
+    direction: high
+    athlete_note: >
+      Genetic and stable across a lifetime; measure once. No linear conversion from mg/dL (a
+      lab printing mg/dL is flagged unit? and needs a manual entry with a note). Over 75
+      nmol/L (about 30 mg/dL) raises lifetime risk and argues for a lower ApoB target.
+    confounders: []
+    sources: ["EAS 2022 Lp(a) consensus", "LabCorp reference intervals"]
+
+  # ---- Thyroid ------------------------------------------------------------------------------
+  tsh:
+    display: TSH
+    system: thyroid
+    unit: mIU/L
+    aliases: [tsh, "thyroid stimulating hormone", "thyrotropin", "tsh, 3rd generation"]
+    conversions: {"uIU/mL": 1.0, "µIU/mL": 1.0, "mU/L": 1.0}
+    conventional: {low: 0.45, high: 4.5}
+    functional: {low: 1.0, high: 2.0}
+    direction: both
+    athlete_note: >
+      TSH is highest overnight and falls through the morning, so an afternoon draw reads lower.
+      Heavy training blocks and low energy availability push TSH up and free T3 down (the
+      non-thyroidal illness pattern); read with free T3, reverse T3 and the load context.
+      IFM's optimal is 0.5-2.0; this table uses Weatherby's 1.0-2.0 floor.
+    confounders: [afternoon_draw, high_acute_load, poor_sleep]
+    sources: ["Weatherby & Ferguson", "IFM functional ranges (0.5-2.0)"]
+  free_t4:
+    display: Free T4
+    system: thyroid
+    unit: ng/dL
+    aliases: [free t4, "t4, free", "free thyroxine", ft4, "t4 free", "thyroxine, free"]
+    conversions: {"pmol/L": 0.07776}
+    conventional: {low: 0.82, high: 1.77}
+    functional: {low: 1.0, high: 1.5}
+    direction: both
+    athlete_note: The storage hormone; normal free T4 with low free T3 is a conversion problem, not production.
+    confounders: []
+    sources: ["Weatherby & Ferguson", "IFM functional ranges"]
+  free_t3:
+    display: Free T3
+    system: thyroid
+    unit: pg/mL
+    aliases: [free t3, "t3, free", "free triiodothyronine", ft3, "t3 free", "triiodothyronine, free"]
+    conversions: {"pmol/L": 0.6512, "pg/dL": 0.01}
+    conventional: {low: 2.0, high: 4.4}
+    functional: {low: 3.0, high: 4.0}
+    direction: both
+    athlete_note: >
+      The active hormone and the most training-sensitive thyroid marker: it falls with low
+      energy availability, hard blocks and poor sleep before TSH moves. Low free T3 with
+      normal TSH and free T4 in a heavy block is usually under-fueling, not thyroid disease.
+    confounders: [high_acute_load, poor_sleep]
+    sources: ["Weatherby & Ferguson", "Loucks 2004, energy availability and the thyroid axis"]
+  reverse_t3:
+    display: Reverse T3
+    system: thyroid
+    unit: ng/dL
+    aliases: [reverse t3, "t3, reverse", rt3, "reverse triiodothyronine", "t3 reverse"]
+    conversions: {"pmol/L": 0.06514, "pg/mL": 0.1, "ng/mL": 100.0}
+    conventional: {low: 9.2, high: 24.1}
+    functional: {low: 9.2, high: 15.0}
+    direction: high
+    athlete_note: >
+      Rises when the body brakes metabolism: caloric deficit, overreaching, inflammation,
+      cortisol excess. High reverse T3 with low-normal free T3 is the strongest lab signal of
+      under-recovery in this panel. Read the free T3 : reverse T3 ratio (over 20 with both in
+      pg/mL is the usual target).
+    confounders: [high_acute_load, inflammation, poor_sleep]
+    sources: ["IFM functional ranges", "Weatherby & Ferguson"]
+  tpo_ab:
+    display: TPO antibodies
+    system: thyroid
+    unit: IU/mL
+    aliases: [tpo ab, "thyroid peroxidase antibodies", "thyroid peroxidase (tpo) ab", "tpo antibodies", "anti-tpo", "thyroperoxidase antibodies", "tpo"]
+    conversions: {"kIU/L": 1.0, "U/mL": 1.0}
+    conventional: {high: 34}
+    functional: {high: 9}
+    direction: high
+    athlete_note: >
+      Any detectable value above 9 suggests autoimmune activity even when TSH is normal; trend
+      it. Not affected by training.
+    confounders: []
+    sources: ["IFM functional ranges", "LabCorp reference intervals"]
+  tg_ab:
+    display: Thyroglobulin antibodies
+    system: thyroid
+    unit: IU/mL
+    aliases: [tg ab, "thyroglobulin antibodies", "thyroglobulin antibody", "anti-thyroglobulin", "anti-tg", "thyroglobulin ab"]
+    conversions: {"kIU/L": 1.0, "U/mL": 1.0}
+    conventional: {high: 0.9}
+    functional: {high: 0.9}
+    direction: high
+    athlete_note: Read with TPO antibodies; either positive is the autoimmune signal.
+    confounders: []
+    sources: ["LabCorp reference intervals", "IFM functional ranges"]
+
+  # ---- Iron ---------------------------------------------------------------------------------
+  ferritin:
+    display: Ferritin
+    system: iron
+    unit: ng/mL
+    aliases: [ferritin, "ferritin, serum"]
+    conversions: {"µg/L": 1.0, "ug/L": 1.0}
+    conventional: {male: {low: 30, high: 400}, female: {low: 15, high: 150}}
+    functional: {male: {low: 50, high: 150}, female: {low: 50, high: 120}}
+    direction: both
+    athlete_note: >
+      Endurance athletes: below 50 impairs adaptation even with normal hemoglobin; below 30 is
+      actionable (the 2019 consensus uses 35 for stage 1 deficiency). Ferritin is an
+      acute-phase reactant and rises for 24-72 h after hard or long sessions, so read with
+      hs-CRP and training proximity: a "normal" ferritin with a high hs-CRP may be hiding a
+      deficiency. Over 150 on a rested draw with a high transferrin saturation deserves an
+      iron-overload workup (hemochromatosis screen).
+    confounders: [recent_hard_session, inflammation]
+    sources: ["Sim et al. 2019, iron considerations for the athlete: a narrative review", "Weatherby & Ferguson", "IFM functional ranges"]
+  iron_serum:
+    display: Serum iron
+    system: iron
+    unit: ug/dL
+    aliases: [iron, "iron, serum", "serum iron", "iron, total", "total iron"]
+    conversions: {"µg/dL": 1.0, "umol/L": 5.585, "µmol/L": 5.585}
+    conventional: {low: 38, high: 169}
+    functional: {low: 85, high: 130}
+    direction: both
+    athlete_note: >
+      Swings 30 % through the day and with meals, supplements and recent sessions; the least
+      reliable iron marker on its own. Use it only through transferrin saturation.
+    confounders: [not_fasting, recent_hard_session]
+    sources: ["Weatherby & Ferguson", "IFM functional ranges"]
+  tibc:
+    display: TIBC
+    system: iron
+    unit: ug/dL
+    aliases: [tibc, "total iron binding capacity", "iron binding capacity, total", "iron bind.cap.(tibc)"]
+    conversions: {"µg/dL": 1.0, "umol/L": 5.585, "µmol/L": 5.585}
+    conventional: {low: 250, high: 450}
+    functional: {low: 250, high: 350}
+    direction: both
+    athlete_note: >
+      Rises as iron stores fall (the body makes more transferrin), so a high TIBC with a low
+      ferritin confirms deficiency; a low TIBC with a high ferritin points to overload or
+      inflammation.
+    confounders: [inflammation]
+    sources: ["Weatherby & Ferguson"]
+  transferrin_saturation:
+    display: Transferrin saturation
+    system: iron
+    unit: "%"
+    aliases: [transferrin saturation, "iron saturation", "iron sat", "% saturation", "saturation, iron", "tsat", "transferrin sat"]
+    conventional: {low: 15, high: 55}
+    functional: {low: 25, high: 35}
+    direction: both
+    athlete_note: >
+      Serum iron / TIBC. Under 20 with ferritin under 50 is functional iron deficiency in an
+      athlete; over 45 on two draws is the hemochromatosis screen threshold. Inherits serum
+      iron's diurnal and meal variability.
+    confounders: [not_fasting, recent_hard_session]
+    sources: ["Sim et al. 2019", "Weatherby & Ferguson"]
+
+  # ---- Inflammation -------------------------------------------------------------------------
+  hs_crp:
+    display: hs-CRP
+    system: inflammation
+    unit: mg/L
+    aliases: [hs-crp, hscrp, "crp, high sensitivity", "c-reactive protein, high sensitivity", "c-reactive protein, cardiac", "high sensitivity crp", "crp hs", "cardio crp", "hs crp"]
+    conversions: {"mg/dL": 10.0}
+    conventional: {high: 3.0}
+    functional: {high: 1.0}
+    direction: high
+    athlete_note: >
+      Rises for 24-48 h after long or hard sessions and stays up with muscle damage, illness
+      or poor sleep. A value over 1.0 on a rested draw is the signal; over 3.0 on a rested
+      draw with no illness is a practitioner conversation. This marker drives the
+      `inflammation` confounder for ferritin, platelets, albumin, globulin, reverse T3 and TIBC
+      in the same panel.
+    confounders: [recent_hard_session, poor_sleep]
+    sources: ["IFM functional ranges", "AHA/CDC 2003 CRP risk categories"]
+  homocysteine:
+    display: Homocysteine
+    system: inflammation
+    unit: umol/L
+    aliases: [homocysteine, "homocysteine, plasma", "homocyst(e)ine", hcy]
+    conversions: {"µmol/L": 1.0, "mg/L": 7.397}
+    conventional: {low: 0, high: 15}
+    functional: {low: 5, high: 8}
+    direction: high
+    athlete_note: >
+      A methylation and B-vitamin marker (folate, B12, B6) more than an inflammation marker.
+      Over 8 with low-normal B12 or folate is a B-vitamin pattern; over 8 with both replete
+      suggests an MTHFR-type conversion limit. IFM uses under 7 as optimal; this table uses 8.
+    confounders: []
+    sources: ["Weatherby & Ferguson", "IFM functional ranges (under 7)"]
+
+  # ---- Vitamins and minerals ----------------------------------------------------------------
+  vitamin_d:
+    display: Vitamin D (25-OH)
+    system: vitamins_minerals
+    unit: ng/mL
+    aliases: [vitamin d, "vitamin d, 25-hydroxy", "25-hydroxyvitamin d", "25-oh vitamin d", "vitamin d 25-hydroxy", "25(oh)d", "vitamin d, 25-oh, total", "vit d 25-oh", "vitamin d total", "calcifediol"]
+    conversions: {"nmol/L": 0.4006}
+    conventional: {low: 30, high: 100}
+    functional: {low: 50, high: 80}
+    direction: both
+    athlete_note: >
+      Athletes below 50 have higher stress-fracture and upper-respiratory illness rates and
+      slower recovery; indoor and winter training predicts insufficiency. Repletion takes 8-12
+      weeks at 2000-5000 IU/day with a retest; over 100 is toxicity territory. Read with calcium.
+    confounders: []
+    sources: ["Owens et al. 2018, vitamin D and the athlete: current perspectives", "IFM functional ranges", "Endocrine Society 2011"]
+  b12:
+    display: Vitamin B12
+    system: vitamins_minerals
+    unit: pg/mL
+    aliases: [b12, "vitamin b12", "vitamin b-12", cobalamin, "b-12", "vitamin b12, serum"]
+    conversions: {"pmol/L": 1.355, "ng/L": 1.0}
+    conventional: {low: 232, high: 1245}
+    functional: {low: 500, high: 900}
+    direction: both
+    athlete_note: >
+      Serum B12 overstates tissue status; 232-500 with a high MCV, high homocysteine or
+      symptoms is functional deficiency. Values over 900 are usually supplementation and not
+      harmful; over 1245 without supplementation deserves a look at the liver.
+    confounders: []
+    sources: ["Weatherby & Ferguson", "IFM functional ranges"]
+  folate:
+    display: Folate
+    system: vitamins_minerals
+    unit: ng/mL
+    aliases: [folate, "folate, serum", "folic acid", "folate (folic acid), serum", "serum folate"]
+    conversions: {"nmol/L": 0.4413, "ug/L": 1.0}
+    conventional: {low: 3.0}
+    functional: {low: 10, high: 20}
+    direction: low
+    athlete_note: >
+      Serum folate reflects the last few days of intake. Low-normal with high homocysteine or
+      a high MCV is the actionable pattern; RBC folate is the tissue measure if it is
+      available.
+    confounders: [not_fasting]
+    sources: ["Weatherby & Ferguson", "IFM functional ranges"]
+  rbc_magnesium:
+    display: RBC magnesium
+    system: vitamins_minerals
+    unit: mg/dL
+    aliases: [rbc magnesium, "magnesium, rbc", "magnesium, red blood cell", "red blood cell magnesium", "mg, rbc", "erythrocyte magnesium"]
+    conversions: {"mmol/L": 2.431}
+    conventional: {low: 4.2, high: 6.8}
+    functional: {low: 5.5, high: 6.8}
+    direction: low
+    athlete_note: >
+      Serum magnesium is held constant at the expense of tissue stores, so RBC magnesium is the
+      marker. Endurance athletes lose magnesium in sweat; below 5.5 is common in high-volume
+      blocks and associates with cramping, poor sleep and low HRV.
+    confounders: []
+    sources: ["IFM functional ranges", "Nielsen & Lukaski 2006, magnesium and exercise"]
+  zinc:
+    display: Zinc
+    system: vitamins_minerals
+    unit: ug/dL
+    aliases: [zinc, "zinc, plasma", "zinc, serum", "zinc, rbc", "plasma zinc", zn]
+    conversions: {"µg/dL": 1.0, "umol/L": 6.538, "µmol/L": 6.538, "mg/L": 100.0}
+    conventional: {low: 60, high: 130}
+    functional: {low: 90, high: 120}
+    direction: both
+    athlete_note: >
+      Falls with inflammation and after hard sessions (redistribution), rises with recent
+      supplements; a fasted, rested draw is needed. Low zinc with a low ALP is the classic
+      pattern. Plasma and RBC zinc share this range for the table's purpose; the RBC value is
+      the slower-moving one.
+    confounders: [inflammation, recent_hard_session, not_fasting]
+    sources: ["Weatherby & Ferguson", "IFM functional ranges"]
+  omega3_index:
+    display: Omega-3 index
+    system: vitamins_minerals
+    unit: "%"
+    aliases: [omega-3 index, "omega 3 index", "omega3 index", "omegacheck", "epa+dha index"]
+    conventional: {low: 4}
+    functional: {low: 8, high: 12}
+    direction: low
+    athlete_note: >
+      RBC EPA+DHA as a percentage of total fatty acids; reflects 3-4 months of intake. Under 4
+      is high cardiovascular risk; 8-12 is the target. Roughly 1-2 g/day of EPA+DHA moves it
+      from 4 to 8 over 3-4 months.
+    confounders: []
+    sources: ["Harris & von Schacky 2004, the omega-3 index", "IFM functional ranges"]
+
+  # ---- Hormones -----------------------------------------------------------------------------
+  testosterone_total:
+    display: Testosterone, total
+    system: hormones
+    unit: ng/dL
+    aliases: [testosterone, "testosterone, total", "total testosterone", "testosterone, serum", "testosterone total"]
+    conversions: {"nmol/L": 28.84, "ng/mL": 100.0}
+    conventional: {male: {low: 264, high: 916}, female: {low: 8, high: 60}}
+    functional: {male: {low: 550, high: 900}, female: {low: 25, high: 50}}
+    direction: both
+    athlete_note: >
+      Peaks in the early morning and falls 20-30 % by afternoon; only an AM fasted draw is
+      comparable across panels. Falls with high training load, low energy availability and
+      poor sleep, and recovers within weeks of a lighter block, so a low value in a heavy block
+      is a load signal before it is an endocrine one. Read with SHBG and free testosterone;
+      with cortisol for the catabolic ratio. Male functional low: IFM 500, Weatherby 550
+      (used).
+    confounders: [afternoon_draw, high_acute_load, poor_sleep, low_hrv, not_fasting]
+    sources: ["Hackney 2020, hypogonadism in exercising males", "Weatherby & Ferguson", "IFM functional ranges (500)"]
+  testosterone_free:
+    display: Testosterone, free
+    system: hormones
+    unit: pg/mL
+    aliases: [free testosterone, "testosterone, free", "testosterone,free (direct)", "free testosterone (direct)", "testosterone free"]
+    conversions: {"pmol/L": 0.2884, "ng/dL": 10.0}
+    conventional: {male: {low: 8.7, high: 25.1}, female: {low: 0.0, high: 4.2}}
+    functional: {male: {low: 15.0, high: 25.0}, female: {low: 1.0, high: 4.0}}
+    direction: both
+    athlete_note: >
+      The bioavailable fraction; a normal total with a low free value means SHBG is high, which
+      itself rises with low energy availability and high volume. Same timing rules as total
+      testosterone. Direct (analog) assays are less reliable than calculated free T; note the
+      method if the lab prints it.
+    confounders: [afternoon_draw, high_acute_load, poor_sleep, low_hrv]
+    sources: ["Hackney 2020", "Weatherby & Ferguson"]
+  shbg:
+    display: SHBG
+    system: hormones
+    unit: nmol/L
+    aliases: [shbg, "sex hormone binding globulin", "sex hormone-binding globulin", "sex hormone binding glob"]
+    conventional: {male: {low: 16.5, high: 55.9}, female: {low: 24.6, high: 122.0}}
+    functional: {male: {low: 20, high: 45}, female: {low: 40, high: 100}}
+    direction: both
+    athlete_note: >
+      Rises with high training volume, low energy availability, low insulin and aging; a high
+      SHBG lowers free testosterone without changing total. Falls with insulin resistance.
+    confounders: [high_acute_load]
+    sources: ["Weatherby & Ferguson", "LabCorp reference intervals"]
+  cortisol_am:
+    display: Cortisol (AM)
+    system: hormones
+    unit: ug/dL
+    aliases: [cortisol, "cortisol, am", "cortisol - am", "am cortisol", "cortisol, serum", "cortisol, total", "cortisol am", "morning cortisol"]
+    conversions: {"µg/dL": 1.0, "nmol/L": 0.03625}
+    conventional: {low: 6.2, high: 19.4}
+    functional: {low: 10, high: 18}
+    direction: both
+    athlete_note: >
+      Only a draw before 10:00 is interpretable; cortisol halves by afternoon. High AM cortisol
+      with a low testosterone, low free T3 and a high reverse T3 is the overreaching pattern;
+      a flat, low AM cortisol after a long heavy block suggests HPA down-regulation. One
+      serum value cannot show the daily rhythm; a 4-point salivary curve does. Read with the
+      testosterone : cortisol ratio.
+    confounders: [afternoon_draw, high_acute_load, poor_sleep, low_hrv, recent_hard_session]
+    sources: ["Hackney & Walz 2013, hormonal adaptation and the stress of exercise training", "Weatherby & Ferguson"]
+  dhea_s:
+    display: DHEA-S
+    system: hormones
+    unit: ug/dL
+    aliases: [dhea-s, "dhea sulfate", "dhea-sulfate", "dehydroepiandrosterone sulfate", dheas, "dhea s"]
+    conversions: {"µg/dL": 1.0, "umol/L": 36.85, "µmol/L": 36.85}
+    conventional: {male: {low: 102, high: 416}, female: {low: 45, high: 320}}
+    functional: {male: {low: 250, high: 400}, female: {low: 150, high: 300}}
+    direction: both
+    athlete_note: >
+      The adrenal counterweight to cortisol; declines with age (the conventional range is for
+      ages 30-50 and should be re-read against the lab's age band). A low DHEA-S with a
+      high cortisol is the chronic-stress pattern; stable across the day, so timing matters
+      less than for cortisol.
+    confounders: [high_acute_load]
+    sources: ["Weatherby & Ferguson", "IFM functional ranges"]
