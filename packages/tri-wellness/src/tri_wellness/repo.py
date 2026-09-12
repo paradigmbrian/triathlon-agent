@@ -200,6 +200,23 @@ def previous_values(conn: Conn, panel_id: int) -> dict[str, tuple[date, float]]:
     return {r["marker"]: (r["drawn_on"], float(r["value"])) for r in rows}
 
 
+def has_earlier_panel(conn: Conn, panel_id: int) -> bool:
+    """True when a panel earlier by (drawn_on, id) exists."""
+    row = conn.execute(
+        """
+        with me as (select drawn_on, id from lab_panels where id = %s)
+        select exists(
+            select 1 from lab_panels p
+            cross join me
+            where (p.drawn_on, p.id) < (me.drawn_on, me.id)
+        ) as exists
+        """,
+        (panel_id,),
+    ).fetchone()
+    assert row is not None
+    return bool(row["exists"])
+
+
 def marker_history(conn: Conn, marker: str) -> list[tuple[int, date, float, str]]:
     rows = conn.execute(
         """

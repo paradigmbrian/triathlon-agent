@@ -7,7 +7,12 @@ import re
 from typing import Any
 
 from tri_wellness.labs.models import Finding
-from tri_wellness.prompts.report import CHANGES_TITLE, DISCLAIMER, SECTION_TITLES
+from tri_wellness.prompts.report import (
+    CHANGES_TITLE,
+    DISCLAIMER,
+    SECTION_TITLES,
+    format_range,
+)
 
 
 def _result(key: str, ok: bool, problems: list[str]) -> dict[str, Any]:
@@ -20,11 +25,6 @@ def _findings(outputs: dict[str, Any]) -> list[Finding]:
 
 def _g(v: float) -> str:
     return f"{v:g}"
-
-
-def _range_text(f: Finding) -> str:
-    low, high = f.functional_range
-    return f"{'' if low is None else _g(low)}-{'' if high is None else _g(high)}"
 
 
 def _mentions_bound(report: str, v: float) -> bool:
@@ -41,7 +41,9 @@ def cites_functional_ranges(inputs: dict[str, Any], outputs: dict[str, Any]) -> 
         named = f.display.lower() in report.lower() or f.marker in report
         bounds_ok = all(_mentions_bound(report, v) for v in (low, high) if v is not None)
         if not (named and bounds_ok):
-            problems.append(f"{f.display}: functional range {_range_text(f)} not cited")
+            problems.append(
+                f"{f.display}: functional range {format_range(*f.functional_range)} not cited"
+            )
     return _result("cites_functional_ranges", not problems, problems)
 
 

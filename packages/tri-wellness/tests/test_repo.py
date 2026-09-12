@@ -152,6 +152,17 @@ def test_previous_values_same_day_uses_lower_id(wdb):
     assert repo.previous_values(wdb, p1) == {}
 
 
+def test_has_earlier_panel(wdb):
+    p1 = panel(wdb, D1, [lr("ferritin", 35.0)])
+    p2 = panel(wdb, D2, [lr("ferritin", 40.0)])
+    p3 = panel(wdb, D3, [lr("ferritin", 48.0)])
+    assert repo.has_earlier_panel(wdb, p1) is False
+    assert repo.has_earlier_panel(wdb, p2) is True
+    assert repo.has_earlier_panel(wdb, p3) is True
+    p4 = panel(wdb, D1, [lr("ferritin", 36.0)], lab="LabCorp")  # same date as p1, higher id
+    assert repo.has_earlier_panel(wdb, p4) is True
+
+
 def test_reports_roundtrip(wdb):
     pid = panel(wdb, D1, [lr("ferritin", 42.0)])
     finding = Finding(

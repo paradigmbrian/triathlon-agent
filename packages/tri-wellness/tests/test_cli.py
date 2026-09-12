@@ -127,3 +127,8 @@ def test_help_lists_panels():
 def test_help_lists_report_and_chat():
     result = runner.invoke(app, ["--help"])
     assert "report" in result.output and "chat" in result.output
+
+
+def test_help_lists_eval():
+    result = runner.invoke(app, ["--help"])
+    assert "eval" in result.output

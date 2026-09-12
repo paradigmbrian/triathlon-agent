@@ -79,8 +79,14 @@ def _g(v: Any) -> str:
     return f"{float(v):g}"
 
 
-def _range(low: float | None, high: float | None) -> str:
-    return f"{'' if low is None else _g(low)}-{'' if high is None else _g(high)}"
+def format_range(low: float | None, high: float | None) -> str:
+    if low is not None and high is not None:
+        return f"{_g(low)}-{_g(high)}"
+    if high is not None:
+        return f"up to {_g(high)}"
+    if low is not None:
+        return f"{_g(low)} or above"
+    return "no range"
 
 
 def profile_block(profile: dict[str, Any] | None, sex: str) -> str:
@@ -146,7 +152,7 @@ def training_block(t: TrainingContext) -> str:
 def _finding_line(f: Finding) -> str:
     line = (
         f"- {f.display}: {_g(f.value)} {f.unit} — {f.functional_status} "
-        f"(functional {_range(*f.functional_range)}; conventional {f.conventional_status})"
+        f"(functional {format_range(*f.functional_range)}; conventional {f.conventional_status})"
     )
     if f.previous is not None:
         prev_date, prev_value = f.previous
@@ -175,7 +181,7 @@ def findings_block(findings: list[Finding], registry: MarkerRegistry) -> str:
             lines.append(
                 "optimal: "
                 + ", ".join(
-                    f"{f.display} {_g(f.value)} {f.unit} ({_range(*f.functional_range)})"
+                    f"{f.display} {_g(f.value)} {f.unit} ({format_range(*f.functional_range)})"
                     for f in optimal
                 )
             )

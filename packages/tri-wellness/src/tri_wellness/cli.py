@@ -1,4 +1,4 @@
-"""Command-line entry points for the wellness agent: ingest, panels, report, chat."""
+"""Command-line entry points for the wellness agent: ingest, panels, report, chat, eval."""
 
 from __future__ import annotations
 
@@ -185,8 +185,6 @@ def chat() -> None:
 
 
 async def _chat() -> None:
-    from datetime import date
-
     from langchain_core.tools import BaseTool
 
     from tri_core.db.connection import connect

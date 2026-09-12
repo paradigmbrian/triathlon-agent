@@ -9,7 +9,7 @@ sleep and recovery data tri-core syncs to Postgres. Design:
 
 ## After Plan 3 (v1 complete)
 
-Pure layer, no model, no commands yet:
+All five commands are here: ingest, report, chat, panels, eval. Pure layer underneath:
 
 - `ranges/markers.yaml`: 65 markers with conventional and functional ranges, aliases, unit
   conversions, athlete notes and sources. `ranges/registry.py` loads it for the configured
@@ -86,3 +86,6 @@ run: not run yet (no panel provided).
   `tri_wellness_reports` (four findings sets in `evals/cases.py`) with three code evaluators:
   every non-optimal marker cites its functional range, the ten-section structure is present,
   active confounders are named. Latest run: not run yet.
+
+Prompt versions: `prompts/report.py` `PROMPT_VERSION` names the experiment; bump it whenever
+`REPORT_SYSTEM` or `REPORT_RULES` changes.

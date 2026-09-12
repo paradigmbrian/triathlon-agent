@@ -11,6 +11,7 @@ from tri_wellness.prompts.report import (
     REPORT_SYSTEM,
     SECTION_TITLES,
     findings_block,
+    format_range,
     render_report_prompt,
 )
 from tri_wellness.ranges.registry import MARKERS_PATH, load_registry
@@ -85,7 +86,7 @@ def test_findings_block_groups_by_system_and_never_shows_a_bare_value(reg, findi
     assert "Ferritin: 42 ng/mL" in text and "suboptimal_low" in text and "functional 50-150" in text
     assert "previous 35 on 2026-03-01 (+20.0%)" in text
     assert "confounders: recent_hard_session, inflammation" in text
-    assert "hs-CRP: 1.8 mg/L" in text and "functional -1" in text  # one-sided range
+    assert "hs-CRP: 1.8 mg/L" in text and "functional up to 1" in text  # one-sided range
     # optimal markers: one compact line per system, still with their range
     assert "optimal: Hemoglobin 15.1 g/dL (14-15.5)" in text
     assert "optimal: TSH 1.5 mIU/L (1-2)" in text
@@ -140,3 +141,10 @@ def test_extract_section():
     assert extract_section(md, "Missing") is None
     assert extract_section("## 3. Priorities\nA\n## Next\n", "Priorities") == "A"
     assert extract_section("### Priorities\nA", "Priorities") is None  # only level-2 headings
+
+
+def test_format_range():
+    assert format_range(50.0, 150.0) == "50-150"
+    assert format_range(None, 1.0) == "up to 1"
+    assert format_range(50.0, None) == "50 or above"
+    assert format_range(None, None) == "no range"

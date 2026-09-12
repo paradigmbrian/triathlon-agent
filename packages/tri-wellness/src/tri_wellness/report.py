@@ -82,6 +82,7 @@ async def run_report(
         training = load_training_context(conn, panel.drawn_on)
         profile = athlete_profile(conn)
         prior = repo.latest_report_before(conn, pid)
+        has_previous = repo.has_earlier_panel(conn, pid)
     findings = evaluate(results, registry, previous, panel.context, training)
     prompt = render_report_prompt(
         findings,
@@ -90,7 +91,7 @@ async def run_report(
         extract_section(prior.report_md, "Priorities") if prior else None,
         profile,
         registry,
-        has_previous=bool(previous),
+        has_previous=has_previous,
     )
     tags = [f"panel_id:{pid}", f"ranges_version:{registry.version}"]
     try:
