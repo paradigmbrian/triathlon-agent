@@ -37,15 +37,17 @@ def _connection(spec: ServerSpec) -> StdioConnection:
 
 
 @asynccontextmanager
-async def open_live_tools(
+async def open_live_servers(
     specs: dict[str, tuple[ServerSpec, Sequence[str]]], log: Callable[[str], None]
-) -> AsyncIterator[list[BaseTool]]:
-    """Start each server, load its tools, keep the allow-listed ones, and keep sessions open.
+) -> AsyncIterator[dict[str, list[BaseTool]]]:
+    """Start each server, load its tools, keep the allow-listed ones, and keep every session open
+    for as long as the context is. Yields server name -> bound tools, in spec order.
 
-    A server that fails to start is logged and skipped; the others still bind.
+    A server that fails to start is logged and left out, so `name not in servers` means it is
+    down; the others still bind.
     """
     client = MultiServerMCPClient({name: _connection(spec) for name, (spec, _) in specs.items()})
-    tools: list[BaseTool] = []
+    servers: dict[str, list[BaseTool]] = {}
     async with AsyncExitStack() as stack:
         for name, (_, allow) in specs.items():
             try:
@@ -54,11 +56,20 @@ async def open_live_tools(
                 )
                 loaded = await load_mcp_tools(session)
                 picked = filter_tools(loaded, allow)
-                tools.extend(picked)
+                servers[name] = picked
                 log(f"{name}: bound {[t.name for t in picked]}")
             except Exception as exc:  # a dead server must not kill the chat
                 log(
                     f"warning: {name} MCP server unavailable ({type(exc).__name__}: {exc}); "
                     "its tools are not bound"
                 )
-        yield tools
+        yield servers
+
+
+@asynccontextmanager
+async def open_live_tools(
+    specs: dict[str, tuple[ServerSpec, Sequence[str]]], log: Callable[[str], None]
+) -> AsyncIterator[list[BaseTool]]:
+    """The flattened view of `open_live_servers`: every bound tool, servers in spec order."""
+    async with open_live_servers(specs, log) as servers:
+        yield [t for tools in servers.values() for t in tools]
