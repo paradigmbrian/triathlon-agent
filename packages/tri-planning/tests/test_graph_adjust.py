@@ -15,6 +15,23 @@ pytestmark = pytest.mark.db
 CFG = {"configurable": {"thread_id": "planning"}}
 
 
+def move_call():
+    return tool_call(
+        "propose_calendar_changes",
+        {
+            "summary": "move it",
+            "changes": [
+                {
+                    "op": "move",
+                    "tp_workout_id": "w1",
+                    "new_date": (MONDAY + timedelta(days=4)).isoformat(),
+                    "reason": "rest day",
+                }
+            ],
+        },
+    )
+
+
 def seed_active(conn):
     goal = TrainingGoal(**GOAL_ARGS)
     gid = repo.insert_goal(conn, goal)
@@ -50,20 +67,7 @@ async def test_active_turn_proposes_reviews_and_applies(nocommit, make_deps):
     tp = FakeTp()
     model = ScriptedChatModel(
         script=[
-            tool_call(
-                "propose_calendar_changes",
-                {
-                    "summary": "move it",
-                    "changes": [
-                        {
-                            "op": "move",
-                            "tp_workout_id": "w1",
-                            "new_date": (MONDAY + timedelta(days=4)).isoformat(),
-                            "reason": "rest day",
-                        }
-                    ],
-                },
-            ),
+            move_call(),
             AIMessage(content="Proposed a move."),
         ]
     )
@@ -87,20 +91,7 @@ async def test_reject_clears_pending_changes_and_returns_to_adjust(nocommit, mak
     tp = FakeTp()
     model = ScriptedChatModel(
         script=[
-            tool_call(
-                "propose_calendar_changes",
-                {
-                    "summary": "move it",
-                    "changes": [
-                        {
-                            "op": "move",
-                            "tp_workout_id": "w1",
-                            "new_date": (MONDAY + timedelta(days=4)).isoformat(),
-                            "reason": "rest day",
-                        }
-                    ],
-                },
-            ),
+            move_call(),
             AIMessage(content="Proposed a move."),
             AIMessage(content="Nothing else to change."),
             AIMessage(content="All good this turn."),
@@ -129,3 +120,19 @@ async def test_reject_clears_pending_changes_and_returns_to_adjust(nocommit, mak
 def test_after_adjust():
     assert after_adjust({"pending_changes": [1]}) == "review"
     assert after_adjust({"pending_changes": []}) == "__end__"
+
+
+async def test_embedded_adjust_ends_with_pending_changes_and_no_interrupt(nocommit, make_deps):
+    seed_active(nocommit)
+    tp = FakeTp()
+    model = ScriptedChatModel(script=[move_call(), AIMessage(content="Proposed a move.")])
+    graph = build_graph(
+        make_deps(model, tp=tp, today=MONDAY + timedelta(days=1), horizon=3),
+        InMemorySaver(),
+        embedded=True,
+    )
+    out = await graph.ainvoke({"messages": [HumanMessage("Move Wednesday to Friday.")]}, CFG)
+    assert "__interrupt__" not in out and (await graph.aget_state(CFG)).next == ()
+    assert [c.op for c in out["pending_changes"]] == ["move"]
+    assert out["pending_summary"] == "move it" and out["changes_from"] == "adjust"
+    assert tp.calls == []

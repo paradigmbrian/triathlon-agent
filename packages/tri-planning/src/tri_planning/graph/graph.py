@@ -9,6 +9,8 @@ review   -> apply (approve/edit) | design or adjust (reject) | END (nothing to r
             rejected apply_plan)
 apply    -> targets (after apply_plan) | END
 adjust   -> review (changes proposed) | END
+
+Embedded mode (build_graph(..., embedded=True)): no review or apply; every "review" target is END.
 """
 
 from __future__ import annotations
@@ -66,22 +68,36 @@ def after_adjust(state: PlanningState) -> str:
     return "review" if state.get("pending_changes") else END
 
 
-def build_graph(deps: GraphDeps, checkpointer: BaseCheckpointSaver[Any]) -> Any:
+def build_graph(
+    deps: GraphDeps, checkpointer: BaseCheckpointSaver[Any], *, embedded: bool = False
+) -> Any:
+    """Compile the planning graph. With `embedded=True` there is no `review` or `apply`: every
+    path that would pause at review ends the run instead, leaving `pending_changes`,
+    `pending_summary` and `changes_from` in the output for the caller (the coach) to review."""
+    review = END if embedded else "review"
     g: StateGraph[PlanningState] = StateGraph(PlanningState)
+    g.add_node("route", make_route_node(deps))
     g.add_node("intake", make_intake_node(deps))
     g.add_node("targets", make_targets_node(deps))
     g.add_node("design", make_design_node(deps))
-    g.add_node("review", review_node)
-    g.add_node("apply", make_apply_node(deps))
     g.add_node("adjust", make_adjust_node(deps))
-    g.add_node("route", make_route_node(deps))
+    if not embedded:
+        g.add_node("review", review_node)
+        g.add_node("apply", make_apply_node(deps))
 
     g.add_edge(START, "route")
-    g.add_conditional_edges("route", route_start, ["review", "intake", "targets", "adjust"])
-    g.add_conditional_edges("intake", after_intake, ["targets", END])
-    g.add_conditional_edges("targets", after_targets, ["review", "design", END])
-    g.add_edge("design", "review")
-    g.add_conditional_edges("review", after_review, ["apply", "design", "adjust", END])
-    g.add_conditional_edges("apply", after_apply, ["targets", END])
-    g.add_conditional_edges("adjust", after_adjust, ["review", END])
+    g.add_conditional_edges(
+        "route",
+        route_start,
+        {"review": review, "intake": "intake", "targets": "targets", "adjust": "adjust"},
+    )
+    g.add_conditional_edges("intake", after_intake, {"targets": "targets", END: END})
+    g.add_conditional_edges(
+        "targets", after_targets, {"review": review, "design": "design", END: END}
+    )
+    g.add_edge("design", review)
+    g.add_conditional_edges("adjust", after_adjust, {"review": review, END: END})
+    if not embedded:
+        g.add_conditional_edges("review", after_review, ["apply", "design", "adjust", END])
+        g.add_conditional_edges("apply", after_apply, ["targets", END])
     return g.compile(checkpointer=checkpointer, name="tri-planning")

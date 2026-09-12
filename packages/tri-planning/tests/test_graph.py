@@ -167,3 +167,17 @@ def test_route_functions():
     assert after_review({"review_decision": reject, "changes_from": "design"}) == "design"
     assert after_review({"review_decision": reject, "changes_from": "targets"}) == "__end__"
     assert after_review({"review_decision": None}) == "__end__"
+
+
+async def test_embedded_graph_has_no_review_and_ends_with_pending_changes(
+    nocommit, make_deps, fake_tp
+):
+    model = ScriptedChatModel(script=[*intake_script(), week_call(300)])
+    graph = build_graph(make_deps(model, tp=fake_tp), InMemorySaver(), embedded=True)
+    assert "review" not in graph.nodes and "apply" not in graph.nodes
+    out = await graph.ainvoke({"messages": [HumanMessage("Olympic Dec 13")]}, CFG)
+    assert "__interrupt__" not in out
+    assert (await graph.aget_state(CFG)).next == ()
+    assert out["pending_changes"] and all(c.op == "create" for c in out["pending_changes"])
+    assert out["changes_from"] == "design" and out["pending_summary"]
+    assert fake_tp.calls == []
