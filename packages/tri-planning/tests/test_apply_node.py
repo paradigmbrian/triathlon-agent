@@ -4,7 +4,7 @@ import pytest
 
 from tri_core.testing import ScriptedChatModel
 from tri_planning import repo
-from tri_planning.graph.nodes.apply import make_apply_node
+from tri_planning.graph.nodes.apply import ApplyResult, apply_changes, make_apply_node
 from tri_planning.planning.models import (
     CalendarChange,
     PlannedSession,
@@ -122,3 +122,42 @@ async def test_refuses_without_tp_server(nocommit, make_deps):
     node = make_apply_node(make_deps(ScriptedChatModel(script=[]), tp=None))
     out = await node(state(gid, pid, [create()]), CFG)
     assert len(out["pending_changes"]) == 1 and "unavailable" in out["last_error"]
+
+
+async def test_apply_changes_direct_reports_sessions_changed_and_thread(nocommit, make_deps):
+    gid, pid = seed(nocommit, create_tp_event=True)
+    tp = FakeTp()
+    deps = make_deps(ScriptedChatModel(script=[]), tp=tp)
+    r = await apply_changes(deps, [create(0)], "coach", plan_id=pid, goal_id=gid)
+    assert isinstance(r, ApplyResult)
+    assert r.sessions_changed is True and r.remaining == [] and r.error is None
+    assert len(r.applied) == 1 and r.skipped == [] and r.tp_plan_applied is False
+    rows = nocommit.execute(
+        "select thread_id from plan_changes where plan_id = %s", (pid,)
+    ).fetchall()
+    assert [row["thread_id"] for row in rows] == ["coach"]
+    assert r.report(1).startswith("TrainingPeaks: applied 1 of 1 changes.")
+
+    goal = repo.get_goal(nocommit, gid).goal
+    r2 = await apply_changes(deps, [event_change(goal)], "coach", plan_id=pid, goal_id=gid)
+    assert r2.sessions_changed is False and len(r2.applied) == 1
+
+
+async def test_apply_changes_direct_holds_everything_without_tp(nocommit, make_deps):
+    gid, pid = seed(nocommit)
+    deps = make_deps(ScriptedChatModel(script=[]), tp=None)
+    r = await apply_changes(deps, [create(0), create(1, "B")], "coach", plan_id=pid, goal_id=gid)
+    assert r.applied == [] and len(r.remaining) == 2 and r.sessions_changed is False
+    assert r.error is not None and "unavailable" in r.error
+    assert "applied 0 of 2" in r.report(2) and "2 changes still pending" in r.report(2)
+
+
+async def test_apply_changes_direct_stops_at_failure(nocommit, make_deps):
+    gid, pid = seed(nocommit)
+    deps = make_deps(ScriptedChatModel(script=[]), tp=FakeTp(fail_on_call=2))
+    r = await apply_changes(
+        deps, [create(0), create(1, "B"), create(2, "C")], "coach", plan_id=pid, goal_id=gid
+    )
+    assert [c.workout.title for c in r.applied] == ["Ride"]
+    assert [c.workout.title for c in r.remaining] == ["B", "C"]
+    assert r.sessions_changed is True and "boom" in r.error
