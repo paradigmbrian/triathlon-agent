@@ -59,6 +59,7 @@ def seed_active(conn):
         tp_workout_id="w1",
         result={},
     )
+    repo.mark_weeks_written(conn, pid, [MONDAY])
     return gid, pid
 
 

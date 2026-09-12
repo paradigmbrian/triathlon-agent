@@ -147,14 +147,19 @@ def get_active_plan(conn: Conn, goal_id: int) -> StoredPlan | None:
 
 
 def derive_phase(conn: Conn) -> tuple[GraphPhase, int | None, int | None]:
-    """Where a run starts, from the tables: no active goal is intake; an active goal without an
-    active plan is planning; an active plan is active. Returns (phase, goal_id, plan_id)."""
+    """Where a run starts, from the tables: no active goal is intake; an active goal without a
+    plan on the calendar is planning; a plan with at least one week written to TrainingPeaks is
+    active. A plan row whose sessions were never applied (a design that failed or was never
+    approved) is still planning, with its plan_id, so the next run re-designs instead of
+    adjusting an empty calendar. Returns (phase, goal_id, plan_id)."""
     goal = get_active_goal(conn)
     if goal is None:
         return "intake", None, None
     plan = get_active_plan(conn, goal.id)
     if plan is None:
         return "planning", goal.id, None
+    if not any(w.written_to_tp for w in list_weeks(conn, plan.id)):
+        return "planning", goal.id, plan.id
     return "active", goal.id, plan.id
 
 

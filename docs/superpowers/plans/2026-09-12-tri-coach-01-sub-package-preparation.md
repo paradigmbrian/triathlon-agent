@@ -40,6 +40,7 @@
 - **Nutrition `ApplyResult` carries `held` and `profile_updated`** in addition to the spec's applied, skipped, remaining and error, because the node's report needs both and the coach's report (Plan 2) names held domains.
 - **The regenerate rule "carries no new `HumanMessage`"** is implemented as "the messages list is empty or its last message is not a `HumanMessage`". In a stateless consultation the list is empty; in the standalone graph `targets_requested` is always false at the start of a run (the `targets` node resets it), so the guard is a safety net, not a routing path.
 - **`GraphPhase = Literal["intake", "planning", "active"]`** is added to `tri_planning.planning.models` so `repo.derive_phase` and `PlanningState` share the type. `Phase` there remains the periodization phase.
+- **`derive_phase` treats a plan as active only once a week of it is on the calendar** (`plan_weeks.written_to_tp`). Spec §7.1 says "an active plan is `active`"; a plan row exists from the moment `targets` runs, before design or apply, so the literal reading would send a run that failed during design to `adjust` and make `check-in` skip its no-plan exit. A plan with nothing written is still `planning`, returned with its `plan_id` so `targets` re-enters and `design` runs again. Found in the final review; the planning `apply` node's own `phase: "active"` write after a clean apply is kept, since `route` overwrites it next run.
 
 ---
 
@@ -473,6 +474,9 @@ def test_derive_phase_from_tables(nocommit):
     assert repo.derive_phase(nocommit) == ("planning", gid, None)
     targets = [WeekTarget(week_start=MONDAY, phase="base", target_tss=300, target_hours=6)]
     pid = repo.insert_plan(nocommit, gid, "generated", None, targets)
+    # a plan row with nothing on the calendar yet is still planning, with its id
+    assert repo.derive_phase(nocommit) == ("planning", gid, pid)
+    repo.mark_weeks_written(nocommit, pid, [MONDAY])
     assert repo.derive_phase(nocommit) == ("active", gid, pid)
     repo.abandon_active(nocommit)
     assert repo.derive_phase(nocommit) == ("intake", None, None)
@@ -540,14 +544,19 @@ GraphPhase = Literal["intake", "planning", "active"]  # where a planning run sta
 
 ```python
 def derive_phase(conn: Conn) -> tuple[GraphPhase, int | None, int | None]:
-    """Where a run starts, from the tables: no active goal is intake; an active goal without an
-    active plan is planning; an active plan is active. Returns (phase, goal_id, plan_id)."""
+    """Where a run starts, from the tables: no active goal is intake; an active goal without a
+    plan on the calendar is planning; a plan with at least one week written to TrainingPeaks is
+    active. A plan row whose sessions were never applied (a design that failed or was never
+    approved) is still planning, with its plan_id, so the next run re-designs instead of
+    adjusting an empty calendar. Returns (phase, goal_id, plan_id)."""
     goal = get_active_goal(conn)
     if goal is None:
         return "intake", None, None
     plan = get_active_plan(conn, goal.id)
     if plan is None:
         return "planning", goal.id, None
+    if not any(w.written_to_tp for w in list_weeks(conn, plan.id)):
+        return "planning", goal.id, plan.id
     return "active", goal.id, plan.id
 ```
 

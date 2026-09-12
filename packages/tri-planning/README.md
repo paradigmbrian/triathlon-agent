@@ -18,9 +18,10 @@ flowchart TD
     START([START]) --> route
     route -->|pending_changes| review
     route -->|no active goal| intake
-    route -->|active goal, no plan| targets
-    route -->|active plan| adjust
+    route -->|active goal, nothing on the calendar| targets
+    route -->|plan on the calendar| adjust
 
+    route["route\nno model call\nphase and ids from the tables"]
     intake["intake\ncreate_agent sub-agent\nasks questions, calls set_training_goal"]
     targets["targets\npure Python\ngoal + fitness -> week targets"]
     design["design\nwith_structured_output(PlannedWeek)\none call per window week, validated"]
@@ -46,7 +47,7 @@ flowchart TD
 
 | Node | Model call | Writes | Reads | Returns |
 |---|---|---|---|---|
-| `route` | none | nothing | `training_goals`, `training_plans` | `phase`, `goal_id`, `plan_id` derived from the tables every run (a fresh thread and a stateless consultation start where the database says) |
+| `route` | none | nothing | `training_goals`, `training_plans`, `plan_weeks` | `phase`, `goal_id`, `plan_id` derived from the tables every run (a fresh thread and a stateless consultation start where the database says); phase is `active` only once a week is written to TrainingPeaks, `planning` when a plan row exists with nothing on the calendar |
 | `intake` | sub-agent loop with `query_training_db`, `list_tp_training_plans`, `set_training_goal` | `training_goals` (via the tool) | messages | new messages; `goal_id` and `phase: planning` once the goal is saved |
 | `targets` | none | `training_plans`, `plan_weeks` | goal, `daily_metrics` | `plan_id` and a summary message, or `pending_changes` for a bought plan |
 | `design` | one structured-output call per week in the horizon, plus one retry per week when the validator objects | `plan_weeks.designed` | goal, plan, thresholds | `pending_changes` (one `create` per session), `pending_summary` |

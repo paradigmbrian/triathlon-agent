@@ -128,9 +128,28 @@ def test_derive_phase_from_tables(nocommit):
     assert repo.derive_phase(nocommit) == ("planning", gid, None)
     targets = [WeekTarget(week_start=MONDAY, phase="base", target_tss=300, target_hours=6)]
     pid = repo.insert_plan(nocommit, gid, "generated", None, targets)
+    # a plan row with nothing on the calendar yet is still planning, with its id
+    assert repo.derive_phase(nocommit) == ("planning", gid, pid)
+    repo.mark_weeks_written(nocommit, pid, [MONDAY])
     assert repo.derive_phase(nocommit) == ("active", gid, pid)
     repo.abandon_active(nocommit)
     assert repo.derive_phase(nocommit) == ("intake", None, None)
+
+
+async def test_second_run_after_a_failed_design_redesigns(nocommit, make_deps, fake_tp):
+    # Run 1: intake and targets commit the goal and plan rows, then design has no scripted
+    # reply and raises. Run 2 must re-design, not adjust an empty calendar.
+    model = ScriptedChatModel(script=intake_script())
+    graph = build_graph(make_deps(model, tp=fake_tp), InMemorySaver())
+    with pytest.raises(IndexError):
+        await graph.ainvoke({"messages": [HumanMessage("Olympic Dec 13")]}, CFG)
+    phase, _, pid = repo.derive_phase(nocommit)
+    assert phase == "planning" and pid is not None
+    model.script.append(week_call(300))
+    out = await graph.ainvoke({"messages": [HumanMessage("try again")]}, CFG)
+    assert "__interrupt__" in out and model.calls == 3
+    assert (await graph.aget_state(CFG)).values["changes_from"] == "design"
+    assert fake_tp.calls == []
 
 
 async def test_fresh_thread_starts_where_the_tables_say(nocommit, make_deps, fake_tp):
