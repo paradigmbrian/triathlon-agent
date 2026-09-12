@@ -44,8 +44,8 @@ def test_get_panel_findings_latest_and_by_id(nocommit, tools):
     assert by_marker["cortisol_am"]["active_confounders"] == ["high_acute_load"]
     first = json.loads(findings_tool.invoke({"panel": str(p1)}))
     assert first["panel"]["id"] == p1 and first["findings"][0]["previous"] is None
-    assert "error" in json.loads(findings_tool.invoke({"panel": "999999"}))["error"]
-    assert "error" in json.loads(findings_tool.invoke({"panel": "x"}))["error"]
+    assert "error" in json.loads(findings_tool.invoke({"panel": "999999"}))
+    assert "error" in json.loads(findings_tool.invoke({"panel": "x"}))
 
 
 def test_get_panel_findings_without_panels(tools):

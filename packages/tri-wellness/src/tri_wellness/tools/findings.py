@@ -67,17 +67,15 @@ def make_findings_tools(connect: ConnectFactory, registry: MarkerRegistry) -> li
             if panel == "latest":
                 pid = repo.latest_panel_id(conn)
                 if pid is None:
-                    return _dump({"error": "error: no panels stored"})
+                    return _dump({"error": "no panels stored"})
             else:
                 try:
                     pid = int(panel)
                 except ValueError:
-                    return _dump(
-                        {"error": f"error: panel must be an id or 'latest', got {panel!r}"}
-                    )
+                    return _dump({"error": f"panel must be an id or 'latest', got {panel!r}"})
             stored = repo.get_panel(conn, pid)
             if stored is None:
-                return _dump({"error": f"error: no panel {pid}"})
+                return _dump({"error": f"no panel {pid}"})
             results = repo.lab_results_for_panel(conn, pid)
             previous = repo.previous_values(conn, pid)
             training = load_training_context(conn, stored.drawn_on)
