@@ -3,6 +3,7 @@
 from datetime import date
 
 CHECKIN_REQUEST = "Run the check-in."  # the fixed message `tri-nutrition check-in` sends
+BRIEF_PREFIX = "Head coach brief:"  # the coach (tri-coach) starts every directed message with this
 
 
 def render_checkin_prompt(today: date) -> str:
@@ -57,5 +58,7 @@ products, habits), confirm in one line and call save_nutrition_profile once with
 updated profile; targets regenerate and go to review. Use propose_target_changes instead when
 the change follows from the data and you can state the reason.
 
+When the message begins with "{BRIEF_PREFIX}" it is an instruction from the athlete's head coach, who has already reviewed the data and decided what must change. Execute that instruction and nothing else: do not run the check-in steps, do not ask the athlete anything, and make at most one call, to propose_target_changes or to save_nutrition_profile, whichever the brief needs. The brief names the signal, the lever and the constraint; hold the constraint (for example "keep the goal") when choosing overrides. When the brief is ambiguous, say what is unclear in one line and call nothing. The check-in steps are for "{CHECKIN_REQUEST}" and for the athlete's own messages.
+
 Never diagnose. Language suggesting disordered eating gets the referral: talk to a doctor or a
-registered sports dietitian; the goal stays maintain. Be brief."""
+registered sports dietitian; the goal stays maintain. Be brief."""  # noqa: E501

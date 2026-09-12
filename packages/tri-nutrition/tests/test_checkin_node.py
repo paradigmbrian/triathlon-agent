@@ -9,6 +9,7 @@ from tri_nutrition import store as S
 from tri_nutrition.graph.nodes.checkin import make_checkin_node, proposal_from_messages
 from tri_nutrition.graph.state import NutritionState
 from tri_nutrition.nutrition.models import NutritionProfile
+from tri_nutrition.prompts.checkin import BRIEF_PREFIX
 from tri_nutrition.testing import PROFILE_ARGS
 
 pytestmark = pytest.mark.db
@@ -94,3 +95,22 @@ async def test_fuel_feedback_turn_writes_log_and_sets_nothing(make_deps, mem_sto
     out = await graph.ainvoke({"messages": [HumanMessage("the long ride was fine at 70")]}, CFG)
     assert "targets_requested" not in out
     assert [e.carbs_g_per_h for e in await S.get_fuel_log(mem_store)] == [70]
+
+
+async def test_brief_turn_proposes_once_and_asks_nothing(make_deps, mem_store):
+    await S.put_profile(mem_store, NutritionProfile(**PROFILE_ARGS))
+    model = ScriptedChatModel(
+        script=[
+            propose({"activity_factor": 1.45}, "race block starts; training load up"),
+            AIMessage(content="Proposed activity factor 1.45 for the race block."),
+        ]
+    )
+    graph = one_node_graph(make_checkin_node(make_deps(model)), mem_store)
+    brief = (
+        f"{BRIEF_PREFIX} Training load rises 20 percent from Monday for the race block. Raise "
+        "activity_factor to 1.45; keep the goal and everything else."
+    )
+    out = await graph.ainvoke({"messages": [HumanMessage(brief)]}, CFG)
+    assert out["targets_requested"] is True and out["regenerate_from"] == "checkin"
+    assert out["profile_overrides"] == {"activity_factor": 1.45} and model.calls == 2
+    assert (await S.get_profile(mem_store)).activity_factor == 1.35  # nothing written yet
