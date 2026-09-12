@@ -267,5 +267,40 @@ async def _chat() -> None:
     )
 
 
+@app.command("eval")
+def eval_cmd(
+    prefix: str | None = typer.Option(
+        None, "--prefix", help="Experiment name prefix (default report-v<PROMPT_VERSION>)"
+    ),
+    recreate: bool = typer.Option(
+        False, "--recreate-dataset", help="Delete and re-create the LangSmith dataset"
+    ),
+) -> None:
+    """Run the report prompt over the LangSmith dataset and print the pass rate per evaluator
+    (exit 1 when any evaluator is below 100%)."""
+    raise typer.Exit(code=asyncio.run(_eval(prefix=prefix, recreate=recreate)))
+
+
+async def _eval(*, prefix: str | None, recreate: bool) -> int:
+    from tri_wellness.evals.run import run_eval
+    from tri_wellness.graph.llm import make_model
+
+    settings = _settings_or_exit()
+    if not settings.langsmith_api_key:
+        console.print("LANGSMITH_API_KEY is not set in .env", style="red")
+        return 2
+    if not settings.anthropic_api_key:
+        console.print("ANTHROPIC_API_KEY is not set in .env", style="red")
+        return 2
+    rates = await run_eval(
+        settings,
+        make_model(settings),
+        prefix=prefix,
+        recreate=recreate,
+        log=lambda m: _out(m + "\n"),
+    )
+    return 0 if rates and all(r == 1.0 for r in rates.values()) else 1
+
+
 if __name__ == "__main__":
     app()
