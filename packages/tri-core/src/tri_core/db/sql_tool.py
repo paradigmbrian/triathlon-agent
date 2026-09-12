@@ -128,7 +128,10 @@ def run_readonly_query(
     }
 
 
-def make_query_tool(url: str) -> BaseTool:
+def make_query_tool(url: str, extra_doc: str = "") -> BaseTool:
+    """The read-only SQL tool. `extra_doc` documents tables an agent adds (appended after
+    SCHEMA_DOC)."""
+
     @tool("query_training_db")
     def query_training_db(sql: str) -> str:
         """Run one read-only SQL SELECT against the athlete's training database and return JSON.
@@ -140,5 +143,6 @@ def make_query_tool(url: str) -> BaseTool:
         """
         return json.dumps(run_readonly_query(url, sql), default=str)
 
-    query_training_db.description = (query_training_db.description or "") + "\n" + SCHEMA_DOC
+    doc = SCHEMA_DOC + ("\n" + extra_doc if extra_doc else "")
+    query_training_db.description = (query_training_db.description or "") + "\n" + doc
     return query_training_db

@@ -100,3 +100,13 @@ def test_tool_wraps_query_as_json_text(url):
     text = tool.invoke({"sql": "select count(*) as n from sync_state"})
     data = json.loads(text)
     assert data["columns"] == ["n"]
+
+
+def test_make_query_tool_extra_doc_is_appended():
+    from tri_core.db.sql_tool import SCHEMA_DOC, make_query_tool
+
+    plain = make_query_tool("postgresql://x/y")
+    assert plain.description.endswith(SCHEMA_DOC)
+    extended = make_query_tool("postgresql://x/y", extra_doc="lab_panels: id, drawn_on")
+    assert extended.description.endswith("lab_panels: id, drawn_on")
+    assert SCHEMA_DOC in extended.description

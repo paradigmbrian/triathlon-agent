@@ -117,3 +117,8 @@ def test_ingest_checkpointer_missing_exits_2(monkeypatch, tiny_pdf):
     get_wellness_settings.cache_clear()
     assert result.exit_code == 2
     assert "checkpoint tables are missing" in result.output
+
+
+def test_help_lists_panels():
+    result = runner.invoke(app, ["--help"])
+    assert "panels" in result.output

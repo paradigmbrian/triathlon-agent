@@ -83,6 +83,14 @@ def ingest(
     raise typer.Exit(code=asyncio.run(_ingest(file, kind, drawn_on)))
 
 
+def _settings_or_exit() -> Any:
+    try:
+        return get_wellness_settings()
+    except ValidationError:
+        console.print("TRI_ATHLETE_SEX must be set to male or female in .env", style="red")
+        raise typer.Exit(code=2) from None
+
+
 async def _ingest(file: Path, kind: str | None, drawn_on: str | None) -> int:
     from tri_wellness.graph.checkpointer import SETUP_HINT, checkpointer_ready, open_checkpointer
     from tri_wellness.graph.deps import make_deps
@@ -106,11 +114,7 @@ async def _ingest(file: Path, kind: str | None, drawn_on: str | None) -> int:
         except ValueError:
             console.print("--drawn-on must be YYYY-MM-DD", style="red")
             return 2
-    try:
-        settings = get_wellness_settings()
-    except ValidationError:
-        console.print("TRI_ATHLETE_SEX must be set to male or female in .env", style="red")
-        return 2
+    settings = _settings_or_exit()
     if not settings.anthropic_api_key:
         console.print("ANTHROPIC_API_KEY is not set in .env", style="red")
         return 2
@@ -131,6 +135,18 @@ async def _ingest(file: Path, kind: str | None, drawn_on: str | None) -> int:
             out=_out,
             edit=make_editor(deps.registry),
         )
+
+
+@app.command()
+def panels() -> None:
+    """List stored panels: date, lab, result count, unmapped count, whether a report exists."""
+    from tri_core.db.connection import connect
+    from tri_wellness import repo
+    from tri_wellness.repl import render_panels
+
+    settings = _settings_or_exit()
+    with connect(settings.database_url) as conn:
+        console.print(render_panels(repo.list_panels(conn)), markup=False, highlight=False)
 
 
 if __name__ == "__main__":

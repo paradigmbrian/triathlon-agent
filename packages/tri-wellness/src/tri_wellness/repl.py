@@ -17,6 +17,7 @@ from tri_wellness.labs.models import (
     IngestDecision,
     LabResult,
     PanelContext,
+    PanelSummary,
     RawResult,
     Unmapped,
 )
@@ -404,3 +405,15 @@ async def run_ingest(
         out("rejected; nothing stored\n")
         return 2
     return 1
+
+
+def render_panels(summaries: list[PanelSummary]) -> str:
+    if not summaries:
+        return "no panels stored; run `tri-wellness ingest <file>`"
+    lines = [f"{'id':>4}  {'drawn':10}  {'lab':20}  {'results':>7}  {'unmapped':>8}  report"]
+    for s in summaries:
+        lines.append(
+            f"{s.id:>4}  {s.drawn_on.isoformat():10}  {(s.lab_name or '-'):20.20}  "
+            f"{s.result_count:>7}  {s.unmapped_count:>8}  {'yes' if s.has_report else 'no'}"
+        )
+    return "\n".join(lines)
