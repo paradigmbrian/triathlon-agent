@@ -1,6 +1,7 @@
 """The planning graph. Nodes are closures over GraphDeps; routing is pure functions over state.
 
-START -> route_start: pending changes -> review; intake | targets | adjust by phase
+START -> route -> route_start: pending changes -> review; intake | targets | adjust by the phase
+            derived from the tables
 intake   -> targets (goal saved) | END
 targets  -> review (bought plan) | design (generated) | END (bought plan adopted)
 design   -> review
@@ -23,6 +24,7 @@ from tri_planning.graph.nodes.apply import make_apply_node
 from tri_planning.graph.nodes.design import make_design_node
 from tri_planning.graph.nodes.intake import make_intake_node
 from tri_planning.graph.nodes.review import review_node
+from tri_planning.graph.nodes.route import make_route_node
 from tri_planning.graph.nodes.targets import make_targets_node
 from tri_planning.graph.state import PlanningState
 
@@ -72,8 +74,10 @@ def build_graph(deps: GraphDeps, checkpointer: BaseCheckpointSaver[Any]) -> Any:
     g.add_node("review", review_node)
     g.add_node("apply", make_apply_node(deps))
     g.add_node("adjust", make_adjust_node(deps))
+    g.add_node("route", make_route_node(deps))
 
-    g.add_conditional_edges(START, route_start, ["review", "intake", "targets", "adjust"])
+    g.add_edge(START, "route")
+    g.add_conditional_edges("route", route_start, ["review", "intake", "targets", "adjust"])
     g.add_conditional_edges("intake", after_intake, ["targets", END])
     g.add_conditional_edges("targets", after_targets, ["review", "design", END])
     g.add_edge("design", "review")

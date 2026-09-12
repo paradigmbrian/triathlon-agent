@@ -11,6 +11,7 @@ GoalType = Literal[
     "sprint", "olympic", "half_ironman", "ironman", "maintenance", "build", "recovery"
 ]
 Phase = Literal["base", "build", "peak", "taper", "race", "recovery"]
+GraphPhase = Literal["intake", "planning", "active"]  # where a planning run starts
 Sport = Literal["swim", "bike", "run", "brick", "strength", "rest"]
 Weekday = Literal["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 Intensity = Literal["recovery", "endurance", "tempo", "threshold", "vo2", "race"]

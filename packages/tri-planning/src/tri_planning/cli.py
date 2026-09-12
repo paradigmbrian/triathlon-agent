@@ -111,9 +111,10 @@ async def _chat(*, no_live: bool) -> None:
             snap = await graph.aget_state(cfg)
             values: dict[str, Any] = snap.values or {}
             with connect(settings.database_url) as conn:
+                phase, _, _ = repo.derive_phase(conn)
                 goal = repo.get_active_goal(conn)
                 if goal is None:
-                    return "no active goal; phase " + str(values.get("phase") or "intake")
+                    return f"no active goal; phase {phase}"
                 plan = repo.get_active_plan(conn, goal.id)
                 monday = week_monday(date.today())
                 actual = conn.execute(
@@ -124,7 +125,7 @@ async def _chat(*, no_live: bool) -> None:
                 g = goal.goal
                 lines = [
                     f"goal: {g.goal_type} {g.event_name or ''} {g.event_date or ''}".rstrip(),
-                    f"phase: {values.get('phase') or 'intake'}; next node: {snap.next or '-'}",
+                    f"phase: {phase}; next node: {snap.next or '-'}",
                 ]
                 if plan is not None:
                     weeks = repo.list_weeks(conn, plan.id)
@@ -186,15 +187,20 @@ def check_in(
 
 
 async def _check_in(*, yes: bool, no_sync: bool, no_live: bool) -> int:
+    from tri_core.db.connection import connect
     from tri_core.sync.runner import run_sync
+    from tri_planning import repo
     from tri_planning.checkin import run_checkin
 
+    settings = get_planning_settings()
     if not no_sync:
-        report = await run_sync(get_planning_settings(), log=lambda m: _out(m + "\n"))
+        report = await run_sync(settings, log=lambda m: _out(m + "\n"))
         if not report.ok:
             _out("check-in: sync had errors; continuing with existing data\n")
+    with connect(settings.database_url) as conn:
+        phase, _, _ = repo.derive_phase(conn)
     async with _open_graph(no_live=no_live) as graph:
-        return await run_checkin(graph, yes=yes, out=_out, thread_id=THREAD_ID)
+        return await run_checkin(graph, phase=phase, yes=yes, out=_out, thread_id=THREAD_ID)
 
 
 @app.command()

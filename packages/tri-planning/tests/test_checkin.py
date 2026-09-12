@@ -20,14 +20,12 @@ class StubGraph:
     def __init__(
         self,
         turns,
-        phase="active",
         next=(),
         pending_changes=(),
         state_after_approve=None,
     ):
         self.turns = list(turns)
         self.inputs = []
-        self.phase = phase
         self.next = tuple(next)
         self.pending_changes = list(pending_changes)
         self.state_after_approve = state_after_approve
@@ -43,7 +41,7 @@ class StubGraph:
     async def aget_state(self, config):
         if self.approved and self.state_after_approve is not None:
             return SimpleNamespace(values=dict(self.state_after_approve), next=())
-        values = {"phase": self.phase, "pending_changes": list(self.pending_changes)}
+        values = {"pending_changes": list(self.pending_changes)}
         return SimpleNamespace(values=values, next=self.next)
 
 
@@ -72,7 +70,7 @@ APPLIED = (
 async def test_checkin_pauses_without_yes():
     g = StubGraph([[INTERRUPT]])
     buf = []
-    assert await run_checkin(g, yes=False, out=buf.append) == 3
+    assert await run_checkin(g, phase="active", yes=False, out=buf.append) == 3
     assert g.inputs[0]["messages"][0].content == CHECKIN_PROMPT
     assert "w1" in "".join(buf) and "paused" in "".join(buf)
 
@@ -80,21 +78,22 @@ async def test_checkin_pauses_without_yes():
 async def test_checkin_yes_approves():
     g = StubGraph([[INTERRUPT], [APPLIED]])
     buf = []
-    assert await run_checkin(g, yes=True, out=buf.append) == 0
+    assert await run_checkin(g, phase="active", yes=True, out=buf.append) == 0
     assert isinstance(g.inputs[1], Command) and g.inputs[1].resume == {"action": "approve"}
 
 
 async def test_checkin_requires_active_plan():
-    g = StubGraph([], phase="intake")
+    g = StubGraph([])
     buf = []
-    assert await run_checkin(g, yes=True, out=buf.append) == 2 and "no active plan" in "".join(buf)
+    assert await run_checkin(g, phase="intake", yes=True, out=buf.append) == 2
+    assert "no active plan" in "".join(buf)
 
 
 async def test_checkin_no_changes_exits_zero():
     g = StubGraph(
         [[((), "updates", {"adjust": {"messages": [AIMessage(content="All on track.")]}})]]
     )
-    assert await run_checkin(g, yes=False, out=lambda s: None) == 0
+    assert await run_checkin(g, phase="active", yes=False, out=lambda s: None) == 0
 
 
 class RaisingStubGraph(StubGraph):
@@ -111,7 +110,7 @@ class RaisingStubGraph(StubGraph):
 async def test_checkin_returns_error_code_on_model_failure():
     g = RaisingStubGraph([])
     buf = []
-    assert await run_checkin(g, yes=False, out=buf.append) == 1
+    assert await run_checkin(g, phase="active", yes=False, out=buf.append) == 1
     assert "connection error" in "".join(buf)
 
 
@@ -119,7 +118,7 @@ async def test_checkin_refuses_a_review_it_did_not_produce():
     pending = [CalendarChange(op="delete", tp_workout_id="w1", reason="sick")]
     g = StubGraph([], next=("review",), pending_changes=pending)
     buf = []
-    assert await run_checkin(g, yes=True, out=buf.append) == 3
+    assert await run_checkin(g, phase="active", yes=True, out=buf.append) == 3
     text = "".join(buf)
     assert g.inputs == []  # no turn was run
     assert "a review is already pending" in text and "w1" in text
@@ -135,5 +134,5 @@ async def test_checkin_yes_reports_a_failed_apply():
         },
     )
     buf = []
-    assert await run_checkin(g, yes=True, out=buf.append) == 1
+    assert await run_checkin(g, phase="active", yes=True, out=buf.append) == 1
     assert "apply did not complete: TrainingPeaks server unavailable" in "".join(buf)

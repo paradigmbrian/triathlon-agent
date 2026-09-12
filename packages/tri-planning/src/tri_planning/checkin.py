@@ -17,8 +17,11 @@ from tri_planning.repl import Out, render_changes, run_turn
 EXIT_OK, EXIT_ERROR, EXIT_NO_PLAN, EXIT_PAUSED = 0, 1, 2, 3
 
 
-async def run_checkin(graph: Any, *, yes: bool, out: Out, thread_id: str = "planning") -> int:
-    """Run one check-in turn. See module docstring for exit codes."""
+async def run_checkin(
+    graph: Any, *, phase: str, yes: bool, out: Out, thread_id: str = "planning"
+) -> int:
+    """Run one check-in turn. `phase` is derived from the tables by the caller
+    (`repo.derive_phase`), not read from the thread. See module docstring for exit codes."""
     cfg = {"configurable": {"thread_id": thread_id}}
     snap = await graph.aget_state(cfg)
     values = snap.values or {}
@@ -38,7 +41,7 @@ async def run_checkin(graph: Any, *, yes: bool, out: Out, thread_id: str = "plan
         )
         out("check-in: a review is already pending; resolve it in `tri-planning chat` first\n")
         return EXIT_PAUSED
-    if values.get("phase") != "active":
+    if phase != "active":
         out("check-in: no active plan; run `tri-planning chat` to set a goal first\n")
         return EXIT_NO_PLAN
     printer = await run_turn(graph, {"messages": [HumanMessage(CHECKIN_PROMPT)]}, thread_id, out)

@@ -11,6 +11,7 @@ from tri_core.db.repo import Conn
 from tri_planning.planning.models import (
     CalendarChange,
     FitnessSnapshot,
+    GraphPhase,
     PlannedWeek,
     PlanWeekRow,
     StoredGoal,
@@ -143,6 +144,18 @@ def get_active_plan(conn: Conn, goal_id: int) -> StoredPlan | None:
         (goal_id,),
     ).fetchone()
     return _plan(row) if row else None
+
+
+def derive_phase(conn: Conn) -> tuple[GraphPhase, int | None, int | None]:
+    """Where a run starts, from the tables: no active goal is intake; an active goal without an
+    active plan is planning; an active plan is active. Returns (phase, goal_id, plan_id)."""
+    goal = get_active_goal(conn)
+    if goal is None:
+        return "intake", None, None
+    plan = get_active_plan(conn, goal.id)
+    if plan is None:
+        return "planning", goal.id, None
+    return "active", goal.id, plan.id
 
 
 def list_weeks(conn: Conn, plan_id: int) -> list[PlanWeekRow]:

@@ -46,7 +46,7 @@ def seed_active(conn):
 
 
 async def test_active_turn_proposes_reviews_and_applies(nocommit, make_deps):
-    gid, pid = seed_active(nocommit)
+    seed_active(nocommit)
     tp = FakeTp()
     model = ScriptedChatModel(
         script=[
@@ -70,7 +70,6 @@ async def test_active_turn_proposes_reviews_and_applies(nocommit, make_deps):
     graph = build_graph(
         make_deps(model, tp=tp, today=MONDAY + timedelta(days=1), horizon=3), InMemorySaver()
     )
-    await graph.aupdate_state(CFG, {"goal_id": gid, "plan_id": pid, "phase": "active"})
     out = await graph.ainvoke({"messages": [HumanMessage("I need Wednesday off")]}, CFG)
     assert out["__interrupt__"][0].value["changes"][0]["op"] == "move"
     out = await graph.ainvoke(Command(resume={"action": "approve"}), CFG)
@@ -84,7 +83,7 @@ async def test_active_turn_proposes_reviews_and_applies(nocommit, make_deps):
 
 
 async def test_reject_clears_pending_changes_and_returns_to_adjust(nocommit, make_deps):
-    gid, pid = seed_active(nocommit)
+    seed_active(nocommit)
     tp = FakeTp()
     model = ScriptedChatModel(
         script=[
@@ -110,7 +109,6 @@ async def test_reject_clears_pending_changes_and_returns_to_adjust(nocommit, mak
     graph = build_graph(
         make_deps(model, tp=tp, today=MONDAY + timedelta(days=1), horizon=3), InMemorySaver()
     )
-    await graph.aupdate_state(CFG, {"goal_id": gid, "plan_id": pid, "phase": "active"})
     out = await graph.ainvoke({"messages": [HumanMessage("I need Wednesday off")]}, CFG)
     assert out["__interrupt__"][0].value["changes"][0]["op"] == "move"
 

@@ -7,12 +7,12 @@ from typing import Annotated, Literal, TypedDict
 from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
 
-from tri_planning.planning.models import CalendarChange, ReviewDecision
+from tri_planning.planning.models import CalendarChange, GraphPhase, ReviewDecision
 
 
 class PlanningState(TypedDict, total=False):
     messages: Annotated[list[AnyMessage], add_messages]
-    phase: Literal["intake", "planning", "active"]
+    phase: GraphPhase
     goal_id: int | None
     plan_id: int | None
     pending_changes: list[CalendarChange]

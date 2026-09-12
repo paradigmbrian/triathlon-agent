@@ -8,7 +8,7 @@ from langgraph.types import Command
 from tri_core.testing import ScriptedChatModel, tool_call
 from tri_planning import repo
 from tri_planning.graph.graph import after_review, build_graph, route_start
-from tri_planning.planning.models import ReviewDecision
+from tri_planning.planning.models import ReviewDecision, TrainingGoal, WeekTarget
 from tri_planning.testing import GOAL_ARGS, MONDAY, FakeTp, week_json
 
 pytestmark = pytest.mark.db
@@ -120,6 +120,41 @@ async def test_bought_plan_path(nocommit, make_deps):
     assert [c[0] for c in tp.calls] == ["tp_apply_training_plan", "tp_get_workouts"]
     assert out["phase"] == "active" and out["plan_id"] is not None
     assert repo.owned_workout_ids(nocommit, out["plan_id"]) == {"w1", "w2"}
+
+
+def test_derive_phase_from_tables(nocommit):
+    assert repo.derive_phase(nocommit) == ("intake", None, None)
+    gid = repo.insert_goal(nocommit, TrainingGoal(**GOAL_ARGS))
+    assert repo.derive_phase(nocommit) == ("planning", gid, None)
+    targets = [WeekTarget(week_start=MONDAY, phase="base", target_tss=300, target_hours=6)]
+    pid = repo.insert_plan(nocommit, gid, "generated", None, targets)
+    assert repo.derive_phase(nocommit) == ("active", gid, pid)
+    repo.abandon_active(nocommit)
+    assert repo.derive_phase(nocommit) == ("intake", None, None)
+
+
+async def test_fresh_thread_starts_where_the_tables_say(nocommit, make_deps, fake_tp):
+    # An active goal with no plan: route -> targets -> design -> review. No intake call.
+    gid = repo.insert_goal(nocommit, TrainingGoal(**GOAL_ARGS))
+    model = ScriptedChatModel(script=[week_call(300)])
+    graph = build_graph(make_deps(model, tp=fake_tp), InMemorySaver())
+    out = await graph.ainvoke({"messages": [HumanMessage("continue")]}, CFG)
+    assert "__interrupt__" in out and model.calls == 1
+    values = (await graph.aget_state(CFG)).values
+    assert values["goal_id"] == gid and values["plan_id"] is not None
+    assert values["phase"] == "planning"
+
+
+async def test_stale_thread_phase_is_overwritten_by_the_tables(nocommit, make_deps, fake_tp):
+    # The checkpoint says active with ids that no longer exist; the tables say intake, so the
+    # run goes intake -> targets -> design -> review instead of asserting in adjust.
+    model = ScriptedChatModel(script=[*intake_script(), week_call(300)])
+    graph = build_graph(make_deps(model, tp=fake_tp), InMemorySaver())
+    await graph.aupdate_state(CFG, {"phase": "active", "goal_id": 999, "plan_id": 999})
+    out = await graph.ainvoke({"messages": [HumanMessage("Olympic Dec 13")]}, CFG)
+    assert "__interrupt__" in out and model.calls == 3
+    values = (await graph.aget_state(CFG)).values
+    assert values["phase"] == "planning" and values["goal_id"] != 999
 
 
 def test_route_functions():
