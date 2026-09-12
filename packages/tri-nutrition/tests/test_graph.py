@@ -138,12 +138,57 @@ def test_route_functions():
     assert route_start({"pending_changes": [1]}) == "review"
     assert route_start({"has_profile": False}) == "intake"
     assert route_start({"has_profile": True}) == "checkin"
+    # the coach's regenerate entry: the flag with no new athlete message goes straight to targets
+    assert route_start({"targets_requested": True, "has_profile": True}) == "targets"
+    assert (
+        route_start({"targets_requested": True, "has_profile": True, "messages": []}) == "targets"
+    )
+    ended = [HumanMessage("hi"), AIMessage(content="ok")]
+    assert (
+        route_start({"targets_requested": True, "has_profile": True, "messages": ended})
+        == "targets"
+    )
+    fresh = [HumanMessage("hi")]
+    assert (
+        route_start({"targets_requested": True, "has_profile": True, "messages": fresh})
+        == "checkin"
+    )
+    assert route_start({"pending_changes": [1], "targets_requested": True}) == "review"
     assert after_review({"review_decision": ReviewDecision(action="approve")}) == "apply"
     reject = ReviewDecision(action="reject")
     assert after_review({"review_decision": reject, "regenerate_from": "checkin"}) == "checkin"
     assert after_review({"review_decision": reject, "regenerate_from": "intake"}) == "intake"
     assert after_review({"review_decision": reject}) == "__end__"
     assert after_review({"review_decision": None}) == "__end__"
+
+
+async def test_embedded_graph_has_no_review_and_ends_with_pending_changes(
+    ndb, make_deps, mem_store
+):
+    g = FakeGarmin()
+    deps = make_deps(ScriptedChatModel(script=intake_script()), garmin=g, horizon=7)
+    graph = build_graph(deps, InMemorySaver(), mem_store, embedded=True)
+    assert "review" not in graph.nodes and "apply" not in graph.nodes
+    out = await graph.ainvoke({"messages": [HumanMessage("set up my nutrition")]}, CFG)
+    assert "__interrupt__" not in out and (await graph.aget_state(CFG)).next == ()
+    assert len(out["pending_changes"]) == 1 and "kcal" in out["pending_summary"]
+    assert out["regenerate_from"] == "intake" and g.calls == []
+
+
+async def test_regenerate_entry_routes_to_targets_and_ends_with_pending_changes(
+    ndb, make_deps, mem_store
+):
+    await S.put_profile(mem_store, NutritionProfile(**PROFILE_ARGS))
+    g = FakeGarmin()
+    deps = make_deps(ScriptedChatModel(script=[]), garmin=g, horizon=3)  # no model call at all
+    graph = build_graph(deps, InMemorySaver(), mem_store, embedded=True)
+    out = await graph.ainvoke({"targets_requested": True, "regenerate_from": "checkin"}, CFG)
+    assert "__interrupt__" not in out and (await graph.aget_state(CFG)).next == ()
+    assert [c.op for c in out["pending_changes"]] == ["set_day_targets"]
+    assert out["pending_changes"][0].day == MONDAY and g.calls == []
+    assert out["targets_requested"] is False and out["last_error"] is None
+    assert len(repo.list_targets(ndb, MONDAY, MONDAY + timedelta(days=2))) == 3
+    assert out.get("messages", []) == []  # nothing was said; the caller narrates
 
 
 async def test_intake_to_review_with_fuel_and_approve_writes_both_servers(
