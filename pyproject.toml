@@ -45,7 +45,7 @@ extend-exclude = ["docs"]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.ruff.lint.flake8-bugbear]
-extend-immutable-calls = ["typer.Argument"]
+extend-immutable-calls = ["typer.Argument", "typer.Option"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["tri_core", "tri_analyze", "tri_planning", "tri_nutrition", "tri_wellness"]

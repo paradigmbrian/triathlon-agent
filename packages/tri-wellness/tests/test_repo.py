@@ -177,3 +177,17 @@ def test_reports_roundtrip(wdb):
     latest = repo.latest_report_for_panel(wdb, pid)
     assert latest is not None and latest.id == r2 and latest.report_md == "# second"
     assert repo.get_report(wdb, r2 + 1000) is None
+
+
+def test_latest_report_before(wdb):
+    p1 = panel(wdb, D1, [lr("ferritin", 35.0)])
+    p2 = panel(wdb, D2, [lr("ferritin", 40.0)])
+    p3 = panel(wdb, D3, [lr("ferritin", 48.0)])
+    assert repo.latest_report_before(wdb, p1) is None
+    assert repo.latest_report_before(wdb, p2) is None  # p1 has no report yet
+    repo.insert_report(wdb, p1, "v", [], "# one")
+    r1b = repo.insert_report(wdb, p1, "v", [], "# one again")
+    repo.insert_report(wdb, p3, "v", [], "# three")
+    got = repo.latest_report_before(wdb, p2)
+    assert got is not None and got.id == r1b and got.report_md == "# one again"
+    assert repo.latest_report_before(wdb, p3).panel_id == p1  # p2 has none; falls back to p1

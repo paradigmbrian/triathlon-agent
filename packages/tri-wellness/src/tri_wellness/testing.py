@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,8 @@ from langchain_core.outputs import ChatResult
 from tri_core.db.models import DailyMetricsRow, WorkoutRow
 from tri_core.db.repo import Conn, upsert_daily_metrics, upsert_workouts
 from tri_core.testing import ScriptedChatModel
+from tri_wellness import repo
+from tri_wellness.labs.models import LabResult, PanelContext, RawResult
 
 FIXTURES = Path(__file__).resolve().parents[2] / "tests" / "fixtures"
 
@@ -101,3 +104,75 @@ class RecordingScriptedModel(ScriptedChatModel):
     ) -> ChatResult:
         self.received = [*self.received, list(messages)]
         return super()._generate(messages, stop, run_manager, **kwargs)
+
+
+def seed_panel(
+    conn: Conn,
+    drawn_on: date,
+    rows: list[tuple[str, float, str]],
+    lab: str | None = "Quest",
+    context: PanelContext | None = None,
+) -> int:
+    """One stored panel from (marker, value, unit) rows; the raw row is synthesized."""
+    results = [
+        LabResult(marker=m, value=v, unit=u, raw=RawResult(name=m, value=str(v), unit=u))
+        for m, v, u in rows
+    ]
+    return repo.insert_panel(
+        conn,
+        drawn_on=drawn_on,
+        lab_name=lab,
+        source_file=None,
+        source_kind="manual",
+        context=context or PanelContext(fasting=True),
+        raw_extract=[r.raw for r in results],
+        results=results,
+    )
+
+
+REPORT_OK = """\
+This is an educational interpretation of lab values against functional-medicine ranges for one \
+athlete, prepared for discussion with a qualified practitioner; it is not a diagnosis or a \
+prescription.
+
+## Draw conditions
+Fasted, 07:30 draw. Active confounders: recent hard session (long ride, 210 TSS, the day \
+before), which raises ferritin, hs-CRP and CK for 24-72 h; weight it heavily for those three.
+
+## By system
+### Iron
+Ferritin shows 42 ng/mL against a functional range of 50-150 (conventional in range, 30-400). \
+With hs-CRP mildly up, the pattern suggests true stores are lower still; the inflammation \
+confounder applies to ferritin as well as the recent hard session.
+### Inflammation
+hs-CRP shows 1.8 mg/L against a functional high of 1 (conventional under 3). The recent hard \
+session confounder applies.
+### Thyroid
+All optimal.
+### CBC
+All optimal.
+
+## Priorities
+1. Iron stores: ferritin 42 (functional 50-150) with a mild hs-CRP rise.
+2. Recovery: the draw followed a 210 TSS ride; retest rested before acting on CK.
+
+## Training implications
+Hold intensity for two weeks; keep long rides under 3 h until ferritin is retested.
+
+## Levers
+Red meat or heme iron three times a week, paired with vitamin C; no coffee within an hour of \
+iron-rich meals.
+
+## Supplements
+Iron bisglycinate 25 mg every other morning for 8 weeks, target ferritin above 50; retest \
+shows it worked. Discuss with your practitioner.
+
+## Retest plan
+Ferritin, hs-CRP, CBC in 8 weeks, fasted, 48 h after the last hard session.
+
+## Questions for your practitioner
+1. Is a full iron panel with transferrin saturation warranted now?
+
+## Changes since last panel
+Ferritin 35 -> 42 (+20.0%) since 2031-01-15.
+"""

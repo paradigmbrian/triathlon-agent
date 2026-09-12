@@ -10,6 +10,7 @@ from typing import Any
 
 import anthropic
 import yaml
+from langchain_core.messages import BaseMessage
 from langgraph.types import Command
 
 from tri_wellness.labs.models import (
@@ -417,3 +418,16 @@ def render_panels(summaries: list[PanelSummary]) -> str:
             f"{s.result_count:>7}  {s.unmapped_count:>8}  {'yes' if s.has_report else 'no'}"
         )
     return "\n".join(lines)
+
+
+def text_of(msg: BaseMessage) -> str:
+    content = msg.content
+    if isinstance(content, str):
+        return content
+    parts: list[str] = []
+    for block in content:
+        if isinstance(block, dict) and block.get("type") == "text":
+            parts.append(str(block.get("text", "")))
+        elif isinstance(block, str):
+            parts.append(block)
+    return "".join(parts)

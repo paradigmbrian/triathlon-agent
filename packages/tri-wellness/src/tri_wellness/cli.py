@@ -149,5 +149,35 @@ def panels() -> None:
         console.print(render_panels(repo.list_panels(conn)), markup=False, highlight=False)
 
 
+@app.command()
+def report(
+    panel: int | None = typer.Option(None, "--panel", help="Panel id (default: latest)"),
+    out: Path | None = typer.Option(None, "--out", help="Also write the markdown here"),
+) -> None:
+    """Evaluate a stored panel and write the interpretation (saved to lab_reports)."""
+    raise typer.Exit(code=asyncio.run(_report(panel, out)))
+
+
+async def _report(panel: int | None, out_path: Path | None) -> int:
+    from tri_core.db.connection import connect
+    from tri_wellness.graph.llm import make_model
+    from tri_wellness.ranges.registry import load_registry
+    from tri_wellness.report import run_report
+
+    settings = _settings_or_exit()
+    if not settings.anthropic_api_key:
+        console.print("ANTHROPIC_API_KEY is not set in .env", style="red")
+        return 2
+    url = settings.database_url
+    return await run_report(
+        make_model(settings),
+        lambda: connect(url),
+        load_registry(settings.tri_athlete_sex),
+        panel,
+        _out,
+        out_path,
+    )
+
+
 if __name__ == "__main__":
     app()

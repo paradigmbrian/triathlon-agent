@@ -253,3 +253,21 @@ def latest_report_for_panel(conn: Conn, panel_id: int) -> StoredReport | None:
         "select * from lab_reports where panel_id = %s order by id desc limit 1", (panel_id,)
     ).fetchone()
     return _report(row) if row else None
+
+
+def latest_report_before(conn: Conn, panel_id: int) -> StoredReport | None:
+    """The newest report of the most recent earlier panel that has one (earlier by
+    (drawn_on, id))."""
+    row = conn.execute(
+        """
+        with me as (select drawn_on, id from lab_panels where id = %s)
+        select x.* from lab_reports x
+        join lab_panels p on p.id = x.panel_id
+        cross join me
+        where (p.drawn_on, p.id) < (me.drawn_on, me.id)
+        order by p.drawn_on desc, p.id desc, x.id desc
+        limit 1
+        """,
+        (panel_id,),
+    ).fetchone()
+    return _report(row) if row else None
