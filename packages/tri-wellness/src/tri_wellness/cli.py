@@ -1,5 +1,4 @@
-"""Command-line entry points for the wellness agent: ingest (report, chat, panels arrive in
-Plan 3)."""
+"""Command-line entry points for the wellness agent: ingest, panels, report, chat."""
 
 from __future__ import annotations
 
@@ -176,6 +175,95 @@ async def _report(panel: int | None, out_path: Path | None) -> int:
         panel,
         _out,
         out_path,
+    )
+
+
+@app.command()
+def chat() -> None:
+    """Ask questions about stored panels and reports."""
+    asyncio.run(_chat())
+
+
+async def _chat() -> None:
+    from datetime import date
+
+    from langchain_core.tools import BaseTool
+
+    from tri_core.db.connection import connect
+    from tri_core.db.sql_tool import make_query_tool
+    from tri_wellness import repo
+    from tri_wellness.agent import build_agent
+    from tri_wellness.graph.llm import make_model
+    from tri_wellness.prompts.chat import render_chat_prompt
+    from tri_wellness.ranges.registry import load_registry
+    from tri_wellness.repl import chat_loop, render_panels
+    from tri_wellness.report import athlete_profile
+    from tri_wellness.tools.findings import WELLNESS_SCHEMA_DOC, make_findings_tools
+
+    settings = _settings_or_exit()
+    if not settings.anthropic_api_key:
+        console.print("ANTHROPIC_API_KEY is not set in .env", style="red")
+        raise typer.Exit(code=2)
+    url = settings.database_url
+    registry = load_registry(settings.tri_athlete_sex)
+    tools: list[BaseTool] = [
+        make_query_tool(url, WELLNESS_SCHEMA_DOC),
+        *make_findings_tools(lambda: connect(url), registry),
+    ]
+    with connect(url) as conn:
+        profile = athlete_profile(conn)
+        panels = repo.list_panels(conn)
+        latest = repo.latest_panel_id(conn)
+        latest_report = repo.latest_report_for_panel(conn, latest) if latest else None
+    prompt = render_chat_prompt(
+        profile, registry.sex, panels, latest_report, date.today(), [t.name for t in tools]
+    )
+    agent = build_agent(make_model(settings), tools, prompt)
+
+    async def read() -> str | None:
+        try:
+            return await asyncio.to_thread(console.input, "[bold cyan]you>[/] ")
+        except EOFError:
+            return None
+
+    async def cmd_panels(_: str) -> str:
+        with connect(url) as conn:
+            return render_panels(repo.list_panels(conn))
+
+    async def cmd_report(arg: str) -> str:
+        with connect(url) as conn:
+            if arg:
+                try:
+                    pid: int | None = int(arg)
+                except ValueError:
+                    return "usage: /report [panel id]"
+            else:
+                pid = repo.latest_panel_id(conn)
+            if pid is None:
+                return "no panels stored"
+            saved = repo.latest_report_for_panel(conn, pid)
+        if saved is None:
+            return f"no report for panel {pid}; run `tri-wellness report --panel {pid}`"
+        return (
+            f"report {saved.id} for panel {pid} ({saved.created_at.date()}):\n\n{saved.report_md}"
+        )
+
+    async def cmd_prompt(_: str) -> str:
+        return prompt
+
+    async def cmd_tools(_: str) -> str:
+        return "\n".join(f"- {t.name}: {t.description.splitlines()[0]}" for t in tools)
+
+    await chat_loop(
+        agent,
+        read=read,
+        out=_out,
+        commands={
+            "panels": cmd_panels,
+            "report": cmd_report,
+            "prompt": cmd_prompt,
+            "tools": cmd_tools,
+        },
     )
 
 

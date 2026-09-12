@@ -122,3 +122,8 @@ def test_ingest_checkpointer_missing_exits_2(monkeypatch, tiny_pdf):
 def test_help_lists_panels():
     result = runner.invoke(app, ["--help"])
     assert "panels" in result.output
+
+
+def test_help_lists_report_and_chat():
+    result = runner.invoke(app, ["--help"])
+    assert "report" in result.output and "chat" in result.output

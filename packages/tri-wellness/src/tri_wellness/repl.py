@@ -10,7 +10,13 @@ from typing import Any
 
 import anthropic
 import yaml
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import (
+    AIMessage,
+    AIMessageChunk,
+    BaseMessage,
+    HumanMessage,
+    ToolMessage,
+)
 from langgraph.types import Command
 
 from tri_wellness.labs.models import (
@@ -431,3 +437,87 @@ def text_of(msg: BaseMessage) -> str:
         elif isinstance(block, str):
             parts.append(block)
     return "".join(parts)
+
+
+ChatCommand = Callable[[str], Awaitable[str]]
+
+
+class TurnPrinter:
+    """Renders agent stream events: text streams inline, tool activity gets its own lines."""
+
+    def __init__(self, out: Out) -> None:
+        self.out = out
+        self.final_text = ""
+
+    def on_event(self, mode: str, data: Any) -> None:
+        if mode == "messages":
+            chunk, meta = data
+            if (
+                isinstance(chunk, AIMessageChunk | AIMessage)
+                and meta.get("langgraph_node") == "model"
+            ):
+                text = text_of(chunk)
+                if text:
+                    self.out(text)
+                    self.final_text += text
+            return
+        if mode == "updates" and isinstance(data, dict):
+            for node, payload in data.items():
+                for msg in (payload or {}).get("messages", []):
+                    if node == "model" and isinstance(msg, AIMessage):
+                        for tc in msg.tool_calls:
+                            self.out(f"\n→ {tc['name']}({tc['args']})\n")
+                        if not msg.tool_calls:
+                            self.final_text = text_of(msg) or self.final_text
+                            self.out("\n")
+                    elif node == "tools" and isinstance(msg, ToolMessage):
+                        self.out(f"← {msg.name}: {len(text_of(msg))} chars\n")
+
+
+async def run_chat_turn(agent: Any, text: str, thread_id: str, out: Out) -> str:
+    printer = TurnPrinter(out)
+    cfg = {"configurable": {"thread_id": thread_id}}
+    try:
+        async for mode, data in agent.astream(
+            {"messages": [HumanMessage(text)]}, config=cfg, stream_mode=["messages", "updates"]
+        ):
+            printer.on_event(mode, data)
+    except anthropic.RateLimitError as exc:
+        out(f"\n[rate limited: {exc}. Wait a moment and try again.]\n")
+    except anthropic.APIStatusError as exc:
+        out(f"\n[Anthropic API error {exc.status_code}: {exc.message}]\n")
+    except anthropic.APIConnectionError as exc:
+        out(f"\n[connection error talking to Anthropic: {exc}]\n")
+    return printer.final_text
+
+
+async def chat_loop(
+    agent: Any,
+    *,
+    read: Read,
+    out: Out,
+    thread_id: str = "wellness",
+    commands: dict[str, ChatCommand] | None = None,
+) -> None:
+    commands = dict(commands or {})
+    names = ", ".join(sorted(["quit", *commands]))
+    out(f"tri-wellness chat. Ask about your labs, /quit to exit, /<command> for: {names}\n")
+    while True:
+        line = await read()
+        if line is None:
+            out("\n")
+            return
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith("/"):
+            name, _, arg = line[1:].partition(" ")
+            if name == "quit":
+                return
+            handler = commands.get(name)
+            if handler is None:
+                out(f"unknown command: /{name}\n")
+                continue
+            out(await handler(arg.strip()) + "\n")
+            continue
+        await run_chat_turn(agent, line, thread_id, out)
