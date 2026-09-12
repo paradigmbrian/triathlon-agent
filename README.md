@@ -9,7 +9,7 @@ TrainingPeaks data, synced into a local Postgres store.
 | `packages/tri-analyze` | `tri_analyze` | `tri-analyze chat` | Analyst agent: feedback on completed sessions, trends. |
 | `packages/tri-planning` | `tri_planning` | `tri-planning chat` | Planning agent: goal intake, periodized plan, approved writes to the TrainingPeaks calendar. |
 | `packages/tri-nutrition` | `tri_nutrition` | `tri-nutrition chat \| today \| check-in \| eval` | Nutrition agent: profile intake, periodized daily targets and fueling plans, approved writes to Garmin Connect and TrainingPeaks. |
-| `packages/tri-wellness` | `tri_wellness` | `tri-wellness ingest \| report \| chat \| panels` | Lab interpreter: PDF and export ingest with review, functional-range evaluation, written interpretation grounded in training data. |
+| `packages/tri-wellness` | `tri_wellness` | `tri-wellness ingest \| report \| chat \| panels \| eval` | Lab interpreter: PDF and export ingest with review, functional-range evaluation, written interpretation grounded in training data. |
 
 `tri-analyze`, `tri-planning`, `tri-nutrition` and `tri-wellness` depend on `tri-core`; no agent depends on another.
 Repo: github.com/paradigmbrian/triathlon-agent.
@@ -74,6 +74,10 @@ uv run tri-planning chat [--no-live]    # plan; every TrainingPeaks write is app
 uv run tri-planning check-in [--yes] [--no-sync] [--no-live]   # sync, review last 7 days, propose; exit 3 when paused, 1 on a model error
 uv run tri-planning reset [--yes]       # abandon goal and plan, clear the thread
 uv run tri-wellness ingest <file.pdf|csv> [--kind pdf|export] [--drawn-on YYYY-MM-DD]   # extract, review, store a lab panel
+uv run tri-wellness report [--panel ID] [--out path.md]   # interpret a stored panel; saved to lab_reports
+uv run tri-wellness chat                                   # ask about panels and reports
+uv run tri-wellness panels                                 # list stored panels
+uv run tri-wellness eval [--recreate-dataset]              # LangSmith report evaluators
 ```
 
 In chat: `/tools` lists bound tools, `/prompt` prints the system prompt, `/sync` refreshes
@@ -132,7 +136,7 @@ packages/tri-core/      src/tri_core/{config,cli,mcp,db,sync,testing}
 packages/tri-analyze/   src/tri_analyze/{cli,allowlist,agent}
 packages/tri-planning/  src/tri_planning/{config,cli,repo,repl,testing,planning,graph,tools,prompts}
 packages/tri-nutrition/ src/tri_nutrition/{config,cli,repo,repl,store,plan_loader,testing,nutrition,graph,tools,prompts,evals}
-packages/tri-wellness/  src/tri_wellness/{config,cli,repo,repl,testing,ranges,labs,graph,prompts}
+packages/tri-wellness/  src/tri_wellness/{config,cli,repo,repl,report,agent,testing,ranges,labs,graph,prompts,tools,evals}
 docs/superpowers/       specs and implementation plans
 ```
 
@@ -151,3 +155,4 @@ Module-level READMEs: `packages/tri-core/src/tri_core/{mcp,db,sync}/README.md`,
   `scripts/design_eval.py --prompt-version v1` and record the `validator_pass` mean here).
 - tri-wellness milestone 1 (2026-09-11): ranges table, registry, normalize, evaluate, training context, lab tables; tracked in docs/superpowers/plans/2026-09-11-tri-wellness-0*.md.
 - tri-wellness milestone 2 (2026-09): PDF and export ingest with a checkpointed review; first real panel pending.
+- tri-wellness milestone 3 (2026-09): report, chat and panels commands; LangSmith report evaluators (pass rates in the package README).

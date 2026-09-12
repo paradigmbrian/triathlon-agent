@@ -7,7 +7,7 @@ sleep and recovery data tri-core syncs to Postgres. Design:
 `docs/superpowers/specs/2026-09-10-tri-wellness-design.md`. Plans:
 `docs/superpowers/plans/2026-09-11-tri-wellness-0*.md`.
 
-## After Plan 2
+## After Plan 3 (v1 complete)
 
 Pure layer, no model, no commands yet:
 
@@ -70,3 +70,19 @@ alias change needs a `reject` and a fresh run (or an `edit` that moves the row b
 Live check (needs a redacted panel and `TRI_WELLNESS_LIVE_PDF` in `.env`):
 `uv run pytest --live packages/tri-wellness/tests/test_live_pdf.py -s`. Findings from the first
 run: not run yet (no panel provided).
+
+- `tri-wellness report [--panel ID] [--out path.md]`: evaluates the panel (findings, previous
+  values, training context around the draw), renders one prompt and streams one model call.
+  Fixed structure: disclaimer, Draw conditions, By system, Priorities, Training implications,
+  Levers, Supplements, Retest plan, Questions for your practitioner, and Changes since last
+  panel when there is one. Saved to `lab_reports` with the findings and the ranges version;
+  re-running makes a new row.
+- `tri-wellness chat`: `create_agent` over `query_training_db` (schema extended with the lab
+  tables), `get_panel_findings`, `get_marker_spec` and `get_marker_history`. The system prompt
+  carries the athlete profile, the panel list, the latest report's priorities and retest plan,
+  and the report rules. `/panels`, `/report [ID]`, `/prompt`, `/tools`, `/quit`.
+- `tri-wellness panels`: one line per stored panel.
+- `tri-wellness eval`: runs the report prompt over the LangSmith dataset
+  `tri_wellness_reports` (four findings sets in `evals/cases.py`) with three code evaluators:
+  every non-optimal marker cites its functional range, the ten-section structure is present,
+  active confounders are named. Latest run: not run yet.
