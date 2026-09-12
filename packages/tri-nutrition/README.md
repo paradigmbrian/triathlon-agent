@@ -41,10 +41,11 @@ print(validate_targets(ts, p) or 'within bounds')
 
 ## The graph (Plan 2)
 
-`build_graph(deps, checkpointer, store)` compiles a LangGraph `StateGraph` over `NutritionState`
-with two kinds of persistence: the checkpointer saves the thread's state after every node (so a
-pause at `review` survives the process exiting), and the Store holds the athlete's profile, fuel
-log and product library under `("athlete", "nutrition")`, which outlive any thread.
+`build_graph(deps, checkpointer, store, *, embedded=False)` compiles a LangGraph `StateGraph`
+over `NutritionState` with two kinds of persistence: the checkpointer saves the thread's state
+after every node (so a pause at `review` survives the process exiting), and the Store holds the
+athlete's profile, fuel log and product library under `("athlete", "nutrition")`, which outlive
+any thread.
 
 ```mermaid
 flowchart TD
@@ -52,6 +53,7 @@ flowchart TD
     route -->|pending_changes| review
     route -->|no profile in the Store| intake
     route -->|profile exists| checkin
+    route -->|targets_requested, no new message| targets
     intake["intake\ncreate_agent sub-agent\nreads Garmin, asks, calls save_nutrition_profile"]
     checkin["checkin\ncreate_agent sub-agent\nthe check-in: intake vs targets, body, recovery, fuel log;\nsave_nutrition_profile or propose_target_changes"]
     targets["targets\npure Python\nprofile + plan -> DayTargets, Garmin change set"]
@@ -70,6 +72,15 @@ flowchart TD
     review -->|reject| checkin
     apply --> END4([END])
 ```
+
+**Regenerate entry and embedded mode.** Invoking the graph with `{"targets_requested": true,
+"regenerate_from": "checkin"}` and no message routes straight to `targets`, which rebuilds the
+horizon from the stored plan; the coach uses it after a plan change has been applied.
+`build_graph(..., embedded=True)` adds no `review` or `apply`: `fuel` ends the run and so does
+a targets violation, leaving `pending_changes` and `pending_summary` for the coach to review;
+writes then go through `apply_changes` in `graph/nodes/apply.py` with `thread_id="coach"`.
+The check-in prompt treats a message starting with `Head coach brief:` as a bounded instruction
+to execute and nothing else. `tri-nutrition today` is unchanged.
 
 The check-in reads through tools only: `read_intake_vs_targets` joins the Garmin food log to
 `nutrition_targets` per day (so the model reads deltas, not two lists), `read_body_composition`

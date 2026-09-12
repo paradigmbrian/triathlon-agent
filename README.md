@@ -156,3 +156,7 @@ Module-level READMEs: `packages/tri-core/src/tri_core/{mcp,db,sync}/README.md`,
 - tri-wellness milestone 1 (2026-09-11): ranges table, registry, normalize, evaluate, training context, lab tables; tracked in docs/superpowers/plans/2026-09-11-tri-wellness-0*.md.
 - tri-wellness milestone 2 (2026-09): PDF and export ingest with a checkpointed review; first real panel pending.
 - tri-wellness milestone 3 (2026-09): report, chat and panels commands; LangSmith report evaluators (pass rates in the package README).
+- tri-coach milestone 1 (2026-09-12): planning route node, embedded mode and `apply_changes` in
+  planning and nutrition, nutrition regenerate entry, directed prompt sections, tri-core
+  `open_live_servers` and `ToolsCaller`; tracked in
+  `docs/superpowers/plans/2026-09-12-tri-coach-01-sub-package-preparation.md`. Coach v1 pending.

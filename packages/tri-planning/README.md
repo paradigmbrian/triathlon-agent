@@ -7,18 +7,19 @@ Design: `docs/superpowers/specs/2026-09-07-tri-planning-design.md`. Plans:
 
 ## The graph
 
-`build_graph(deps, checkpointer)` compiles a LangGraph `StateGraph` over `PlanningState`. Each
-node is a function that takes the state and returns a partial update; LangGraph merges the
-update in (`messages` appends, every other key is replaced) and a route function picks the next
-node from the new state. The checkpointer saves the state after every node, so a pause at
-`review` survives the process exiting.
+`build_graph(deps, checkpointer, *, embedded=False)` compiles a LangGraph `StateGraph` over
+`PlanningState`. Each node is a function that takes the state and returns a partial update;
+LangGraph merges the update in (`messages` appends, every other key is replaced) and a route
+function picks the next node from the new state. The checkpointer saves the state after every
+node, so a pause at `review` survives the process exiting.
 
 ```mermaid
 flowchart TD
-    START([START]) -->|pending_changes| review
-    START -->|phase intake| intake
-    START -->|phase planning| targets
-    START -->|phase active| adjust
+    START([START]) --> route
+    route -->|pending_changes| review
+    route -->|no active goal| intake
+    route -->|active goal, no plan| targets
+    route -->|active plan| adjust
 
     intake["intake\ncreate_agent sub-agent\nasks questions, calls set_training_goal"]
     targets["targets\npure Python\ngoal + fitness -> week targets"]
@@ -45,6 +46,7 @@ flowchart TD
 
 | Node | Model call | Writes | Reads | Returns |
 |---|---|---|---|---|
+| `route` | none | nothing | `training_goals`, `training_plans` | `phase`, `goal_id`, `plan_id` derived from the tables every run (a fresh thread and a stateless consultation start where the database says) |
 | `intake` | sub-agent loop with `query_training_db`, `list_tp_training_plans`, `set_training_goal` | `training_goals` (via the tool) | messages | new messages; `goal_id` and `phase: planning` once the goal is saved |
 | `targets` | none | `training_plans`, `plan_weeks` | goal, `daily_metrics` | `plan_id` and a summary message, or `pending_changes` for a bought plan |
 | `design` | one structured-output call per week in the horizon, plus one retry per week when the validator objects | `plan_weeks.designed` | goal, plan, thresholds | `pending_changes` (one `create` per session), `pending_summary` |
@@ -54,6 +56,14 @@ flowchart TD
 
 Two invariants hold by construction: no TrainingPeaks write tool is ever bound to a model, and
 there is no edge into `apply` except from `review`.
+
+**Embedded mode.** `build_graph(..., embedded=True)` adds no `review` or `apply` node and sends
+every edge that would reach `review` to `END`, so the run ends with `pending_changes`,
+`pending_summary` and `changes_from` in the output state. The coach (`tri-coach`) runs the
+graph this way, reviews the proposal itself, and writes through `apply_changes` in
+`graph/nodes/apply.py` with `thread_id="coach"`. The adjust prompt treats a message starting
+with `Head coach brief:` as a bounded instruction to satisfy and nothing else; the review
+checklist is for `tri-planning check-in` and the athlete's own messages.
 
 ## Commands
 

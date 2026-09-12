@@ -11,8 +11,10 @@ the agent is allowed to call live. See also: [`../sync/README.md`](../sync/READM
 mcp/
   servers.py     ServerSpec + garmin_spec()/trainingpeaks_spec(): command, args, env
   client.py      McpToolClient (async ctx manager) + parse_tool_text(): programmatic calls
-  live_tools.py  Bind allow-listed MCP tools as LangChain tools over persistent sessions;
-                 the generic opener used by tri-analyze and tri-planning
+  live_tools.py  open_live_servers (tools per server) and open_live_tools (flattened); the
+                 generic opener used by tri-analyze, tri-planning and tri-coach
+  caller.py      ToolsCaller: a ToolCaller over adapter-bound tools, so one session serves both
+                 the model (BaseTools) and call_json (the sync/apply path)
   (allowlist.py) GARMIN_LIVE_TOOLS / TP_LIVE_TOOLS: what an agent may call live; one per
                  agent package (tri_analyze, tri_planning)
 ```
@@ -44,7 +46,12 @@ the ETL can call tools deterministically with no model in the loop.
 
 **Agent path (`live_tools.py`).** `langchain-mcp-adapters` opens its own session per server
 and converts tools into LangChain `BaseTool`s. Same servers, same specs, different consumer.
-Each agent package wraps `open_live_tools` with its own allow-lists.
+Each agent package wraps `open_live_tools` with its own allow-lists. `open_live_servers` yields
+the same tools grouped by server name (a dead server is absent), and `caller.ToolsCaller(tools)`
+turns one server's list into a `ToolCaller`: `call_json` finds the tool by name, awaits it, joins
+the adapter's text content blocks, and parses the text with `parse_tool_text`. That is how a
+process that already holds a session for the model also serves the graph deps' `tp` and `garmin`
+callers without a second subprocess (tri-coach).
 
 ## Result conventions (`parse_tool_text`)
 
