@@ -1,0 +1,18 @@
+from tri_coach.config import CoachSettings
+
+
+def test_defaults(monkeypatch):
+    monkeypatch.delenv("TRI_COACH_LANGSMITH_PROJECT", raising=False)
+    monkeypatch.delenv("TRI_COACH_MAX_CONSULTS_PER_DOMAIN", raising=False)
+    s = CoachSettings(_env_file=None)
+    assert s.tri_coach_langsmith_project == "tri_coach"
+    assert s.tri_coach_max_consults_per_domain == 2
+    assert s.database_url.endswith("/tri_analyze")  # inherited from tri_core Settings
+
+
+def test_env_override(monkeypatch):
+    monkeypatch.setenv("TRI_COACH_LANGSMITH_PROJECT", "coach-dev")
+    monkeypatch.setenv("TRI_COACH_MAX_CONSULTS_PER_DOMAIN", "3")
+    s = CoachSettings(_env_file=None)
+    assert s.tri_coach_langsmith_project == "coach-dev"
+    assert s.tri_coach_max_consults_per_domain == 3
