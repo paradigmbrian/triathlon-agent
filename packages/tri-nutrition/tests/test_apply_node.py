@@ -6,7 +6,7 @@ from langgraph.graph import END, START, StateGraph
 from tri_core.testing import ScriptedChatModel
 from tri_nutrition import repo
 from tri_nutrition import store as S
-from tri_nutrition.graph.nodes.apply import make_apply_node
+from tri_nutrition.graph.nodes.apply import ApplyResult, apply_changes, make_apply_node
 from tri_nutrition.graph.state import NutritionState
 from tri_nutrition.nutrition.garmin_calls import day_target_change
 from tri_nutrition.nutrition.models import DayTarget, NutritionProfile, RaceFuelPlan, SessionFuel
@@ -203,3 +203,47 @@ async def test_tp_failure_stops_batch_and_keeps_remainder(ndb, make_deps, mem_st
     )
     assert [c.target_key for c in out["pending_changes"]] == ["w1", "w2"]
     assert "boom" in out["last_error"]
+
+
+async def test_apply_changes_direct_records_thread_and_persists_overrides(
+    ndb, make_deps, mem_store
+):
+    await S.put_profile(mem_store, NutritionProfile(**PROFILE_ARGS))
+    repo.upsert_targets(ndb, [target()])
+    g = FakeGarmin()
+    deps = make_deps(ScriptedChatModel(script=[]), garmin=g)
+    r = await apply_changes(
+        deps, mem_store, [day_target_change(target())], "coach", overrides={"activity_factor": 1.5}
+    )
+    assert isinstance(r, ApplyResult)
+    assert [c.op for c in r.applied] == ["set_day_targets"]
+    assert r.remaining == [] and r.held == [] and r.skipped == [] and r.error is None
+    assert r.profile_updated is True
+    assert (await S.get_profile(mem_store)).activity_factor == 1.5
+    rows = ndb.execute("select thread_id from nutrition_changes").fetchall()
+    assert [row["thread_id"] for row in rows] == ["coach"]
+    text = r.report(1, {"activity_factor": 1.5})
+    assert text.startswith("Applied 1 of 1 changes (Garmin 1, TrainingPeaks 0).")
+    assert "profile updated" in text
+
+
+async def test_apply_changes_direct_holds_when_the_server_is_down(ndb, make_deps, mem_store):
+    deps = make_deps(ScriptedChatModel(script=[]), garmin=None)
+    r = await apply_changes(deps, mem_store, [day_target_change(target())], "coach", overrides=None)
+    assert r.applied == [] and len(r.remaining) == 1 and r.held == r.remaining
+    assert r.error is not None and "Garmin server unavailable" in r.error
+    assert r.profile_updated is False
+    assert "1 change(s) still pending" in r.report(1, None)
+
+
+async def test_apply_changes_direct_does_not_persist_overrides_on_partial(
+    ndb, make_deps, mem_store
+):
+    await S.put_profile(mem_store, NutritionProfile(**PROFILE_ARGS))
+    repo.upsert_targets(ndb, [target()])
+    deps = make_deps(ScriptedChatModel(script=[]), garmin=FakeGarmin(fail_on_call=1))
+    r = await apply_changes(
+        deps, mem_store, [day_target_change(target())], "coach", overrides={"activity_factor": 1.5}
+    )
+    assert r.error is not None and "boom" in r.error and r.profile_updated is False
+    assert (await S.get_profile(mem_store)).activity_factor == 1.35

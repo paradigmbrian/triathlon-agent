@@ -1,8 +1,11 @@
 """Apply node: the only place Garmin and TrainingPeaks are written. One call per change,
-recorded as it goes. `write_change` is shared with the `today` command."""
+recorded as it goes. `write_change` is shared with the `today` command; `apply_changes` is the
+batch the node and the coach both call."""
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from langchain_core.messages import AIMessage
@@ -91,70 +94,109 @@ def _server_down(deps: GraphDeps, change: NutritionChange) -> bool:
     )
 
 
+@dataclass
+class ApplyResult:
+    applied: list[NutritionChange]
+    skipped: list[str]
+    remaining: list[NutritionChange]
+    held: list[NutritionChange]  # a subset of remaining: the server for these was down
+    error: str | None
+    profile_updated: bool
+
+    def report(self, total: int, overrides: dict[str, Any] | None) -> str:
+        n_garmin = sum(1 for c in self.applied if c.op in GARMIN_OPS)
+        n_tp = sum(1 for c in self.applied if c.op in TP_OPS)
+        lines = [
+            f"Applied {len(self.applied)} of {total} changes "
+            f"(Garmin {n_garmin}, TrainingPeaks {n_tp})."
+        ]
+        lines += [f"  skipped: {s}" for s in self.skipped]
+        if self.profile_updated:
+            lines.append(f"  profile updated: {overrides}")
+        if self.error:
+            lines.append(f"  stopped: {self.error}")
+            lines.append(
+                f"  {len(self.remaining)} change(s) still pending; they will be re-proposed next "
+                "turn."
+            )
+        return "\n".join(lines)
+
+
+async def apply_changes(
+    deps: GraphDeps,
+    store: BaseStore,
+    changes: Sequence[NutritionChange],
+    thread_id: str,
+    *,
+    overrides: dict[str, Any] | None,
+) -> ApplyResult:
+    """Send each change to its server in order, recording every success in `nutrition_changes`
+    under `thread_id`. Changes whose server is down are held (kept in `remaining`); an ownership
+    refusal drops the change; a server error stops the batch. `overrides` are written to the
+    profile in the Store only when every change went through."""
+    todo = list(changes)
+    applied: list[NutritionChange] = []
+    skipped: list[str] = []
+    held: list[NutritionChange] = []
+    remaining = list(todo)
+    error: str | None = None
+    for change in todo:
+        if _server_down(deps, change):
+            held.append(change)
+            continue
+        try:
+            await write_change(deps, thread_id, change)
+        except PermissionError as exc:
+            skipped.append(f"{_label(change)}: {exc}; dropped")
+            remaining.remove(change)
+            continue
+        except (McpToolError, ValueError) as exc:
+            error = f"{_label(change)} failed: {exc}"
+            break
+        applied.append(change)
+        remaining.remove(change)
+    if error is None:
+        remaining = [c for c in remaining if c in held]
+    if held:
+        servers = sorted({"Garmin" if c.op in GARMIN_OPS else "TrainingPeaks" for c in held})
+        held_msg = (
+            f"{' and '.join(servers)} server unavailable; {len(held)} change(s) held pending."
+        )
+        error = held_msg if error is None else f"{error}; {held_msg}"
+
+    persisted = False
+    if error is None and not remaining and overrides:
+        base = await S.get_profile(store)
+        if base is not None:
+            await S.put_profile(store, apply_overrides(base, overrides))
+            persisted = True
+    return ApplyResult(
+        applied=applied,
+        skipped=skipped,
+        remaining=remaining,
+        held=held,
+        error=error,
+        profile_updated=persisted,
+    )
+
+
 def make_apply_node(deps: GraphDeps) -> Any:
     async def apply(
         state: NutritionState, config: RunnableConfig, *, store: BaseStore
     ) -> dict[str, Any]:
         changes = list(state.get("pending_changes") or [])
-        thread_id = str(config["configurable"]["thread_id"])
-        applied: list[NutritionChange] = []
-        skipped: list[str] = []
-        held: list[NutritionChange] = []
-        remaining = list(changes)
-        error: str | None = None
-        for change in changes:
-            if _server_down(deps, change):
-                held.append(change)
-                continue
-            try:
-                await write_change(deps, thread_id, change)
-            except PermissionError as exc:
-                skipped.append(f"{_label(change)}: {exc}; dropped")
-                remaining.remove(change)
-                continue
-            except (McpToolError, ValueError) as exc:
-                error = f"{_label(change)} failed: {exc}"
-                break
-            applied.append(change)
-            remaining.remove(change)
-        if error is None:
-            remaining = [c for c in remaining if c in held]
-        if held:
-            servers = sorted({"Garmin" if c.op in GARMIN_OPS else "TrainingPeaks" for c in held})
-            held_msg = (
-                f"{' and '.join(servers)} server unavailable; {len(held)} change(s) held pending."
-            )
-            error = held_msg if error is None else f"{error}; {held_msg}"
-
         overrides = state.get("profile_overrides")
-        persisted = False
-        if error is None and not remaining and overrides:
-            base = await S.get_profile(store)
-            if base is not None:
-                await S.put_profile(store, apply_overrides(base, overrides))
-                persisted = True
-
-        n_garmin = sum(1 for c in applied if c.op in GARMIN_OPS)
-        n_tp = sum(1 for c in applied if c.op in TP_OPS)
-        lines = [
-            f"Applied {len(applied)} of {len(changes)} changes "
-            f"(Garmin {n_garmin}, TrainingPeaks {n_tp})."
-        ]
-        lines += [f"  skipped: {s}" for s in skipped]
-        if persisted:
-            lines.append(f"  profile updated: {overrides}")
-        if error:
-            lines.append(f"  stopped: {error}")
-            lines.append(
-                f"  {len(remaining)} change(s) still pending; they will be re-proposed next turn."
-            )
+        r = await apply_changes(
+            deps, store, changes, str(config["configurable"]["thread_id"]), overrides=overrides
+        )
+        clean = r.error is None and not r.remaining
         return {
-            "pending_changes": remaining,
-            "pending_summary": state.get("pending_summary") if remaining else None,
-            "last_error": error,
+            "pending_changes": r.remaining,
+            "pending_summary": state.get("pending_summary") if r.remaining else None,
+            "last_error": r.error,
             "review_decision": None,
-            "profile_overrides": None if (error is None and not remaining) else overrides,
-            "messages": [AIMessage("\n".join(lines))],
+            "profile_overrides": None if clean else overrides,
+            "messages": [AIMessage(r.report(len(changes), overrides))],
         }
 
     return apply
