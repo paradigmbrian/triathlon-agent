@@ -6,7 +6,12 @@ from tri_core.db import repo as core_repo
 from tri_core.db.models import DailyMetricsRow, WorkoutRow
 from tri_planning import repo
 from tri_planning.planning.models import CalendarChange, PlannedSession, TrainingGoal, WeekTarget
-from tri_planning.prompts.adjust import AdjustContext, load_adjust_context, render_adjust_prompt
+from tri_planning.prompts.adjust import (
+    BRIEF_PREFIX,
+    AdjustContext,
+    load_adjust_context,
+    render_adjust_prompt,
+)
 from tri_planning.testing import GOAL_ARGS, MONDAY
 
 pytestmark = pytest.mark.db
@@ -169,3 +174,24 @@ def test_render_flags_rpe_and_feeling_and_lists_owned_ids():
     assert "Weeks already on the calendar from this week: 1 (horizon 3)." in text
     assert "Window extension needed: yes" in text and "design_next_week" in text
     assert text.index("Lever order") < text.index("Today is")  # stable rules first, data after
+
+
+def test_directed_section_is_stable_and_names_the_prefix():
+    ctx = AdjustContext(
+        today=date(2026, 9, 21),
+        goal=TrainingGoal(**GOAL_ARGS),
+        this_week=None,
+        next_week=None,
+        actual_tss_this_week=0,
+        sessions=[],
+        baseline={},
+        owned=[],
+        weeks_on_calendar=2,
+        horizon=3,
+        extension_needed=False,
+    )
+    text = render_adjust_prompt(ctx)
+    assert BRIEF_PREFIX == "Head coach brief:" and BRIEF_PREFIX in text
+    assert "smallest change set" in text and "ask one question" in text
+    assert "athlete_requested" in text.split("Directed briefs")[1]
+    assert text.index("Review checklist") < text.index("Directed briefs") < text.index("Today is")

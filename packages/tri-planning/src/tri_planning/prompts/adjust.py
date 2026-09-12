@@ -41,6 +41,21 @@ Rules:
 - Finish with exactly one call to propose_calendar_changes, or with a short message saying no
   changes are needed and why. Be concise: findings first, then the proposal."""
 
+BRIEF_PREFIX = "Head coach brief:"  # the coach (tri-coach) starts every directed message with this
+
+DIRECTED_RULES = f"""\
+Directed briefs:
+When the message begins with "{BRIEF_PREFIX}" it is an instruction from the athlete's head coach,
+who has already reviewed the data and decided what must change. Satisfy that instruction with the
+smallest change set that does it and nothing else: do not run the review checklist, do not propose
+changes the brief did not ask for, and do not call design_next_week unless the brief asks for the
+window to be extended. The brief names the signal, the lever and the constraint; hold the
+constraint (for example "keep weekly TSS within 10 percent of target" or "keep Saturday's ride")
+when choosing what to change. The lever order and the ownership rule still apply; set
+athlete_requested only when the brief says the athlete asked for that change. When the brief is
+ambiguous, ask one question in a short message and stop without calling propose_calendar_changes.
+The review checklist is for the scheduled check-in and for the athlete's own messages."""
+
 
 @dataclass
 class AdjustContext:
@@ -106,7 +121,7 @@ def _week_line(label: str, w: PlanWeekRow | None) -> str:
 
 
 def render_adjust_prompt(ctx: AdjustContext) -> str:
-    lines = [ADJUST_RULES, "", f"Today is {ctx.today.isoformat()}."]
+    lines = [ADJUST_RULES, "", DIRECTED_RULES, "", f"Today is {ctx.today.isoformat()}."]
     g = ctx.goal
     lines.append(
         f"Goal: {g.goal_type}"

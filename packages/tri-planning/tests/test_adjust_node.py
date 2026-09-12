@@ -16,6 +16,7 @@ from tri_planning.planning.models import (
     TrainingGoal,
 )
 from tri_planning.planning.targets import build
+from tri_planning.prompts.adjust import BRIEF_PREFIX
 from tri_planning.testing import GOAL_ARGS, MONDAY, FakeTp, week_json
 
 pytestmark = pytest.mark.db
@@ -242,3 +243,40 @@ async def test_adjust_binds_only_read_and_propose_tools(nocommit, make_deps, mon
     assert not any(
         name.startswith(("tp_create", "tp_update", "tp_delete", "tp_apply")) for name in bound[0]
     )
+
+
+async def test_directed_brief_ends_on_the_proposal_and_merges_the_designed_week(
+    nocommit, make_deps
+):
+    gid, pid, targets = seed(nocommit)
+    model = ScriptedChatModel(
+        script=[
+            tool_call("design_next_week", {}),
+            tool_call("PlannedWeek", week_json(MONDAY + timedelta(weeks=1), targets[1].target_tss)),
+            tool_call(
+                "propose_calendar_changes",
+                {
+                    "summary": "drop tempo",
+                    "changes": [
+                        {"op": "delete", "tp_workout_id": "w1", "reason": "knee pain reported"}
+                    ],
+                },
+                call_id="c2",
+            ),
+            AIMessage(content="Done."),
+        ]
+    )
+    node = make_adjust_node(
+        make_deps(model, tp=FakeTp(), today=MONDAY + timedelta(days=3), horizon=3)
+    )
+    brief = (
+        f"{BRIEF_PREFIX} Knee pain reported today. Drop w1 (Wednesday tempo run) and design "
+        "next week without running; hold weekly TSS within 10 percent of target."
+    )
+    out = await node(
+        {"goal_id": gid, "plan_id": pid, "phase": "active", "messages": [HumanMessage(brief)]},
+        CFG,
+    )
+    assert out["changes_from"] == "adjust" and out["pending_summary"] == "drop tempo"
+    assert [c.op for c in out["pending_changes"]] == ["create", "create", "create", "delete"]
+    assert repo.list_weeks(nocommit, pid)[1].designed is not None
