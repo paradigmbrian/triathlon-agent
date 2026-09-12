@@ -89,6 +89,7 @@ class Finding(BaseModel):
 
 
 UnmappedReason = Literal["name", "unit", "value", "duplicate"]
+BLOCKING_REASONS: frozenset[UnmappedReason] = frozenset({"unit", "value"})
 
 
 class Unmapped(BaseModel):

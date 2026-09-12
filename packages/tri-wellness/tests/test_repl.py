@@ -1,5 +1,7 @@
 from datetime import date, time
 
+import anthropic
+import httpx
 import pytest
 import yaml
 from langgraph.checkpoint.memory import InMemorySaver
@@ -17,6 +19,7 @@ from tri_wellness.repl import (
     review_from_yaml,
     review_to_yaml,
     run_ingest,
+    run_turn,
 )
 from tri_wellness.testing import load_extracted
 
@@ -139,7 +142,7 @@ def test_yaml_round_trip_and_validation():
     assert [r.model_dump(mode="json") for r in back["results"]] == payload()["results"]
     assert [u.model_dump(mode="json") for u in back["unmapped"]] == payload()["unmapped"]
     assert back["drawn_on"] == date(2026, 8, 20) and back["lab_name"] == "Quest"
-    assert back["context"] == PanelContext()  # the empty template counts as no edit
+    assert back["context"] is None  # the untouched, all-empty template counts as no edit
     # an unmapped row moved into results with a marker, value and the canonical unit
     doc = yaml.safe_load(text)
     row = doc["unmapped"].pop()
@@ -236,6 +239,103 @@ async def test_review_dialogue_paths():
     # no editor available
     d = await review_dialogue(payload(), reads(["edit", "reject"]), out.append, None)
     assert any("not available" in s for s in out)
+
+
+async def test_review_dialogue_edit_with_no_context_still_prompts_on_approve():
+    out = []
+
+    # an edit that only changed drawn_on: review_from_yaml now reports context as None
+    async def edit_drawn_on_only(p):
+        return {
+            "drawn_on": date(2026, 8, 21),
+            "results": None,
+            "unmapped": None,
+            "lab_name": None,
+            "context": None,
+        }
+
+    d = await review_dialogue(payload(), reads(["edit"]), out.append, edit_drawn_on_only)
+    assert d is not None and d.action == "edit" and d.context is None
+    assert d.drawn_on == date(2026, 8, 21)
+
+    # the review node would merge that edit and hand back a payload whose context is still
+    # None -- approve must run the six context prompts, not silently reuse an empty one
+    d = await review_dialogue(
+        payload(drawn_on="2026-08-21", context=None),
+        reads(["approve", "y", "07:30", "", "", "", ""]),
+        out.append,
+        None,
+    )
+    assert d is not None and d.action == "approve"
+    assert d.context is not None and d.context.fasting is True
+    assert not any("using the context from your edit" in s for s in out)
+
+
+async def test_review_dialogue_all_empty_context_dict_is_treated_as_absent():
+    out = []
+    empty_ctx = PanelContext().model_dump(mode="json")
+    d = await review_dialogue(
+        payload(context=empty_ctx),
+        reads(["approve", "n", "", "", "", "", ""]),
+        out.append,
+        None,
+    )
+    assert d is not None and d.action == "approve"
+    assert d.context is not None and d.context.fasting is False
+    assert not any("using the context from your edit" in s for s in out)
+
+
+async def test_run_turn_sets_error_on_api_connection_failure():
+    class RaisingGraph:
+        async def astream(self, payload, config=None, stream_mode=None):
+            raise anthropic.APIConnectionError(request=httpx.Request("POST", "https://x"))
+            yield  # pragma: no cover - makes this an async generator
+
+    out = []
+    result = await run_turn(RaisingGraph(), {"source_path": "x"}, "t1", out.append)
+    assert result.error is not None and "connection error" in result.error
+    assert any("connection error" in s for s in out)
+    assert result.interrupt is None
+
+
+async def test_run_turn_sets_error_on_unexpected_exception():
+    class RaisingGraph:
+        async def astream(self, payload, config=None, stream_mode=None):
+            raise RuntimeError("boom")
+            yield  # pragma: no cover - makes this an async generator
+
+    out = []
+    result = await run_turn(RaisingGraph(), {"source_path": "x"}, "t1", out.append)
+    assert result.error is not None and "boom" in result.error
+    assert any("boom" in s for s in out)
+
+
+async def test_run_ingest_returns_1_when_graph_raises(tiny_pdf):
+    class RaisingGraph:
+        async def aget_state(self, cfg):
+            class S:
+                values: dict = {}
+                next: tuple = ()
+
+            return S()
+
+        async def astream(self, payload, config=None, stream_mode=None):
+            raise RuntimeError("boom")
+            yield  # pragma: no cover - makes this an async generator
+
+    out = []
+    code = await run_ingest(
+        RaisingGraph(),
+        source_path=str(tiny_pdf),
+        source_kind="pdf",
+        drawn_on_hint=None,
+        thread_id="ingest:err",
+        read=reads([]),
+        out=out.append,
+        edit=None,
+    )
+    assert code == 1
+    assert any("boom" in s for s in out)
 
 
 @pytest.mark.db

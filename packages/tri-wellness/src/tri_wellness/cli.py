@@ -53,14 +53,15 @@ def make_editor(registry: Any) -> Any:
             f.write(review_to_yaml(payload))
             path = f.name
         try:
-            await asyncio.to_thread(subprocess.call, [editor, path])
+            try:
+                await asyncio.to_thread(subprocess.call, [editor, path])
+            except OSError as exc:
+                _out(f"could not run editor '{editor}': {exc}\n")
+                return None
             with open(path, encoding="utf-8") as fh:
                 return review_from_yaml(fh.read(), registry)
         except ValueError as exc:
             _out(f"edited YAML is not valid:\n{exc}\n")
-            return None
-        except OSError as exc:
-            _out(f"could not run editor '{editor}': {exc}\n")
             return None
         finally:
             os.unlink(path)

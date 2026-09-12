@@ -12,7 +12,14 @@ import anthropic
 import yaml
 from langgraph.types import Command
 
-from tri_wellness.labs.models import IngestDecision, LabResult, PanelContext, RawResult, Unmapped
+from tri_wellness.labs.models import (
+    BLOCKING_REASONS,
+    IngestDecision,
+    LabResult,
+    PanelContext,
+    RawResult,
+    Unmapped,
+)
 from tri_wellness.ranges.registry import MarkerRegistry
 
 Out = Callable[[str], None]
@@ -20,7 +27,6 @@ Read = Callable[[], Awaitable[str | None]]
 EditFn = Callable[[dict[str, Any]], Awaitable[dict[str, Any] | None]]
 
 REVIEW_PROMPT = "approve / edit / reject <note> / quit"
-BLOCKING_REASONS = ("unit", "value")
 
 
 def _rng(low: Any, high: Any) -> str:
@@ -240,7 +246,8 @@ def review_from_yaml(text: str, registry: MarkerRegistry) -> dict[str, Any]:
             problems.append(f"drawn_on: '{doc['drawn_on']}' is not YYYY-MM-DD")
     context: PanelContext | None = None
     try:
-        context = PanelContext.model_validate(doc.get("context") or {})
+        parsed_context = PanelContext.model_validate(doc.get("context") or {})
+        context = None if parsed_context == PanelContext() else parsed_context
     except ValueError as exc:
         problems.append(f"context: {exc}")
     if problems:
@@ -284,11 +291,12 @@ async def review_dialogue(
         if blocking:
             out(f"{len(blocking)} row(s) need a unit or value fix; edit or remove them first\n")
             continue
-        if payload.get("context"):
-            out("using the context from your edit\n")
-            return IngestDecision(
-                action="approve", context=PanelContext.model_validate(payload["context"])
-            )
+        payload_context = payload.get("context")
+        if payload_context is not None:
+            edited_context = PanelContext.model_validate(payload_context)
+            if edited_context != PanelContext():
+                out("using the context from your edit\n")
+                return IngestDecision(action="approve", context=edited_context)
         context = await collect_context(read, out)
         if context is None:
             return None
@@ -326,6 +334,8 @@ async def run_turn(
         result.error = f"Anthropic API error {exc.status_code}: {exc.message}"
     except anthropic.APIConnectionError as exc:
         result.error = f"connection error talking to Anthropic: {exc}"
+    except Exception as exc:
+        result.error = f"ingest failed: {type(exc).__name__}: {exc}"
     if result.error:
         out(f"[{result.error}]\n")
     return result

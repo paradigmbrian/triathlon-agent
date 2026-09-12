@@ -34,6 +34,8 @@ def test_parse_generic_csv():
     )
     assert panel.results[3].flag == "L"
     assert all(r.page is None for r in panel.results)
+    # a ragged trailing line (fewer cells than the header) is skipped, not a crash
+    assert len(panel.results) == 4
 
 
 def test_parse_generic_csv_without_date_or_lab(tmp_path):

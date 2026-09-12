@@ -150,4 +150,4 @@ Module-level READMEs: `packages/tri-core/src/tri_core/{mcp,db,sync}/README.md`,
   check-in; design-prompt validator pass rate: not yet measured (run
   `scripts/design_eval.py --prompt-version v1` and record the `validator_pass` mean here).
 - tri-wellness milestone 1 (2026-09-11): ranges table, registry, normalize, evaluate, training context, lab tables; tracked in docs/superpowers/plans/2026-09-11-tri-wellness-0*.md.
-- tri-wellness milestone 2 (2026-09): PDF and export ingest with a checkpointed review; first real panel stored.
+- tri-wellness milestone 2 (2026-09): PDF and export ingest with a checkpointed review; first real panel pending.

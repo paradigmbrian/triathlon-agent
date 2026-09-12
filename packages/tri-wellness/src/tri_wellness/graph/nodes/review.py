@@ -15,9 +15,7 @@ from langgraph.types import interrupt
 from tri_wellness import repo
 from tri_wellness.graph.deps import GraphDeps
 from tri_wellness.graph.state import IngestState
-from tri_wellness.labs.models import IngestDecision, Unmapped
-
-BLOCKING_REASONS = frozenset({"unit", "value"})
+from tri_wellness.labs.models import BLOCKING_REASONS, IngestDecision, Unmapped
 
 
 def blocking_rows(unmapped: list[Unmapped]) -> list[Unmapped]:

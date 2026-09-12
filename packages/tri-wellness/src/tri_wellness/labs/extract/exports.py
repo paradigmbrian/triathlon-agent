@@ -41,7 +41,7 @@ def _col(header: list[str], candidates: tuple[str, ...]) -> str | None:
 def _read_header(path: Path) -> list[str] | None:
     if path.suffix.lower() not in (".csv", ".tsv"):
         return None
-    with path.open(encoding="utf-8-sig", newline="") as fh:
+    with path.open(encoding="utf-8-sig", newline="", errors="replace") as fh:
         reader = csv.reader(fh, delimiter="\t" if path.suffix.lower() == ".tsv" else ",")
         return next(reader, None)
 
@@ -56,12 +56,12 @@ def detect_format(path: Path) -> str | None:
 def _cell(row: dict[str, str], col: str | None) -> str | None:
     if col is None:
         return None
-    v = row.get(col, "").strip()
+    v = (row.get(col) or "").strip()
     return v or None
 
 
 def parse_generic_csv(text: str, delimiter: str = ",") -> ExtractedPanel:
-    reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
+    reader = csv.DictReader(io.StringIO(text), delimiter=delimiter, restval="")
     header = list(reader.fieldnames or [])
     name, value = _col(header, NAME_COLS), _col(header, VALUE_COLS)
     assert name is not None and value is not None
@@ -99,7 +99,7 @@ def parse_export(path: Path) -> ExtractedPanel | None:
     model)."""
     if detect_format(path) == "generic_csv":
         delimiter = "\t" if path.suffix.lower() == ".tsv" else ","
-        return parse_generic_csv(path.read_text(encoding="utf-8-sig"), delimiter)
+        return parse_generic_csv(path.read_text(encoding="utf-8-sig", errors="replace"), delimiter)
     return None
 
 

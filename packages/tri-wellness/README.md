@@ -60,7 +60,8 @@ Extract, normalize, review, store:
   `$EDITOR` as YAML and re-validates; `reject` ends with nothing stored. Approve is refused
   while a row still has an unknown unit or a non-numeric value.
 - `tri-wellness ingest <file> [--kind pdf|export] [--drawn-on YYYY-MM-DD]`: exit 0 stored, 1
-  extraction or API error, 2 rejected, 3 paused (rerun to resume).
+  extraction or API error, 2 rejected (or a usage/setup problem: bad --kind or --drawn-on, unset
+  TRI_ATHLETE_SEX or ANTHROPIC_API_KEY, missing checkpoint tables), 3 paused (rerun to resume).
 
 Unmapped names are fixed by adding an alias to `ranges/markers.yaml`, then rerunning the same
 command: the thread resumes at review, so extraction is not repeated. Re-normalising after an

@@ -114,6 +114,23 @@ async def test_reject_stores_nothing_and_ends(nocommit, make_deps, tiny_pdf):
     assert repo.find_duplicate_panels(nocommit, date(2026, 8, 20), "Quest Diagnostics") == []
 
 
+async def test_rerun_after_reject_re_extracts(nocommit, make_deps, tiny_pdf):
+    fixture = load_extracted("pdf_panel")
+    model = ScriptedChatModel(
+        script=[tool_call("ExtractedPanel", fixture), tool_call("ExtractedPanel", fixture)]
+    )
+    graph = build_ingest_graph(make_deps(model), InMemorySaver())
+    c = cfg()
+    await graph.ainvoke(pdf_input(tiny_pdf), c)
+    rejected = await graph.ainvoke(Command(resume={"action": "reject", "note": "wrong file"}), c)
+    assert rejected["decision"] == "reject"
+    out = await graph.ainvoke(pdf_input(tiny_pdf), c)
+    assert model.calls == 2
+    assert "__interrupt__" in out
+    snap = await graph.aget_state(c)
+    assert snap.next == ("review",) and snap.values["decision"] is None
+
+
 async def test_approve_refused_until_unit_row_is_edited_away(nocommit, make_deps, tiny_pdf):
     graph = build_ingest_graph(make_deps(scripted("pdf_panel_bad_unit")), InMemorySaver())
     c = cfg()
