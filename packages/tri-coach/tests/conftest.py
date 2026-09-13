@@ -21,3 +21,13 @@ def ndb(nocommit):
     if nocommit.execute("select to_regclass('nutrition_targets') as t").fetchone()["t"] is None:
         pytest.skip("migrations/004_nutrition.sql not applied")
     return nocommit
+
+
+@pytest.fixture
+def make_deps(nocommit):
+    from tri_coach.testing import make_test_deps
+
+    def _make(**kw):
+        return make_test_deps(nocommit, **kw)
+
+    return _make
