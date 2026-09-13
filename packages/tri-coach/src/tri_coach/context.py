@@ -142,9 +142,11 @@ def _pending_line(pending: ChangeSet | None) -> str | None:
         return None
     n_plan = sum(len(p.changes) for p in pending.proposals if p.domain == "planning")
     n_nut = sum(len(p.changes) for p in pending.proposals if p.domain == "nutrition")
+    ids = ", ".join(p.id for p in pending.proposals)
     return (
         f"Pending change set from an earlier turn ({n_plan} planning, {n_nut} nutrition): "
-        f"{pending.narration} Re-propose it with propose_changes when the athlete wants it applied."
+        f"{pending.narration} Re-propose it with propose_changes using the ids {ids} when the "
+        "athlete wants it applied."
     )
 
 

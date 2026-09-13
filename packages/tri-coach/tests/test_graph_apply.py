@@ -140,6 +140,26 @@ async def test_bought_plan_is_adopted_after_apply(nocommit, make_deps, mem_store
     assert repo.derive_phase(nocommit)[0] == "active" and out["pending"] is None
 
 
+async def test_a_failing_adopt_is_reported_not_raised(nocommit, make_deps, mem_store):
+    repo.insert_goal(nocommit, TrainingGoal(**{**GOAL_ARGS, "tp_plan_id": "p1"}))
+    tp = FakeTp(fail_on_call=2)  # tp_apply_training_plan lands; the adopt's read blows up
+    graph, _ = graph_for(
+        make_deps,
+        mem_store,
+        tp=tp,
+        coach=[
+            consult("planning", "Activate the bought plan p1 from next Monday."),
+            propose("Apply the bought plan.", ["p1"]),
+        ],
+    )
+    await graph.ainvoke({"messages": [HumanMessage("use my bought plan")]}, CFG)
+    out = await graph.ainvoke(Command(resume={"action": "approve"}), CFG)
+    assert [c[0] for c in tp.calls] == ["tp_apply_training_plan", "tp_get_workouts"]
+    assert "boom" in out["last_error"] and "adopt" in out["last_error"]
+    assert out["reports"][0].applied == 1 and out["pending"] is None
+    assert (await graph.aget_state(CFG)).next == ()
+
+
 async def test_partial_apply_keeps_the_remainder_pending_and_shows_it_next_turn(
     nocommit, make_deps, mem_store, monkeypatch
 ):
@@ -185,9 +205,60 @@ async def test_partial_apply_keeps_the_remainder_pending_and_shows_it_next_turn(
     out = await graph.ainvoke(Command(resume={"action": "approve"}), CFG)
     assert out["reports"][0].applied == 0 and out["reports"][0].remaining == 2
     assert out["pending"] is not None and len(out["pending"].proposals[0].changes) == 2
+    assert out["pending"].proposals[0].id == "held-planning"
     assert "boom" in out["last_error"] and "stopped:" in out["messages"][-1].content
     await graph.ainvoke({"messages": [HumanMessage("what now?")]}, CFG)
     assert "Pending change set from an earlier turn (2 planning, 0 nutrition)" in prompts[-1]
+    assert "held-planning" in prompts[-1]
+
+
+async def test_a_held_remainder_can_be_re_proposed_by_its_id_next_turn(
+    nocommit, make_deps, mem_store
+):
+    seed_active_plan(nocommit)
+    tp = FakeTp(fail_on_call=1)
+    two_moves = tool_call(
+        "propose_calendar_changes",
+        {
+            "summary": "two moves",
+            "changes": [
+                {
+                    "op": "move",
+                    "tp_workout_id": "w1",
+                    "new_date": (MONDAY + timedelta(days=4)).isoformat(),
+                    "reason": "a",
+                },
+                {
+                    "op": "move",
+                    "tp_workout_id": "w1",
+                    "new_date": (MONDAY + timedelta(days=5)).isoformat(),
+                    "reason": "b",
+                },
+            ],
+        },
+    )
+    graph, _ = graph_for(
+        make_deps,
+        mem_store,
+        tp=tp,
+        coach=[
+            consult("planning", "x"),
+            propose("Two changes.", ["p1"]),
+            propose("Let us try the rest again.", ["held-planning"]),
+        ],
+        planning=[two_moves, AIMessage(content="ok")],
+    )
+    await graph.ainvoke({"messages": [HumanMessage("go")]}, CFG)
+    out = await graph.ainvoke(Command(resume={"action": "approve"}), CFG)
+    assert out["pending"].proposals[0].id == "held-planning"
+
+    out = await graph.ainvoke({"messages": [HumanMessage("try the rest again")]}, CFG)
+    assert "__interrupt__" in out, "the held remainder must reach review, not an unknown-id error"
+    payload = out["__interrupt__"][0].value
+    assert payload["proposals"][0]["id"] == "held-planning"
+    assert len(payload["proposals"][0]["changes"]) == 2
+    out = await graph.ainvoke(Command(resume={"action": "approve"}), CFG)
+    assert out["reports"][0].applied == 2 and out["pending"] is None
 
 
 async def test_start_clears_last_turns_proposals_but_not_pending(nocommit, make_deps, mem_store):

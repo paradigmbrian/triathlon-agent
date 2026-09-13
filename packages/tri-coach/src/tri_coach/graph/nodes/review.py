@@ -15,7 +15,10 @@ from tri_coach.models import ChangeSet, ReviewDecision
 
 def review_node(state: CoachState) -> dict[str, Any]:
     request = state.get("proposal_request")
-    proposals = {p.id: p for p in state.get("proposals") or []}
+    # This turn's proposals, plus anything a partial apply held under its stable id.
+    held = state.get("pending")
+    proposals = {p.id: p for p in (held.proposals if held else [])}
+    proposals.update({p.id: p for p in state.get("proposals") or []})
     if request is None:
         return {
             "messages": [
@@ -29,7 +32,8 @@ def review_node(state: CoachState) -> dict[str, Any]:
             "proposal_request": None,
             "messages": [
                 HumanMessage(
-                    f"[review] unknown proposal ids {what}; propose again with ids from this turn"
+                    f"[review] unknown proposal ids {what}; propose again with ids from this "
+                    "turn or a held id from the context block"
                 )
             ],
         }
