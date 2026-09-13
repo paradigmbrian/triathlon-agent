@@ -2,6 +2,7 @@
 
 import json
 from datetime import date
+from types import SimpleNamespace
 
 import pytest
 from langchain_core.messages import AIMessage
@@ -15,6 +16,14 @@ from tri_analyze.evals.evaluators import (
     render_judge_prompt,
     states_window,
     uses_sql,
+)
+from tri_analyze.evals.run import (
+    DATASET_NAME,
+    case_examples,
+    ensure_dataset,
+    errored,
+    pass_rates,
+    render_pass_rates,
 )
 from tri_analyze.evals.target import Canned, athlete_from_inputs, make_target, stub_tools
 from tri_analyze.prompts.analyst import FEEDBACK_RULES
@@ -288,3 +297,71 @@ async def test_a_raising_judge_scores_both_keys_zero_with_the_error():
         assert r.score == 0 and str(r.comment).startswith("judge failed: IndexError")
     assert {r.key for r in res["results"]} == {"grounded", "feedback_quality"}
     assert FeedbackJudgement.model_fields.keys() == verdict().keys()
+
+
+class FakeClient:
+    def __init__(self) -> None:
+        self.names: set[str] = set()
+        self.created: list[str] = []
+        self.examples: list[dict] = []
+        self.deleted = 0
+
+    def has_dataset(self, dataset_name):
+        return dataset_name in self.names
+
+    def delete_dataset(self, dataset_name):
+        self.names.discard(dataset_name)
+        self.deleted += 1
+
+    def create_dataset(self, name, description):
+        self.names.add(name)
+        self.created.append(name)
+
+    def create_examples(self, dataset_name, examples):
+        self.examples += examples
+
+
+def test_dataset_examples_are_created_once_and_recreated_on_request():
+    examples = case_examples()
+    assert DATASET_NAME == "tri_analyze_feedback" and len(examples) == len(CASES)
+    assert examples[0]["inputs"] == CASES[0].inputs()
+    assert examples[0]["outputs"] == CASES[0].outputs()
+    assert examples[0]["metadata"] == {"case": CASES[0].name}
+    client = FakeClient()
+    ensure_dataset(client)
+    ensure_dataset(client)
+    assert client.created == [DATASET_NAME] and len(client.examples) == len(CASES)
+    ensure_dataset(client, recreate=True)
+    assert client.deleted == 1 and client.created == [DATASET_NAME, DATASET_NAME]
+
+
+def test_pass_rates_skip_none_and_rendering_names_the_prompt_version():
+    def R(key, score):
+        return SimpleNamespace(key=key, score=score)
+
+    rows = [
+        {
+            "evaluation_results": {
+                "results": [R("uses_sql", 1), R("pulls_splits", None), R("grounded", 0)]
+            }
+        },
+        {
+            "evaluation_results": {
+                "results": [R("uses_sql", 0), R("pulls_splits", 1), R("grounded", 1)]
+            }
+        },
+    ]
+    rates = pass_rates(rows)
+    assert rates == {"uses_sql": 0.5, "pulls_splits": 1.0, "grounded": 0.5}
+    text = render_pass_rates(rates, 2)
+    assert text.startswith("pass rate over 2 examples (prompt version 1):")
+    assert "uses_sql" in text and "50%" in text and "100%" in text
+
+
+def test_errored_counts_rows_whose_run_carries_an_error():
+    rows = [
+        {"run": SimpleNamespace(error=None)},
+        {"run": SimpleNamespace(error="IndexError: list index out of range")},
+        {"run": SimpleNamespace(error="")},
+    ]
+    assert errored(rows) == 1 and errored([]) == 0
