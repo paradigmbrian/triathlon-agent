@@ -237,6 +237,32 @@ async def test_ask_analyst_runs_the_analyst_on_a_throwaway_thread(nocommit):
     assert await ask.ainvoke({"question": "again?"}) == "Fresh answer."
 
 
+@pytest.mark.db
+async def test_ask_analyst_passes_the_context_and_the_analyst_sees_its_prompt(nocommit):
+    from langchain_core.messages import SystemMessage
+
+    from tri_analyze.testing import RecordingScriptedModel
+
+    @tool
+    def query_training_db(sql: str) -> str:
+        """fake db tool"""
+        return "[]"
+
+    analyst = RecordingScriptedModel(script=[AIMessage(content="Nothing synced yet.")])
+    ask = make_analyst_tool(
+        analyst,
+        [query_training_db],
+        lambda: contextlib.nullcontext(nocommit),
+        lambda: date(2026, 9, 14),
+    )
+    assert await ask.ainvoke({"question": "how was the week?"}) == "Nothing synced yet."
+    system = analyst.received[0][0]
+    assert isinstance(system, SystemMessage)
+    assert "Today is 2026-09-14." in system.content
+    assert "Athlete thresholds: not available (run `tri sync`)." in system.content
+    assert "Tools bound this session: query_training_db." in system.content
+
+
 def test_last_ai_text_takes_the_last_answer_without_tool_calls():
     calls = AIMessage(
         content="", tool_calls=[{"name": "x", "args": {}, "id": "c1", "type": "tool_call"}]
