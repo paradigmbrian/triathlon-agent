@@ -113,8 +113,9 @@ and feeling, readiness and HRV against baseline, TSB, designed weeks, logged int
 targets, weight trend, and targets remaining. It writes a `checkin` memory entry that lasts two
 weeks, then proposes or reports a clean week. Exit codes match `tri-planning check-in`: 0 done,
 1 a model error or an incomplete apply, 2 neither an active plan nor a nutrition profile, and
-3 paused, or refused while a review or a held change set is pending. `--yes` approves the change
-set and its follow-on, at most two gates.
+3 paused, or refused while a review or a held change set is pending or the thread stopped mid-run.
+`--yes` approves the change set and its nutrition follow-on, at most two gates; a second gate that
+is not the nutrition follow-on pauses.
 
 ## Evaluation
 
