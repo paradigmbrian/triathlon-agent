@@ -10,6 +10,7 @@ from tri_coach.evals.evaluators import (
     no_unrequested_adjustment,
     routing_accuracy,
 )
+from tri_coach.evals.run import DATASET_NAME, case_examples, ensure_dataset, render_pass_rates
 from tri_coach.evals.target import classify, make_target, stub_tools
 from tri_coach.prompts.coach import CHECKIN_REQUEST
 from tri_coach.tools.analyst import make_analyst_tool
@@ -144,3 +145,44 @@ async def test_brief_judge_scores_every_brief_and_skips_a_turn_without_one():
     assert "no constraint named" in res["comment"]
     res = await make_brief_judge(ScriptedChatModel(script=[]))(c.inputs(), {"briefs": []})
     assert res["score"] is None
+
+
+class FakeClient:
+    def __init__(self) -> None:
+        self.names: set[str] = set()
+        self.created: list[str] = []
+        self.examples: list[dict] = []
+        self.deleted = 0
+
+    def has_dataset(self, dataset_name):
+        return dataset_name in self.names
+
+    def delete_dataset(self, dataset_name):
+        self.names.discard(dataset_name)
+        self.deleted += 1
+
+    def create_dataset(self, name, description):
+        self.names.add(name)
+        self.created.append(name)
+
+    def create_examples(self, dataset_name, examples):
+        self.examples += examples
+
+
+def test_dataset_examples_are_created_once_and_recreated_on_request():
+    examples = case_examples()
+    assert DATASET_NAME == "tri_coach_routing" and len(examples) == len(CASES)
+    assert examples[0]["outputs"] == CASES[0].outputs()
+    assert examples[0]["metadata"] == {"case": CASES[0].name}
+    client = FakeClient()
+    ensure_dataset(client)
+    ensure_dataset(client)
+    assert client.created == [DATASET_NAME] and len(client.examples) == len(CASES)
+    ensure_dataset(client, recreate=True)
+    assert client.deleted == 1 and client.created == [DATASET_NAME, DATASET_NAME]
+
+
+def test_render_pass_rates_names_the_prompt_version():
+    text = render_pass_rates({"routing_accuracy": 0.75, "brief_quality": 1.0}, 13)
+    assert text.startswith("pass rate over 13 examples (prompt version 3):")
+    assert "routing_accuracy" in text and "75%" in text and "100%" in text

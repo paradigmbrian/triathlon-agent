@@ -1,4 +1,4 @@
-"""Command-line entry points for the head coach: chat, check-in, memory, reset."""
+"""Command-line entry points for the head coach: chat, check-in, memory, reset, eval."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ load_dotenv()
 os.environ["LANGSMITH_PROJECT"] = get_coach_settings().tri_coach_langsmith_project
 
 app = typer.Typer(
-    help="Head coach: one conversation over the analyst, planning and nutrition",
+    help="Head coach: one conversation over the analyst, wellness, planning and nutrition",
     no_args_is_help=True,
 )
 console = Console()
@@ -255,6 +255,45 @@ async def _memory(*, forget: str | None) -> int:
             else "nothing remembered yet\n"
         )
         return 0
+
+
+@app.command(name="eval")
+def eval_cmd(
+    judge: bool = typer.Option(True, "--judge/--no-judge", help="Also run the brief judge"),
+    prefix: str | None = typer.Option(
+        None, "--prefix", help="Experiment name prefix (default coach-v<PROMPT_VERSION>)"
+    ),
+    recreate: bool = typer.Option(
+        False,
+        "--recreate-dataset",
+        help="Delete and re-create the LangSmith dataset from the cases in code",
+    ),
+) -> None:
+    """Run the coach over the routing dataset in LangSmith and print the pass rate per evaluator
+    (exit 1 when any evaluator is below 100%)."""
+    raise typer.Exit(code=asyncio.run(_eval(judge=judge, prefix=prefix, recreate=recreate)))
+
+
+async def _eval(*, judge: bool, prefix: str | None, recreate: bool) -> int:
+    from tri_coach.evals.run import run_eval
+    from tri_coach.graph.llm import make_model
+
+    settings = get_coach_settings()
+    if not settings.langsmith_api_key:
+        console.print("LANGSMITH_API_KEY is not set in .env", style="red")
+        return 2
+    if not settings.anthropic_api_key:
+        console.print("ANTHROPIC_API_KEY is not set in .env", style="red")
+        return 2
+    rates = await run_eval(
+        settings,
+        make_model(settings),
+        judge=judge,
+        prefix=prefix,
+        recreate=recreate,
+        log=lambda m: _out(m + "\n"),
+    )
+    return 0 if rates and all(r == 1.0 for r in rates.values()) else 1
 
 
 @app.command()
