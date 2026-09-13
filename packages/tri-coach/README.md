@@ -26,7 +26,7 @@ block from the tables and both Store namespaces, then the athlete memory.
 ```mermaid
 flowchart TD
     START([START]) --> start["start\nclears last turn's brief, proposals, decision"]
-    start --> coach["coach\ncreate_agent sub-agent\nask_analyst, consult_planning, consult_nutrition,\npropose_changes, remember, forget"]
+    start --> coach["coach\ncreate_agent sub-agent\nask_analyst, ask_wellness, consult_planning, consult_nutrition,\npropose_changes, remember, forget"]
     coach -->|turn ended in conversation| END1([END])
     coach ==>|Command: consult_planning| planning["planning\ntri-planning graph, embedded,\nfresh InMemorySaver per run"]
     coach ==>|Command: consult_nutrition| nutrition["nutrition\ntri-nutrition graph, embedded"]
@@ -51,7 +51,7 @@ beside a handoff in the same step could never be answered, so the sub-agent's mo
 | Node | Model call | Reads | Writes | Returns |
 |---|---|---|---|---|
 | `start` | none | nothing | nothing | clears `brief`, `proposals`, `proposal_request`, `review_decision`, `reports`; keeps `pending` |
-| `coach` | sub-agent loop | tables and both Store namespaces (context), coach memory | coach memory (via `remember`/`forget`) | new messages, or a `Command` from a tool |
+| `coach` | sub-agent loop | tables, both Store namespaces and the lab tables (context), coach memory | coach memory (via `remember`/`forget`) | new messages, or a `Command` from a tool |
 | `planning` | the embedded planning graph | `brief` | planning's working tables (as a standalone run would before review) | `proposals` + one, the handoff result message |
 | `nutrition` | the embedded nutrition graph | `brief` | nutrition's working tables, the profile on intake | same |
 | `review` | none | `proposal_request`, `proposals`, the held `pending` | nothing before the interrupt | `pending`, `review_decision`; a reject note as a `HumanMessage` |
@@ -75,6 +75,20 @@ whole active list is rendered into the prompt; entries whose `until` has passed 
 from the rendering and stay in the Store until forgotten. `reset --forget-memory` deletes the
 key. Nutrition's namespace is read for the context block and never written by the coach.
 
+## Wellness consult
+
+`ask_wellness` runs `tri-wellness`'s chat agent the way `ask_analyst` runs the analyst: on a
+throwaway thread, with wellness's own prompt (profile, stored panels, the latest report's
+priorities and retest plan) and its read-only tools (`query_training_db` with the lab schema
+doc, `get_panel_findings`, `get_marker_spec`, `get_marker_history`). The context block carries
+one `Labs:` line from the latest panel and report: draw date and lab, whether a report exists,
+how many markers sit outside the optimal functional band, and the report's Priorities. A lab
+finding that bears on load or fueling is named as the signal in a planning or nutrition brief;
+the sub-agents never read lab tables. The coach never runs `ingest` or `report`.
+
+`TRI_ATHLETE_SEX` is optional for the coach: unset, the tool is not bound and the line says labs
+are not configured.
+
 ## Sessions
 
 One Garmin process (`GARMIN_ENABLED_TOOLS` set to the union of the analyst's, planning's and
@@ -82,10 +96,11 @@ nutrition's lists) and one TrainingPeaks process, opened with
 `tri_core.mcp.live_tools.open_live_servers`. The bound tools go to the analyst (its read-only
 lists plus nutrition's `read_body_composition`) and to planning's adjust sub-agent; a
 `ToolsCaller` per server goes to planning's and nutrition's deps for their read tools and
-`apply_changes`.
+`apply_changes`. Wellness needs no session: it reads Postgres only.
 
 ## Status
 
 - Coach v1 (2026-09): chat, memory, reset; handoffs, review gate, apply dispatch, bought-plan
   adoption. Live test (`tests/test_live.py --live`): not yet run.
-- Milestone 3 (check-in, post-apply nutrition regeneration, routing dataset and eval): pending.
+- Wellness consult (2026-09): ask_wellness, the lab line in the context block, prompt v2.
+- Milestone 4 (check-in, post-apply nutrition regeneration, routing dataset and eval): pending.
