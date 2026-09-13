@@ -3,8 +3,15 @@
 import json
 from datetime import date
 
+import pytest
+from langchain_core.messages import AIMessage
+
+from tri_analyze.allowlist import GARMIN_LIVE_TOOLS, TP_LIVE_TOOLS
 from tri_analyze.evals.cases import CASES, EXTRA_TOOLS, KINDS, TODAY, EvalCase, jsonable
+from tri_analyze.evals.target import Canned, athlete_from_inputs, make_target, stub_tools
 from tri_analyze.repo import AthleteContext
+from tri_core.db.sql_tool import make_query_tool
+from tri_core.testing import ScriptedChatModel, tool_call
 
 
 def case(name: str) -> EvalCase:
@@ -55,3 +62,86 @@ def test_jsonable_converts_nested_dates():
         "ftp_watts": 250
     }
     assert jsonable([date(2026, 1, 2), 3, "x"]) == ["2026-01-02", 3, "x"]
+
+
+def test_athlete_round_trips_through_inputs():
+    for c in CASES:
+        assert athlete_from_inputs(c.inputs()) == c.athlete, c.name
+
+
+def test_stub_names_and_order_match_the_real_binding():
+    live = [t.name for t in stub_tools({"live": True})]
+    assert live == ["query_training_db", *GARMIN_LIVE_TOOLS, *TP_LIVE_TOOLS]
+    assert [t.name for t in stub_tools({"live": False})] == ["query_training_db"]
+    coach = [t.name for t in stub_tools({"live": True, "extra_tools": list(EXTRA_TOOLS)})]
+    assert coach == [*live, *EXTRA_TOOLS]
+    only_extra = stub_tools({"live": False, "extra_tools": ["read_intake_vs_targets"]})
+    assert [t.name for t in only_extra] == ["query_training_db", "read_intake_vs_targets"]
+
+
+def test_stub_sql_description_equals_the_real_tool_and_arguments_are_named_like_the_real_ones():
+    stubs = {t.name: t for t in stub_tools({"live": True, "extra_tools": list(EXTRA_TOOLS)})}
+    real = make_query_tool("postgresql://unused/db")
+    assert stubs["query_training_db"].description == real.description
+    assert set(stubs["query_training_db"].args) == set(real.args) == {"sql"}
+    assert set(stubs["get_activity"].args) == {"activity_id"}
+    assert set(stubs["get_activity_splits"].args) == {"activity_id"}
+    assert set(stubs["get_training_readiness"].args) == {"date"}
+    assert set(stubs["get_hrv_data"].args) == {"date"}
+    assert set(stubs["tp_get_workout"].args) == {"workout_id"}
+    assert set(stubs["read_body_composition"].args) == {"days"}
+    assert set(stubs["read_intake_vs_targets"].args) == {"days"}
+    for name, t in stubs.items():
+        assert t.description.strip(), name
+
+
+def test_every_case_only_cans_results_for_tools_it_binds():
+    for c in CASES:
+        bound = {t.name for t in stub_tools(c.inputs())}
+        assert set(c.tool_results) <= bound, c.name
+
+
+def test_canned_serves_in_order_repeats_the_last_and_defaults_to_empty():
+    canned = Canned({"query_training_db": ["[1]", "[2]"]})
+    assert [canned("query_training_db") for _ in range(3)] == ["[1]", "[2]", "[2]"]
+    assert canned("get_activity") == "[]"
+
+
+async def test_stubs_answer_from_the_case():
+    c = case("run_intervals")
+    stubs = {t.name: t for t in stub_tools(c.inputs())}
+    assert (
+        await stubs["query_training_db"].ainvoke({"sql": "select 1"})
+        == c.tool_results["query_training_db"][0]
+    )
+    assert (
+        await stubs["get_activity_splits"].ainvoke({"activity_id": "g-1502"})
+        == c.tool_results["get_activity_splits"][0]
+    )
+    assert await stubs["tp_get_workout"].ainvoke({"workout_id": "w"}) == "[]"
+
+
+async def test_target_returns_the_calls_and_the_final_answer():
+    c = case("run_intervals")
+    model = ScriptedChatModel(
+        script=[
+            tool_call(
+                "query_training_db",
+                {"sql": "select * from workouts where workout_date = '2026-09-15'"},
+                "c1",
+            ),
+            tool_call("get_activity_splits", {"activity_id": "g-1502"}, "c2"),
+            AIMessage(content="Reps 1-4 held 4:10-4:18/km; 5 and 6 drifted to 4:24 and 4:32."),
+        ]
+    )
+    out = await make_target(model)(c.inputs())
+    assert model.calls == 3
+    assert [x["name"] for x in out["calls"]] == ["query_training_db", "get_activity_splits"]
+    assert out["calls"][1]["args"] == {"activity_id": "g-1502"}
+    assert out["answer"].startswith("Reps 1-4 held")
+
+
+async def test_target_propagates_an_exception_so_langsmith_records_an_error():
+    c = case("last_z2_ride")
+    with pytest.raises(IndexError):
+        await make_target(ScriptedChatModel(script=[]))(c.inputs())
