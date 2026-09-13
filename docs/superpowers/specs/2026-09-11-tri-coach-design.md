@@ -1,7 +1,7 @@
 # tri-coach — The Coaching Orchestrator (package `tri_coach`)
 
 **Date:** 2026-09-11
-**Status:** Approved design; milestones 1 and 2 merged (plans 01, 02; `main` at 00ed820 on 2026-09-13); milestone 3, the wellness consult, in progress (plan 03); revised 2026-09-13 to compose `tri-wellness` as a read-only consult (see §4, §6.3, §6.4, §6.6, §9, §10, §11, §13, §14)
+**Status:** Approved design; milestones 1 to 3 merged (plans 01 to 03; `main` at 354ef39 on 2026-09-13); milestone 4, check-in and follow-on, in progress (plan 04); revised 2026-09-13 to compose `tri-wellness` as a read-only consult (see §4, §6.3, §6.4, §6.6, §9, §10, §11, §13, §14)
 **Purpose:** The agent the athlete talks to. It answers questions by consulting the analyst and, for lab work, the wellness interpreter; it decides on its own authority when a change to the training plan or the nutrition targets is warranted, briefs the planning and nutrition agents to produce that change, and presents one change set for approval. It is the sole decider: sub-agents never initiate a change under the coach.
 
 Companion specs: `tri-analyze` (2026-09-06), `tri-planning` (2026-09-07), `tri-nutrition` (2026-09-10). Both the planning and nutrition specs deferred "an orchestrator composing the agents as subgraphs" to this spec. The `tri-wellness` spec (2026-09-10) is composed here as a read-only consult (§6.6), added 2026-09-13; it deferred "findings flowing into planning intake as constraints" to a later spec, and the coach's briefs are how that now happens.

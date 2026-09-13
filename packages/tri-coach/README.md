@@ -9,6 +9,8 @@ set for approval. Nothing is written to Garmin or TrainingPeaks until the athlet
 
 ```
 uv run tri-coach chat [--no-live]              # the conversation; /status /memory /pending /tools /prompt /sync /quit
+uv run tri-coach check-in [--yes] [--no-sync] [--no-live]   # sync, the weekly checklist, one change set; exit 3 when paused
+uv run tri-coach eval [--judge/--no-judge] [--prefix P] [--recreate-dataset]   # the LangSmith routing eval
 uv run tri-coach memory [--forget ID]          # print the coach's athlete memory, or remove one entry
 uv run tri-coach reset [--yes] [--forget-memory]   # clear the coach thread (and optionally its memory)
 ```
@@ -34,8 +36,9 @@ flowchart TD
     nutrition --> coach
     coach ==>|Command: propose_changes| review["review\ninterrupt()\napprove / reject <note> / edit"]
     review -->|approve or edit| apply["apply\nplanning.apply_changes then nutrition.apply_changes\nthread_id coach"]
-    review -->|reject, or unknown ids| coach
-    apply --> END2([END])
+    review -->|reject, unknown ids, or no changes| coach
+    apply -->|planning moved sessions and targets exist| nutrition
+    apply -->|otherwise| END2([END])
 ```
 
 Double arrows are `Command(goto=..., graph=Command.PARENT)` returned by a tool inside the
@@ -53,9 +56,9 @@ beside a handoff in the same step could never be answered, so the sub-agent's mo
 | `start` | none | nothing | nothing | clears `brief`, `proposals`, `proposal_request`, `review_decision`, `reports`; keeps `pending` |
 | `coach` | sub-agent loop | tables, both Store namespaces and the lab tables (context), coach memory | coach memory (via `remember`/`forget`) | new messages, or a `Command` from a tool |
 | `planning` | the embedded planning graph | `brief` | planning's working tables (as a standalone run would before review) | `proposals` + one, the handoff result message |
-| `nutrition` | the embedded nutrition graph | `brief` | nutrition's working tables, the profile on intake | same |
+| `nutrition` | the embedded nutrition graph | `brief` | nutrition's working tables, the profile on intake | same; on the regenerate brief, the targets entry and a "[follow-on]" message |
 | `review` | none | `proposal_request`, `proposals`, the held `pending` | nothing before the interrupt | `pending`, `review_decision`; a reject note as a `HumanMessage` |
-| `apply` | none | `pending` | TrainingPeaks and Garmin through the packages' `apply_changes`, their audit rows with `thread_id = "coach"` | `reports`, the remainder in `pending` under `held-planning` / `held-nutrition`, one report message |
+| `apply` | none | `pending` | TrainingPeaks and Garmin through the packages' `apply_changes`, their audit rows with `thread_id = "coach"` | `reports`, the remainder in `pending` under `held-planning` / `held-nutrition`, one report message; regenerate_after_apply and a regenerate brief when planning moved sessions and targets exist in the horizon |
 
 Invariants by construction: no write tool is ever bound to a model; the only path into either
 package's `apply_changes` is `apply`, reached only from `review`; the embedded graphs contain
@@ -90,6 +93,39 @@ the sub-agents never read lab tables. The coach never runs `ingest` or `report`.
 are not configured. If it is set but `migrations/005_wellness.sql` has not been applied, the
 line says the lab tables are missing instead of misreading that as no panels stored.
 
+## Follow-on gate
+
+Nutrition targets are built from the stored plan, so a plan change and its nutrition consequence
+are two gates in one command. When the apply node sees planning move sessions without error and
+`nutrition_targets` has rows in the horizon, it sets `regenerate_after_apply` and routes to
+`nutrition` with a regenerate brief. That brief skips the sub-agent and runs the graph's targets
+entry. The result comes back to the coach as a `[follow-on]` message: the coach narrates it and
+proposes again, or says the targets stand. Applied proposals are consumed, so the follow-on
+proposal is `p1`. Held proposals a change set does not name stay pending through an approve or a
+reject. Review refuses a proposal without changes. An exception inside one domain's apply is
+reported and its changes are held unverified, while the other domain still runs.
+
+## Check-in
+
+`tri-coach check-in` runs `tri sync`, then sends `Run the coach check-in.` on thread `coach`
+tagged `checkin`. The prompt's checklist reads through the analyst: planned versus actual, RPE
+and feeling, readiness and HRV against baseline, TSB, designed weeks, logged intake against
+targets, weight trend, and targets remaining. It writes a `checkin` memory entry that lasts two
+weeks, then proposes or reports a clean week. Exit codes match `tri-planning check-in`: 0 done,
+1 a model error or an incomplete apply, 2 neither an active plan nor a nutrition profile, and
+3 paused, or refused while a review or a held change set is pending. `--yes` approves the change
+set and its follow-on, at most two gates.
+
+## Evaluation
+
+`tri-coach eval` creates the LangSmith dataset `tri_coach_routing` from `evals/cases.py`: single
+turns with a rendered context block, memory and conversation, plus the routes the coach may
+take (none, analyst, wellness, planning, nutrition, both). The target runs the coach model
+over stub tools with the real names and descriptions. It scores `routing_accuracy`,
+`no_unrequested_adjustment` (pure questions only) and `brief_quality`, an LLM judge checking
+that each brief is bounded and names the signal, the lever and the constraint. The experiment
+is `coach-v<PROMPT_VERSION>`.
+
 ## Sessions
 
 One Garmin process (`GARMIN_ENABLED_TOOLS` set to the union of the analyst's, planning's and
@@ -104,4 +140,5 @@ lists plus nutrition's `read_body_composition`) and to planning's adjust sub-age
 - Coach v1 (2026-09): chat, memory, reset; handoffs, review gate, apply dispatch, bought-plan
   adoption. Live test (`tests/test_live.py --live`): not yet run.
 - Wellness consult (2026-09): ask_wellness, the lab line in the context block, prompt v2.
-- Milestone 4 (check-in, post-apply nutrition regeneration, routing dataset and eval): pending.
+- Check-in and follow-on (2026-09): check-in, the follow-on gate, prompt v3, routing eval.
+  Eval pass rates (`tri-coach eval`): not yet measured. First `tri-coach check-in --no-live`: not yet run.
