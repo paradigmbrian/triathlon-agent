@@ -127,6 +127,85 @@ async def test_handoff_after_an_earlier_tool_call_keeps_that_call_too():
     assert len({m.id for m in out["messages"]}) == 5  # nothing duplicated
 
 
+class RecordingModel(ScriptedChatModel):
+    """A scripted model that records the kwargs create_agent binds its tools with."""
+
+    bind_kwargs: list[dict[str, Any]] = []
+
+    def bind_tools(self, tools: Any, **kwargs: Any) -> "RecordingModel":
+        self.bind_kwargs.append(kwargs)
+        return self
+
+
+async def test_the_coach_sub_agent_disables_parallel_tool_calls():
+    model = RecordingModel(script=[AIMessage(content="hi")])
+    graph = outer_graph(model, make_handoff_tools())
+    await graph.ainvoke({"messages": [HumanMessage("hello")]})
+    assert model.bind_kwargs and model.bind_kwargs[0].get("parallel_tool_calls") is False
+
+
+async def test_a_sibling_call_in_a_handoff_step_gets_a_not_delivered_result():
+    @tool
+    def remember(text: str) -> str:
+        """fake memory"""
+        return "ok"
+
+    model = ScriptedChatModel(
+        script=[
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {"name": "remember", "args": {"text": "knee"}, "id": "r1", "type": "tool_call"},
+                    {
+                        "name": "consult_planning",
+                        "args": {"instruction": "Lighten the week."},
+                        "id": "c1",
+                        "type": "tool_call",
+                    },
+                ],
+            )
+        ]
+    )
+    graph = outer_graph(model, [remember, *make_handoff_tools()])
+    out = await graph.ainvoke({"messages": [HumanMessage("tired")]})
+    assert out["reached"] == "planning"
+    results = {m.tool_call_id: m for m in out["messages"] if isinstance(m, ToolMessage)}
+    assert set(results) == {"r1", "c1"}  # no tool_use id is left without a result
+    assert results["r1"].content.startswith("not delivered")
+    assert results["r1"].name == "remember"
+
+
+async def test_a_sibling_call_in_a_propose_step_gets_a_not_delivered_result():
+    @tool
+    def remember(text: str) -> str:
+        """fake memory"""
+        return "ok"
+
+    model = ScriptedChatModel(
+        script=[
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {"name": "remember", "args": {"text": "knee"}, "id": "r1", "type": "tool_call"},
+                    {
+                        "name": "propose_changes",
+                        "args": {"narration": "Move it.", "proposal_ids": ["p1"]},
+                        "id": "c9",
+                        "type": "tool_call",
+                    },
+                ],
+            )
+        ]
+    )
+    graph = outer_graph(model, [remember, *make_handoff_tools()])
+    out = await graph.ainvoke({"messages": [HumanMessage("go")]})
+    assert out["reached"] == "review"
+    results = {m.tool_call_id: m for m in out["messages"] if isinstance(m, ToolMessage)}
+    assert set(results) == {"r1", "c9"}
+    assert results["r1"].content.startswith("not delivered")
+
+
+@pytest.mark.db
 async def test_ask_analyst_runs_the_analyst_on_a_throwaway_thread(nocommit):
     @tool
     def query_training_db(sql: str) -> str:
@@ -151,9 +230,3 @@ async def test_ask_analyst_runs_the_analyst_on_a_throwaway_thread(nocommit):
     # a second question starts fresh: the analyst does not remember the first
     analyst.script.extend([AIMessage(content="Fresh answer.")])
     assert await ask.ainvoke({"question": "again?"}) == "Fresh answer."
-
-
-pytestmark_db = pytest.mark.db
-test_ask_analyst_runs_the_analyst_on_a_throwaway_thread = pytest.mark.db(
-    test_ask_analyst_runs_the_analyst_on_a_throwaway_thread
-)

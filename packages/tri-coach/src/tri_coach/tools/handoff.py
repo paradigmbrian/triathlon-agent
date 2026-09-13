@@ -12,7 +12,7 @@ from collections.abc import Sequence
 from typing import Annotated
 from uuid import uuid4
 
-from langchain_core.messages import AnyMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, ToolMessage
 from langchain_core.tools import BaseTool, InjectedToolCallId, tool
 from langgraph.prebuilt import InjectedState
 from langgraph.types import Command
@@ -29,6 +29,26 @@ def turn_messages(messages: Sequence[AnyMessage]) -> list[AnyMessage]:
     return list(messages[last + 1 :])
 
 
+NOT_DELIVERED = "not delivered: this step ended with a handoff; call again if still needed"
+
+
+def undelivered(turn: Sequence[AnyMessage], handoff_call_id: str) -> list[ToolMessage]:
+    """A result for every sibling call of the handoff that the tools node will never answer.
+
+    The sub-agent unwinds the moment a handoff tool returns, so a call made alongside it in the
+    same step loses its result. Anthropic rejects a persisted history that holds a tool_use with
+    no tool_result, which would break every later turn on the thread."""
+    last_ai = next((m for m in reversed(turn) if isinstance(m, AIMessage)), None)
+    if last_ai is None:
+        return []
+    answered = {m.tool_call_id for m in turn if isinstance(m, ToolMessage)} | {handoff_call_id}
+    return [
+        ToolMessage(content=NOT_DELIVERED, tool_call_id=tc["id"], name=tc["name"], id=str(uuid4()))
+        for tc in last_ai.tool_calls
+        if tc["id"] and tc["id"] not in answered
+    ]
+
+
 def _consult(
     domain: Domain, instruction: str, tool_call_id: str, messages: Sequence[AnyMessage]
 ) -> Command[str]:
@@ -42,10 +62,11 @@ def _consult(
     brief = Brief(
         domain=domain, instruction=instruction, tool_call_id=tool_call_id, message_id=message_id
     )
+    turn = turn_messages(messages)
     return Command(
         goto=domain,
         graph=Command.PARENT,
-        update={"brief": brief, "messages": [*turn_messages(messages), ack]},
+        update={"brief": brief, "messages": [*turn, *undelivered(turn, tool_call_id), ack]},
     )
 
 
@@ -87,12 +108,13 @@ def make_handoff_tools() -> list[BaseTool]:
             name="propose_changes",
             id=str(uuid4()),
         )
+        turn = turn_messages(messages)
         return Command(
             goto="review",
             graph=Command.PARENT,
             update={
                 "proposal_request": ProposalRequest(narration=narration, ids=list(proposal_ids)),
-                "messages": [*turn_messages(messages), ack],
+                "messages": [*turn, *undelivered(turn, tool_call_id), ack],
             },
         )
 

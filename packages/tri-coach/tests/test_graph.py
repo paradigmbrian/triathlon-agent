@@ -114,6 +114,44 @@ async def test_two_consultations_in_one_turn_number_proposals(nocommit, make_dep
     assert names == ["consult_planning", "consult_planning"]
 
 
+async def test_a_parallel_call_beside_a_handoff_leaves_no_dangling_tool_use(
+    nocommit, make_deps, mem_store
+):
+    seed_active_plan(nocommit)
+    both = AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "name": "remember",
+                "args": {"kind": "injury", "text": "Left knee sore."},
+                "id": "r1",
+                "type": "tool_call",
+            },
+            {
+                "name": "consult_planning",
+                "args": {"instruction": "Move w1 off Wednesday."},
+                "id": "c1",
+                "type": "tool_call",
+            },
+        ],
+    )
+    graph, _ = graph_for(
+        make_deps,
+        mem_store,
+        tp=FakeTp(),
+        coach=[both, AIMessage(content="Moved it to Friday.")],
+        planning=[move_call("m1"), AIMessage(content="ok")],
+    )
+    out = await graph.ainvoke({"messages": [HumanMessage("my knee hurts")]}, CFG)
+    asked = {tc["id"] for m in out["messages"] if isinstance(m, AIMessage) for tc in m.tool_calls}
+    answered = {m.tool_call_id for m in out["messages"] if isinstance(m, ToolMessage)}
+    assert asked == answered == {"r1", "c1"}
+    results = {m.tool_call_id: m for m in out["messages"] if isinstance(m, ToolMessage)}
+    assert results["c1"].content.startswith("p1 (planning): move it")
+    assert results["r1"].content.startswith("not delivered")
+    assert (await graph.aget_state(CFG)).next == ()
+
+
 async def test_remember_writes_the_store_and_the_next_prompt_shows_it(
     nocommit, make_deps, mem_store, monkeypatch
 ):
