@@ -16,8 +16,8 @@ from langchain_core.tools import BaseTool, StructuredTool
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.errors import GraphBubbleUp
 
-from tri_analyze.agent.agent import build_agent
-from tri_analyze.agent.prompt import load_athlete_context, render_system_prompt
+from tri_analyze.agent import build_agent
+from tri_analyze.repo import load_athlete_context
 from tri_coach.text import last_ai_text
 from tri_core.db.repo import Conn
 
@@ -30,8 +30,6 @@ def make_analyst_tool(
     connect: Callable[[], AbstractContextManager[Conn]],
     today: Callable[[], date],
 ) -> BaseTool:
-    live = [t.name for t in tools if t.name != "query_training_db"]
-
     async def ask_analyst(question: str) -> str:
         """Ask the analyst about past sessions, trends, readiness, sleep, HRV, body composition,
         logged intake against nutrition targets, or how training compares to plan. It reads the
@@ -39,13 +37,14 @@ def make_analyst_tool(
         try:
             with connect() as conn:
                 ctx = load_athlete_context(conn, today())
-            agent = build_agent(model, tools, render_system_prompt(ctx, live), InMemorySaver())
+            agent = build_agent(model, tools, InMemorySaver())
             out = await agent.ainvoke(
                 {"messages": [HumanMessage(question)]},
                 {
                     "configurable": {"thread_id": f"analyst-{uuid4()}"},
                     "recursion_limit": ANALYST_RECURSION_LIMIT,
                 },
+                context=ctx,
             )
         except GraphBubbleUp:
             raise  # interrupts and other langgraph control flow must keep propagating

@@ -1,4 +1,4 @@
-"""Analyze's live tools: the shared opener with this agent's allow-lists."""
+"""The analyst's live tools: the shared MCP opener with this agent's allow-lists."""
 
 from __future__ import annotations
 
