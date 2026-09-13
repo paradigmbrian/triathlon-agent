@@ -6,7 +6,7 @@ import yaml
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from langgraph.types import Command, Interrupt
 
-from tri_coach.models import Proposal
+from tri_coach.models import ChangeSet, Proposal
 from tri_coach.repl import (
     TurnPrinter,
     chat_loop,
@@ -15,6 +15,7 @@ from tri_coach.repl import (
     proposals_from_yaml,
     proposals_to_yaml,
     render_review,
+    run_turn,
 )
 
 
@@ -132,6 +133,97 @@ def test_printer_streams_coach_tokens_and_labels_sub_graph_activity():
     assert "planning: applied 1" in text and p.final_text == "planning: applied 1"
 
 
+def test_printer_labels_the_analyst_and_does_not_repeat_its_answer():
+    out: list[str] = []
+    p = TurnPrinter(out.append)
+    # the coach asks the analyst
+    p.on_event(
+        ("coach:1",),
+        "updates",
+        {
+            "model": {
+                "messages": [
+                    AIMessage(
+                        content="",
+                        tool_calls=[
+                            {
+                                "name": "ask_analyst",
+                                "args": {"question": "CTL?"},
+                                "id": "a1",
+                                "type": "tool_call",
+                            }
+                        ],
+                    )
+                ]
+            }
+        },
+    )
+    # the analyst's own agent streams at the root namespace: label it, do not read it as coach text
+    p.on_event((), "messages", (AIMessageChunk(content="CTL is 45."), {"langgraph_node": "model"}))
+    p.on_event(
+        (),
+        "updates",
+        {
+            "model": {
+                "messages": [
+                    AIMessage(
+                        content="",
+                        tool_calls=[
+                            {
+                                "name": "query_training_db",
+                                "args": {"sql": "select 1"},
+                                "id": "q1",
+                                "type": "tool_call",
+                            }
+                        ],
+                    )
+                ]
+            }
+        },
+    )
+    p.on_event(
+        (),
+        "updates",
+        {
+            "tools": {
+                "messages": [ToolMessage(content="[]", name="query_training_db", tool_call_id="q1")]
+            }
+        },
+    )
+    # the coach's tools node reports the analyst's answer once, as a length
+    p.on_event(
+        ("coach:1",),
+        "updates",
+        {
+            "tools": {
+                "messages": [
+                    ToolMessage(content="CTL is 45.", name="ask_analyst", tool_call_id="a1")
+                ]
+            }
+        },
+    )
+    # the coach node's own update replays the same messages; they must not print again
+    p.on_event(
+        (),
+        "updates",
+        {
+            "coach": {
+                "messages": [
+                    ToolMessage(content="CTL is 45.", name="ask_analyst", tool_call_id="a1"),
+                    AIMessage(content="Your CTL is 45."),
+                ]
+            }
+        },
+    )
+    text = "".join(out)
+    assert "[analyst] CTL is 45." in text
+    assert "[analyst] → query_training_db" in text
+    assert "[analyst] ← query_training_db" in text
+    assert text.count("← ask_analyst") == 1
+    assert "← ask_analyst: 10 chars" in text
+    assert p.final_text == ""  # the analyst never speaks for the coach
+
+
 def test_printer_captures_the_interrupt():
     from langgraph.types import Interrupt
 
@@ -230,7 +322,22 @@ async def test_chat_loop_reviews_then_resumes_the_graph_with_the_decision():
     assert graph.inputs[1].resume == {"action": "approve"}
 
 
-async def test_chat_loop_survives_a_bare_slash_and_shows_a_paused_review():
+async def test_chat_loop_survives_a_bare_slash_and_shows_a_held_change_set():
+    held = ChangeSet(narration="Held from the last apply.", proposals=proposals())
+    snapshot = SimpleNamespace(next=(), values={"pending": held}, tasks=())
+    graph = StubGraph([[]], state=snapshot)
+    buf: list[str] = []
+
+    await chat_loop(graph, read=scripted(["/", "/pending", "/quit"]), out=buf.append)
+
+    text = "".join(buf)
+    assert "unknown command" not in text
+    assert "-- nutrition (p2): targets" in text
+    assert "held from an earlier apply" in text
+    assert graph.inputs == []
+
+
+async def test_chat_loop_resumes_a_review_paused_before_the_restart():
     snapshot = SimpleNamespace(
         next=("review",),
         values={},
@@ -239,10 +346,41 @@ async def test_chat_loop_survives_a_bare_slash_and_shows_a_paused_review():
     graph = StubGraph([[]], state=snapshot)
     buf: list[str] = []
 
-    await chat_loop(graph, read=scripted(["/", "/pending", "approve", "/quit"]), out=buf.append)
+    await chat_loop(graph, read=scripted(["approve", "/quit"]), out=buf.append)
 
     text = "".join(buf)
-    assert "unknown command" not in text
-    assert "-- nutrition (p2): targets" in text
+    assert "-- nutrition (p2): targets" in text  # shown before any new message is read
     assert isinstance(graph.inputs[0], Command)
     assert graph.inputs[0].resume == {"action": "approve"}
+
+
+async def test_run_turn_reports_a_non_anthropic_failure_instead_of_raising():
+    class Boom:
+        async def astream(self, payload, config=None, stream_mode=None, subgraphs=False):
+            raise RuntimeError("psycopg went away")
+            yield  # pragma: no cover - makes this an async generator
+
+    buf: list[str] = []
+    printer = await run_turn(Boom(), {"messages": []}, "coach", buf.append)
+    assert printer.error is not None and "psycopg went away" in printer.error
+    assert "psycopg went away" in "".join(buf)
+
+
+async def test_chat_loop_keeps_going_after_a_failed_turn():
+    class Flaky(StubGraph):
+        async def astream(self, payload, config=None, stream_mode=None, subgraphs=False):
+            self.inputs.append(payload)
+            turn = self.turns.pop(0)
+            if turn == "boom":
+                raise RuntimeError("psycopg went away")
+            for ev in turn:
+                yield ev
+
+    done = ((), "updates", {"coach": {"messages": [AIMessage(content="still here")]}})
+    graph = Flaky(["boom", [done]], state=SimpleNamespace(next=(), values={}, tasks=()))
+    buf: list[str] = []
+
+    await chat_loop(graph, read=scripted(["hello", "again", "/quit"]), out=buf.append)
+
+    assert "psycopg went away" in "".join(buf)
+    assert len(graph.inputs) == 2

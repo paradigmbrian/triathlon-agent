@@ -3,7 +3,9 @@ dialogue over both domains.
 
 Events are (namespace, mode, data). The namespace is () for the coach graph's own nodes,
 ("coach:<id>",) inside the coach sub-agent, ("planning:<id>", ...) and ("nutrition:<id>", ...)
-inside a consultation; the first segment's name is the label."""
+inside a consultation; the first segment's name is the label. ask_analyst runs its own agent
+inside a tool, which streams at the root namespace under nodes `model` and `tools`; the coach
+graph has no such nodes, so those events are the analyst's."""
 
 from __future__ import annotations
 
@@ -33,6 +35,8 @@ EditFn = Callable[[list[Proposal]], Awaitable[list[Proposal] | None]]
 REVIEW_PROMPT = "approve / reject <note> / edit"
 # Only a consultation's output is tagged: the coach speaks to the athlete in its own voice.
 TAGGED = frozenset({"planning", "nutrition"})
+# Nodes of the coach graph itself; any other node at the root namespace belongs to the analyst.
+ROOT_NODES = frozenset({"start", "coach", "planning", "nutrition", "review", "apply"})
 
 
 def _text_of(msg: BaseMessage) -> str:
@@ -51,9 +55,13 @@ def label(namespace: tuple[str, ...]) -> str:
     return namespace[0].split(":", 1)[0] if namespace else ""
 
 
-def _tag(where: str) -> str:
-    """The bracket label for a label(): a consultation's, or "" for the coach and the root."""
-    return where if where in TAGGED else ""
+def _tag(where: str, node: str = "") -> str:
+    """The bracket label: a consultation's, the analyst's, or "" for the coach and the root."""
+    if where in TAGGED:
+        return where
+    if not where and node in ("model", "tools"):
+        return "analyst"
+    return ""
 
 
 class TurnPrinter:
@@ -64,8 +72,8 @@ class TurnPrinter:
         self.error: str | None = None
         self._line_label = ""  # tag printed at the start of the current streamed line
 
-    def _stream(self, where: str, text: str) -> None:
-        tag = _tag(where)
+    def _stream(self, where: str, node: str, text: str) -> None:
+        tag = _tag(where, node)
         if self._line_label != tag:
             self.out(f"\n[{tag}] " if tag else "\n")
             self._line_label = tag
@@ -81,7 +89,7 @@ class TurnPrinter:
             ):
                 text = _text_of(chunk)
                 if text:
-                    self._stream(where, text)
+                    self._stream(where, "model", text)
                     if where == "coach":
                         self.final_text += text
             return
@@ -90,20 +98,24 @@ class TurnPrinter:
         if "__interrupt__" in data:
             self.interrupt = dict(data["__interrupt__"][0].value)
             return
-        prefix = f"[{_tag(where)}] " if _tag(where) else ""
         for node, payload in data.items():
+            tag = _tag(where, node)
+            prefix = f"[{tag}] " if tag else ""
             for msg in (payload or {}).get("messages", []):
                 if node == "model" and isinstance(msg, AIMessage):
                     for tc in msg.tool_calls:
                         self.out(f"\n{prefix}→ {tc['name']}({tc['args']})\n")
-                    if not msg.tool_calls and where:
+                    if not msg.tool_calls and (where or tag):
                         if where == "coach":
                             self.final_text = _text_of(msg) or self.final_text
                         self.out("\n")  # close the streamed line
                     self._line_label = ""
                 elif node == "tools" and isinstance(msg, ToolMessage):
+                    self._line_label = ""
                     self.out(f"{prefix}← {msg.name}: {len(_text_of(msg))} chars\n")
-                elif not where and isinstance(msg, ToolMessage):  # a consultation's result
+                elif (
+                    not where and node in ("planning", "nutrition") and isinstance(msg, ToolMessage)
+                ):  # a consultation's result, once, from the coach graph's own node
                     self.out(f"← {msg.name}: {_text_of(msg)}\n")
                 elif (
                     not where
@@ -134,6 +146,9 @@ async def run_turn(
         out(printer.error)
     except anthropic.APIConnectionError as exc:
         printer.error = f"\n[connection error talking to Anthropic: {exc}]\n"
+        out(printer.error)
+    except Exception as exc:  # noqa: BLE001 - the chat keeps the state at the last checkpoint
+        printer.error = f"\n[the turn failed: {type(exc).__name__}: {exc}]\n"
         out(printer.error)
     return printer
 
@@ -225,6 +240,16 @@ async def _review_dialogue(
         return decision
 
 
+def _paused_review(snap: Any) -> dict[str, Any] | None:
+    """The interrupt payload of a review that is still waiting, from a state snapshot."""
+    if snap is None or getattr(snap, "next", ()) != ("review",):
+        return None
+    tasks = getattr(snap, "tasks", ()) or ()
+    if tasks and tasks[0].interrupts:
+        return dict(tasks[0].interrupts[0].value)
+    return None
+
+
 async def chat_loop(
     graph: Any,
     *,
@@ -237,7 +262,9 @@ async def chat_loop(
     commands = dict(commands or {})
     names = ", ".join(sorted(["quit", "pending", *commands]))
     out(f"tri-coach chat. Type a message, /quit to exit, /<command> for: {names}\n")
-    pending: dict[str, Any] | None = None
+    # A review the athlete walked away from is still paused in the checkpoint: finish it first,
+    # or the next typed message makes LangGraph drop the unfinished task and the change set.
+    pending = _paused_review(await graph.aget_state({"configurable": {"thread_id": thread_id}}))
     while True:
         if pending is not None:
             decision = await _review_dialogue(pending, read, out, edit)
@@ -266,8 +293,9 @@ async def chat_loop(
                 return
             if name == "pending":
                 snap = await graph.aget_state({"configurable": {"thread_id": thread_id}})
-                if snap.next == ("review",) and snap.tasks and snap.tasks[0].interrupts:
-                    pending = dict(snap.tasks[0].interrupts[0].value)
+                paused = _paused_review(snap)
+                if paused is not None:
+                    pending = paused
                 elif snap.values.get("pending") is not None:
                     held = snap.values["pending"]
                     out(
