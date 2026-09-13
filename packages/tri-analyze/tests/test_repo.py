@@ -34,7 +34,7 @@ def _seed_profile(db):
             hr_zones=None,
             power_zones=None,
             pace_zones=None,
-            weight_kg=None,
+            weight_kg=70.5,
             raw={},
         ),
     )
@@ -101,7 +101,8 @@ def test_load_athlete_context_reads_profile_and_windows(db):
     )
     ctx = load_athlete_context(db, TODAY)
     assert ctx.today == TODAY
-    assert ctx.profile and ctx.profile["ftp_watts"] == 230 and ctx.profile["weight_kg"] is None
+    assert ctx.profile and ctx.profile["ftp_watts"] == 230
+    assert ctx.profile["weight_kg"] == 70.5 and isinstance(ctx.profile["weight_kg"], float)
     assert [d["metric_date"] for d in ctx.recent_days] == [
         date(2026, 8, 30),
         date(2026, 9, 5),

@@ -41,7 +41,10 @@ def load_athlete_context(conn: Conn, today: date) -> AthleteContext:
         """Convert Decimal values to float."""
         return {k: float(v) if isinstance(v, Decimal) else v for k, v in d.items()}
 
-    days = [_to_native(d) for d in days_rows] if days_rows else []
-    workouts = [_to_native(w) for w in workouts_rows] if workouts_rows else []
+    normalized_profile = _to_native(profile) if profile else None
+    days = [_to_native(d) for d in days_rows]
+    workouts = [_to_native(w) for w in workouts_rows]
 
-    return AthleteContext(today=today, profile=profile, recent_days=days, recent_workouts=workouts)
+    return AthleteContext(
+        today=today, profile=normalized_profile, recent_days=days, recent_workouts=workouts
+    )
