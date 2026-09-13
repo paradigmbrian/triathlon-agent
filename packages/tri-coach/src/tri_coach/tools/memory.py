@@ -3,6 +3,7 @@ langgraph.config.get_store(), so the same tool objects work in chat and in tests
 
 from __future__ import annotations
 
+import inspect
 import json
 from collections.abc import Callable
 from datetime import date
@@ -37,6 +38,8 @@ def make_memory_tools(today: Callable[[], date]) -> list[BaseTool]:
         return json.dumps({"forgotten": ok, "id": entry_id})
 
     def _tool(fn: Any, name: str) -> BaseTool:
-        return StructuredTool.from_function(coroutine=fn, name=name, description=fn.__doc__)
+        return StructuredTool.from_function(
+            coroutine=fn, name=name, description=inspect.cleandoc(fn.__doc__ or "")
+        )
 
     return [_tool(remember, "remember"), _tool(forget, "forget")]

@@ -5,6 +5,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 
+from tri_coach.graph.checkpointer import make_serde
 from tri_coach.graph.graph import build_graph
 from tri_coach.testing import CFG, consult, move_call, propose, seed_active_plan
 from tri_core.testing import ScriptedChatModel, tool_call
@@ -25,7 +26,7 @@ def graph_for(make_deps, mem_store, *, tp=None, garmin=None, **scripts):
         for k in ("coach", "planning", "nutrition", "analyst")
     }
     deps = make_deps(tp=tp, garmin=garmin, **models)
-    return build_graph(deps, InMemorySaver(), mem_store), models
+    return build_graph(deps, InMemorySaver(serde=make_serde()), mem_store), models
 
 
 async def test_reject_returns_to_the_coach_with_the_note(nocommit, make_deps, mem_store):

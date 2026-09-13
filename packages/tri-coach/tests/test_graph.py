@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.checkpoint.memory import InMemorySaver
@@ -5,6 +7,7 @@ from langgraph.types import Command
 
 from tri_coach import memory as M
 from tri_coach.graph import nodes
+from tri_coach.graph.checkpointer import make_serde
 from tri_coach.graph.graph import after_review, build_graph
 from tri_coach.models import ReviewDecision
 from tri_coach.testing import CFG, consult, move_call, propose, seed_active_plan
@@ -23,7 +26,7 @@ def graph_for(make_deps, mem_store, *, tp=None, **scripts):
         **{k: scripts.get(k, []) for k in ("coach", "planning", "nutrition", "analyst")}
     )
     deps = make_deps(tp=tp, **models)
-    return build_graph(deps, InMemorySaver(), mem_store), models
+    return build_graph(deps, InMemorySaver(serde=make_serde()), mem_store), models
 
 
 async def test_pure_question_uses_the_analyst_and_ends_without_a_handoff(
@@ -70,6 +73,28 @@ async def test_handoff_runs_planning_and_lands_a_proposal(nocommit, make_deps, m
     assert tm.name == "consult_planning" and tm.content.startswith("p1 (planning): move it")
     assert out["brief"] is None and out["messages"][-1].content.startswith("Planning suggests")
     assert models["coach"].calls == 2
+
+
+async def test_no_checkpoint_deserializes_an_unregistered_type(
+    nocommit, make_deps, mem_store, caplog
+):
+    """langgraph's default serde only warns today and refuses under LANGGRAPH_STRICT_MSGPACK."""
+    seed_active_plan(nocommit)
+    graph, _ = graph_for(
+        make_deps,
+        mem_store,
+        tp=FakeTp(),
+        coach=[
+            consult("planning", "Move w1 off Wednesday."),
+            propose("Move it.", ["p1"]),
+        ],
+        planning=[move_call(), AIMessage(content="ok")],
+    )
+    with caplog.at_level(logging.WARNING):
+        await graph.ainvoke({"messages": [HumanMessage("my knee hurts")]}, CFG)
+        await graph.ainvoke(Command(resume={"action": "approve"}), CFG)
+    unregistered = [r.getMessage() for r in caplog.records if "unregistered type" in r.getMessage()]
+    assert unregistered == []
 
 
 async def test_sub_agent_question_comes_back_as_a_proposal_question(nocommit, make_deps, mem_store):

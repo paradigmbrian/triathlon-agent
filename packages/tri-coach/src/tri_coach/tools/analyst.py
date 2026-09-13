@@ -3,6 +3,7 @@ in-memory thread with the coach's read-only tools and returns its final text."""
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
 from datetime import date
@@ -59,5 +60,7 @@ def make_analyst_tool(
         return "The analyst returned no answer; ask a narrower question."
 
     return StructuredTool.from_function(
-        coroutine=ask_analyst, name="ask_analyst", description=ask_analyst.__doc__
+        coroutine=ask_analyst,
+        name="ask_analyst",
+        description=inspect.cleandoc(ask_analyst.__doc__ or ""),
     )

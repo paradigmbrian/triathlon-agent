@@ -43,7 +43,10 @@ coach sub-agent. Such a command unwinds the sub-agent before its model step is c
 each handoff tool re-emits the turn's messages together with its own `ToolMessage`; the
 planning or nutrition node then replaces that `ToolMessage`'s content (same id) with the
 proposal, and the history reads as one tool call and its result. Because a conditional edge on
-`coach` would fire alongside a handoff, `coach` has only a static edge to `END`.
+`coach` would fire alongside a handoff, `coach` has only a static edge to `END`. A call made
+beside a handoff in the same step could never be answered, so the sub-agent's model calls bind
+`parallel_tool_calls=False` and any sibling that slips through still gets a "not delivered"
+`ToolMessage`: the thread never holds a `tool_use` without its `tool_result`.
 
 | Node | Model call | Reads | Writes | Returns |
 |---|---|---|---|---|
@@ -51,13 +54,18 @@ proposal, and the history reads as one tool call and its result. Because a condi
 | `coach` | sub-agent loop | tables and both Store namespaces (context), coach memory | coach memory (via `remember`/`forget`) | new messages, or a `Command` from a tool |
 | `planning` | the embedded planning graph | `brief` | planning's working tables (as a standalone run would before review) | `proposals` + one, the handoff result message |
 | `nutrition` | the embedded nutrition graph | `brief` | nutrition's working tables, the profile on intake | same |
-| `review` | none | `proposal_request`, `proposals` | nothing before the interrupt | `pending`, `review_decision`; a reject note as a `HumanMessage` |
-| `apply` | none | `pending` | TrainingPeaks and Garmin through the packages' `apply_changes`, their audit rows with `thread_id = "coach"` | `reports`, the remainder in `pending`, one report message |
+| `review` | none | `proposal_request`, `proposals`, the held `pending` | nothing before the interrupt | `pending`, `review_decision`; a reject note as a `HumanMessage` |
+| `apply` | none | `pending` | TrainingPeaks and Garmin through the packages' `apply_changes`, their audit rows with `thread_id = "coach"` | `reports`, the remainder in `pending` under `held-planning` / `held-nutrition`, one report message |
 
 Invariants by construction: no write tool is ever bound to a model; the only path into either
 package's `apply_changes` is `apply`, reached only from `review`; the embedded graphs contain
 no `review` or `apply` node; consultations run in a fresh checkpoint namespace with a private
-in-memory saver, so a consultation never sees an earlier one.
+in-memory saver carrying that package's serde, so a consultation never sees an earlier one.
+
+A partial apply keeps what it could not write in `pending` under the stable ids
+`held-planning` and `held-nutrition`. The context block names those ids, and `review` resolves
+a `propose_changes` call against this turn's proposals and the held set, so a later turn can
+re-propose the remainder by id.
 
 ## Memory
 

@@ -225,6 +225,7 @@ async def test_ask_analyst_runs_the_analyst_on_a_throwaway_thread(nocommit):
         lambda: date(2026, 9, 14),
     )
     assert ask.name == "ask_analyst"
+    assert "\n " not in ask.description  # the raw __doc__ would carry its source indent
     assert await ask.ainvoke({"question": "what is my CTL?"}) == "Your CTL is 45."
     assert analyst.calls == 2
     # a second question starts fresh: the analyst does not remember the first

@@ -59,6 +59,12 @@ def test_render_lists_active_entries_with_kind_and_end():
     assert M.render([], TODAY) == "Athlete memory: nothing remembered yet."
 
 
+def test_the_memory_tool_descriptions_are_not_indented():
+    remember, forget = make_memory_tools(lambda: TODAY)
+    for t in (remember, forget):
+        assert t.description and "\n " not in t.description
+
+
 async def test_remember_and_forget_tools_write_the_store():
     store = InMemoryStore()
     remember, forget = make_memory_tools(lambda: TODAY)

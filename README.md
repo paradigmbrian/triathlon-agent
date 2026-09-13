@@ -12,7 +12,7 @@ TrainingPeaks data, synced into a local Postgres store.
 | `packages/tri-wellness` | `tri_wellness` | `tri-wellness ingest \| report \| chat \| panels \| eval` | Lab interpreter: PDF and export ingest with review, functional-range evaluation, written interpretation grounded in training data. |
 | `packages/tri-coach` | `tri_coach` | `tri-coach chat \| memory \| reset` | Head coach: answers through the analyst, briefs planning and nutrition, one review gate over both, approved writes only. |
 
-`tri-analyze`, `tri-planning`, `tri-nutrition` and `tri-wellness` depend on `tri-core`; no agent depends on another.
+`tri-analyze`, `tri-planning`, `tri-nutrition` and `tri-wellness` depend on `tri-core` and on nothing else; `tri-coach` sits above them and depends on `tri-analyze`, `tri-planning` and `tri-nutrition`.
 Repo: github.com/paradigmbrian/triathlon-agent.
 
 ## How it fits together
