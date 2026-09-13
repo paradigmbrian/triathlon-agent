@@ -9,6 +9,7 @@ dependencies = [
     "langchain==1.4.0",
     "langchain-anthropic==1.7.1",
     "langchain-mcp-adapters==0.3.2",
+    "langsmith>=0.12,<1",
     "psycopg[binary]==3.3.5",
     "pydantic-settings>=2.6",
     "typer>=0.15",
