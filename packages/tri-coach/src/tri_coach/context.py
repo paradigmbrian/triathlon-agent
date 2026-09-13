@@ -18,6 +18,52 @@ from tri_nutrition.nutrition.models import NutritionProfile
 from tri_planning import repo
 from tri_planning.planning.models import GraphPhase, PlanWeekRow, StoredGoal, StoredPlan
 from tri_planning.planning.targets import week_monday
+from tri_wellness import repo as wrepo
+from tri_wellness.report import extract_section
+
+PRIORITIES_CHARS = 300
+
+
+@dataclass
+class LabSummary:
+    panel_id: int
+    drawn_on: date
+    lab_name: str | None
+    report_on: date | None  # the latest report's creation date; None when no report yet
+    outside_optimal: int | None  # findings whose functional_status is not "optimal"
+    markers: int | None
+    priorities: str | None  # the report's Priorities section, whitespace collapsed, clipped
+
+
+def load_lab_summary(conn: Conn) -> LabSummary | None:
+    """The latest stored panel and its latest report, or None when no panel is stored (or the
+    lab tables are not there: the coach must not fail a turn because wellness is not set up)."""
+    row = conn.execute("select to_regclass('lab_panels') as t").fetchone()
+    if row is None or row["t"] is None:
+        return None
+    pid = wrepo.latest_panel_id(conn)
+    if pid is None:
+        return None
+    panel = wrepo.get_panel(conn, pid)
+    if panel is None:
+        return None
+    report = wrepo.latest_report_for_panel(conn, pid)
+    if report is None:
+        return LabSummary(pid, panel.drawn_on, panel.lab_name, None, None, None, None)
+    priorities = extract_section(report.report_md, "Priorities")
+    if priorities:
+        priorities = " ".join(priorities.split())
+        if len(priorities) > PRIORITIES_CHARS:
+            priorities = priorities[: PRIORITIES_CHARS - 1].rstrip() + "…"
+    return LabSummary(
+        panel_id=pid,
+        drawn_on=panel.drawn_on,
+        lab_name=panel.lab_name,
+        report_on=report.created_at.date(),
+        outside_optimal=sum(1 for f in report.findings if f.functional_status != "optimal"),
+        markers=len(report.findings),
+        priorities=priorities or None,
+    )
 
 
 @dataclass
@@ -35,10 +81,17 @@ class CoachContext:
     targets_through: date | None
     recent_days: list[dict[str, Any]] = field(default_factory=list)
     pending: ChangeSet | None = None
+    labs_enabled: bool = False  # TRI_ATHLETE_SEX set: the wellness consult is bound
+    labs: LabSummary | None = None
 
 
 async def load_context(
-    conn: Conn, store: BaseStore, today: date, pending: ChangeSet | None
+    conn: Conn,
+    store: BaseStore,
+    today: date,
+    pending: ChangeSet | None,
+    *,
+    labs_enabled: bool = False,
 ) -> CoachContext:
     phase, goal_id, plan_id = repo.derive_phase(conn)
     goal = repo.get_goal(conn, goal_id) if goal_id is not None else None
@@ -76,6 +129,8 @@ async def load_context(
         targets_through=stored[-1].target.day if stored else None,
         recent_days=load_athlete_context(conn, today).recent_days,
         pending=pending,
+        labs_enabled=labs_enabled,
+        labs=load_lab_summary(conn) if labs_enabled else None,
     )
 
 
@@ -124,6 +179,27 @@ def _nutrition_line(ctx: CoachContext) -> str:
     return f"Nutrition: goal {p.goal}, {p.weight_kg:g} kg{fat}; targets through {through}."
 
 
+def _labs_line(ctx: CoachContext) -> str:
+    if not ctx.labs_enabled:
+        return "Labs: not configured (set TRI_ATHLETE_SEX to enable the wellness consult)."
+    s = ctx.labs
+    if s is None:
+        return "Labs: no panels stored (tri-wellness ingest)."
+    lab = f" ({s.lab_name})" if s.lab_name else ""
+    if s.report_on is None:
+        return (
+            f"Labs: latest panel {s.drawn_on.isoformat()}{lab} has no report yet "
+            "(run tri-wellness report)."
+        )
+    line = (
+        f"Labs: panel {s.drawn_on.isoformat()}{lab}, report {s.report_on.isoformat()}: "
+        f"{s.outside_optimal} of {s.markers} markers outside optimal."
+    )
+    if s.priorities:
+        line += f" Priorities: {s.priorities}"
+    return line
+
+
 def _days_lines(days: list[dict[str, Any]]) -> list[str]:
     if not days:
         return ["Recent load: not available."]
@@ -164,6 +240,7 @@ def render_context(ctx: CoachContext) -> str:
         lines.append("Thresholds: not available (run `tri sync`).")
     lines += _plan_lines(ctx)
     lines.append(_nutrition_line(ctx))
+    lines.append(_labs_line(ctx))
     lines += _days_lines(ctx.recent_days)
     pending = _pending_line(ctx.pending)
     if pending:

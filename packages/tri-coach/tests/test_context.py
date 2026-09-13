@@ -11,6 +11,9 @@ from tri_nutrition.testing import PROFILE_ARGS
 from tri_planning import repo
 from tri_planning.planning.models import TrainingGoal, WeekTarget
 from tri_planning.testing import GOAL_ARGS, MONDAY
+from tri_wellness import repo as wrepo
+from tri_wellness.labs.models import Finding
+from tri_wellness.testing import REPORT_OK, seed_panel
 
 pytestmark = pytest.mark.db
 
@@ -105,3 +108,53 @@ def test_render_is_byte_stable_and_shows_pending():
     assert "FTP 250 W" in a and "run threshold 4:30/km" in a and "swim CSS 1:40/100m" in a
     assert "Pending change set from an earlier turn (1 planning, 0 nutrition): Knee pain" in a
     assert "Recent load: not available." in a
+
+
+async def test_labs_line_when_not_configured(nocommit, mem_store):
+    ctx = await load_context(nocommit, mem_store, MONDAY, None)
+    assert ctx.labs_enabled is False and ctx.labs is None
+    assert "Labs: not configured (set TRI_ATHLETE_SEX" in render_context(ctx)
+
+
+async def test_labs_line_in_each_stored_state(ldb, mem_store, registry):
+    ctx = await load_context(ldb, mem_store, MONDAY, None, labs_enabled=True)
+    assert ctx.labs is None
+    assert "Labs: no panels stored (tri-wellness ingest)." in render_context(ctx)
+
+    pid = seed_panel(ldb, date(2026, 8, 30), [("ferritin", 18.0, "ng/mL"), ("hs_crp", 0.4, "mg/L")])
+    ctx = await load_context(ldb, mem_store, MONDAY, None, labs_enabled=True)
+    assert ctx.labs is not None and ctx.labs.panel_id == pid and ctx.labs.report_on is None
+    assert "Labs: latest panel 2026-08-30 (Quest) has no report yet (run tri-wellness report)." in (
+        render_context(ctx)
+    )
+
+    findings = [
+        Finding(
+            marker="ferritin",
+            display="Ferritin",
+            system="iron",
+            value=18.0,
+            unit="ng/mL",
+            conventional_status="in_range",
+            functional_status="low",
+            functional_range=(50.0, 150.0),
+        ),
+        Finding(
+            marker="hs_crp",
+            display="hs-CRP",
+            system="inflammation",
+            value=0.4,
+            unit="mg/L",
+            conventional_status="in_range",
+            functional_status="optimal",
+            functional_range=(None, 1.0),
+        ),
+    ]
+    wrepo.insert_report(ldb, pid, registry.version, findings, REPORT_OK)
+    ctx = await load_context(ldb, mem_store, MONDAY, None, labs_enabled=True)
+    text = render_context(ctx)
+    assert ctx.labs is not None and ctx.labs.outside_optimal == 1 and ctx.labs.markers == 2
+    assert "Labs: panel 2026-08-30 (Quest), report " in text
+    assert "1 of 2 markers outside optimal. Priorities: " in text
+    assert text.index("Nutrition:") < text.index("Labs:")
+    assert render_context(ctx) == text  # byte-stable
