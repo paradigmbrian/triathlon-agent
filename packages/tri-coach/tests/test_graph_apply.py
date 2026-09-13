@@ -7,6 +7,8 @@ from langgraph.types import Command
 
 from tri_coach.graph.checkpointer import make_serde
 from tri_coach.graph.graph import build_graph
+from tri_coach.graph.nodes.apply import merge_held
+from tri_coach.models import ChangeSet, Proposal
 from tri_coach.testing import CFG, consult, move_call, propose, seed_active_plan
 from tri_core.testing import ScriptedChatModel, tool_call
 from tri_nutrition import store as S
@@ -276,3 +278,135 @@ async def test_start_clears_last_turns_proposals_but_not_pending(nocommit, make_
     await graph.ainvoke({"messages": [HumanMessage("b")]}, CFG)
     values = (await graph.aget_state(CFG)).values
     assert values["proposals"] == [] and values["brief"] is None and values["pending"] is None
+
+
+def held_set() -> ChangeSet:
+    return ChangeSet(
+        narration="Held from the last apply.",
+        proposals=[
+            Proposal.model_validate(
+                {
+                    "id": "held-planning",
+                    "domain": "planning",
+                    "summary": "1 planning changes held from the last apply",
+                    "changes": [
+                        {
+                            "op": "move",
+                            "tp_workout_id": "w1",
+                            "new_date": (MONDAY + timedelta(days=4)).isoformat(),
+                            "reason": "rest day",
+                        }
+                    ],
+                }
+            ),
+            Proposal.model_validate(
+                {
+                    "id": "held-nutrition",
+                    "domain": "nutrition",
+                    "summary": "1 nutrition changes held from the last apply",
+                    "changes": [
+                        {
+                            "op": "set_day_targets",
+                            "target_key": MONDAY.isoformat(),
+                            "day": MONDAY.isoformat(),
+                            "payload": {"calorie_goal": 2800},
+                            "reason": "extend horizon",
+                        }
+                    ],
+                }
+            ),
+        ],
+    )
+
+
+async def test_re_proposing_one_held_proposal_keeps_the_other_held(ndb, make_deps, mem_store):
+    seed_active_plan(ndb)
+    tp = FakeTp()
+    graph, _ = graph_for(
+        make_deps,
+        mem_store,
+        tp=tp,
+        coach=[propose("Retry the plan part.", ["held-planning"])],
+    )
+    await graph.aupdate_state(CFG, {"pending": held_set()}, as_node="start")
+    out = await graph.ainvoke({"messages": [HumanMessage("retry the plan part")]}, CFG)
+    assert [p["id"] for p in out["__interrupt__"][0].value["proposals"]] == ["held-planning"]
+    out = await graph.ainvoke(Command(resume={"action": "approve"}), CFG)
+    assert [c[0] for c in tp.calls] == ["tp_update_workout"]
+    assert [p.id for p in out["pending"].proposals] == ["held-nutrition"]
+    assert out["carried"] == []
+
+
+async def test_rejecting_a_held_proposal_keeps_the_ones_it_did_not_name(ndb, make_deps, mem_store):
+    graph, _ = graph_for(
+        make_deps,
+        mem_store,
+        tp=FakeTp(),
+        coach=[
+            propose("Retry the plan part.", ["held-planning"]),
+            AIMessage(content="Dropped the plan part."),
+        ],
+    )
+    await graph.aupdate_state(CFG, {"pending": held_set()}, as_node="start")
+    await graph.ainvoke({"messages": [HumanMessage("retry the plan part")]}, CFG)
+    out = await graph.ainvoke(Command(resume={"action": "reject", "note": "not now"}), CFG)
+    assert [p.id for p in out["pending"].proposals] == ["held-nutrition"]
+    assert out["pending"].narration == "Held from the last apply."
+
+
+async def test_a_proposal_without_changes_is_refused_at_review(nocommit, make_deps, mem_store):
+    seed_active_plan(nocommit)
+    graph, models = graph_for(
+        make_deps,
+        mem_store,
+        tp=FakeTp(),
+        coach=[
+            consult("planning", "Lighten the week."),
+            propose("Lighter week.", ["p1"]),
+            AIMessage(content="Planning asked which session hurt; I will ask you."),
+        ],
+        planning=[AIMessage(content="Which session hurt: the run or the ride?")],
+    )
+    out = await graph.ainvoke({"messages": [HumanMessage("tired")]}, CFG)
+    assert "__interrupt__" not in out and models["coach"].calls == 3
+    assert any(
+        isinstance(m, HumanMessage) and m.content.startswith("[review] p1 carry no changes")
+        for m in out["messages"]
+    )
+    assert out["proposal_request"] is None and out["pending"] is None
+
+
+async def test_an_exception_inside_apply_is_reported_and_the_changes_held(
+    nocommit, make_deps, mem_store, monkeypatch
+):
+    from tri_coach.graph import nodes
+
+    async def boom(*args, **kwargs):
+        raise RuntimeError("psycopg went away")
+
+    monkeypatch.setattr(nodes.apply, "apply_planning", boom)
+    seed_active_plan(nocommit)
+    graph, _ = graph_for(
+        make_deps,
+        mem_store,
+        tp=FakeTp(),
+        coach=[consult("planning", "Move w1."), propose("Move it.", ["p1"])],
+        planning=[move_call(), AIMessage(content="ok")],
+    )
+    await graph.ainvoke({"messages": [HumanMessage("do it")]}, CFG)
+    out = await graph.ainvoke(Command(resume={"action": "approve"}), CFG)
+    report = out["reports"][0]
+    assert report.domain == "planning" and report.applied == 0 and report.remaining == 1
+    assert "RuntimeError: psycopg went away" in out["last_error"]
+    held = out["pending"].proposals[0]
+    assert held.id == "held-planning" and len(held.changes) == 1 and "unverified" in held.summary
+    assert (await graph.aget_state(CFG)).next == ()
+
+
+def test_merge_held_joins_a_shared_stable_id():
+    plan = held_set().proposals[0]
+    nut = held_set().proposals[1]
+    merged = merge_held([plan, nut], [plan.model_copy(update={"summary": "new"})])
+    assert [p.id for p in merged] == ["held-planning", "held-nutrition"]
+    assert len(merged[0].changes) == 2 and merged[0].summary.startswith("2 planning changes")
+    assert merge_held([], [nut]) == [nut] and merge_held([nut], []) == [nut]

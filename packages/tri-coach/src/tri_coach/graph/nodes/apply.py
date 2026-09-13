@@ -1,7 +1,9 @@
 """Apply node: the only caller of the packages' apply_changes, planning first then nutrition,
 with thread_id "coach". A bought plan that was just applied is adopted by one more embedded
 planning run. Remaining changes stay in `pending` under a stable id (`held-planning`,
-`held-nutrition`) so a later turn can re-propose them by that id."""
+`held-nutrition`) so a later turn can re-propose them by that id, together with the held
+proposals the approved set did not name (`carried`). An exception inside one domain's apply is
+reported and that domain's changes are held unverified; the other domain still runs."""
 
 from __future__ import annotations
 
@@ -9,11 +11,12 @@ from typing import Any, cast
 
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
+from langgraph.errors import GraphBubbleUp
 from langgraph.store.base import BaseStore
 
 from tri_coach.graph.deps import CoachDeps
 from tri_coach.graph.state import CoachState
-from tri_coach.models import ApplyReport, ChangeSet, Proposal
+from tri_coach.models import ApplyReport, ChangeSet, Domain, Proposal
 from tri_nutrition.graph.nodes.apply import ApplyResult as NutritionResult
 from tri_nutrition.graph.nodes.apply import apply_changes as apply_nutrition
 from tri_nutrition.nutrition.models import NutritionChange
@@ -45,7 +48,40 @@ def report_from_nutrition(r: NutritionResult) -> ApplyReport:
     )
 
 
+def raised_report(domain: Domain, n: int, exc: Exception) -> ApplyReport:
+    return ApplyReport(
+        domain=domain,
+        applied=0,
+        skipped=[],
+        remaining=n,
+        error=(
+            f"apply raised {type(exc).__name__}: {exc}; some changes may already be written, "
+            "check before re-proposing"
+        ),
+        sessions_changed=False,
+    )
+
+
 HELD_IDS: dict[str, str] = {"planning": "held-planning", "nutrition": "held-nutrition"}
+
+
+def merge_held(carried: list[Proposal], new: list[Proposal]) -> list[Proposal]:
+    """Carried held proposals first, then this apply's remainder; a shared stable id merges."""
+    by_id = {p.id: p for p in carried}
+    for p in new:
+        prev = by_id.get(p.id)
+        if prev is None:
+            by_id[p.id] = p
+            continue
+        changes = [*prev.changes, *p.changes]
+        by_id[p.id] = prev.model_copy(
+            update={
+                "changes": changes,
+                "summary": f"{len(changes)} {p.domain} changes held from earlier applies",
+                "overrides": {**(prev.overrides or {}), **(p.overrides or {})} or None,
+            }
+        )
+    return list(by_id.values())
 
 
 def make_apply_node(deps: CoachDeps, planning_graph: Any) -> Any:
@@ -62,31 +98,45 @@ def make_apply_node(deps: CoachDeps, planning_graph: Any) -> Any:
         if planning:
             # The domain decides the change type; the Proposal validator already typed them.
             changes = cast(list[CalendarChange], [c for p in planning for c in p.changes])
-            with deps.planning_deps.connect() as conn:
-                _, goal_id, plan_id = repo.derive_phase(conn)
-            r = await apply_planning(
-                deps.planning_deps, changes, thread_id, plan_id=plan_id, goal_id=goal_id
-            )
-            report = report_from_planning(r)
-            if r.tp_plan_applied and r.error is None:
-                # The adopt re-invoke reads TrainingPeaks again; TrainingPeaks was already
-                # written, so a failure here is reported, not raised.
-                try:
-                    await planning_graph.ainvoke({"tp_plan_applied": True}, config)
-                except Exception as exc:  # noqa: BLE001 - any failure is reported to the athlete
-                    detail = f"the plan was applied but adopting it failed: {exc}"
-                    joined = "; ".join(x for x in (report.error, detail) if x)
-                    report = report.model_copy(update={"error": joined})
-            reports.append(report)
-            if r.remaining:
+            try:
+                with deps.planning_deps.connect() as conn:
+                    _, goal_id, plan_id = repo.derive_phase(conn)
+                r = await apply_planning(
+                    deps.planning_deps, changes, thread_id, plan_id=plan_id, goal_id=goal_id
+                )
+            except GraphBubbleUp:
+                raise
+            except Exception as exc:  # noqa: BLE001 - reported and held; nutrition still runs
+                reports.append(raised_report("planning", len(changes), exc))
                 held.append(
                     Proposal(
                         id=HELD_IDS["planning"],
                         domain="planning",
-                        summary=f"{len(r.remaining)} planning changes held from the last apply",
-                        changes=r.remaining,
+                        summary=f"{len(changes)} planning changes held unverified: apply raised",
+                        changes=changes,
                     )
                 )
+            else:
+                report = report_from_planning(r)
+                if r.tp_plan_applied and r.error is None:
+                    # The adopt re-invoke reads TrainingPeaks again; TrainingPeaks was already
+                    # written, so a failure here is reported, not raised.
+                    try:
+                        await planning_graph.ainvoke({"tp_plan_applied": True}, config)
+                    except Exception as exc:  # noqa: BLE001 - any failure is reported
+                        detail = f"the plan was applied but adopting it failed: {exc}"
+                        joined = "; ".join(x for x in (report.error, detail) if x)
+                        report = report.model_copy(update={"error": joined})
+                reports.append(report)
+                if r.remaining:
+                    held.append(
+                        Proposal(
+                            id=HELD_IDS["planning"],
+                            domain="planning",
+                            summary=f"{len(r.remaining)} planning changes held from the last apply",
+                            changes=r.remaining,
+                        )
+                    )
 
         nutrition = [p for p in pending.proposals if p.domain == "nutrition"]
         if nutrition:
@@ -94,25 +144,44 @@ def make_apply_node(deps: CoachDeps, planning_graph: Any) -> Any:
             overrides: dict[str, Any] = {}
             for p in nutrition:
                 overrides.update(p.overrides or {})
-            rn = await apply_nutrition(
-                deps.nutrition_deps, store, nchanges, thread_id, overrides=overrides or None
-            )
-            reports.append(report_from_nutrition(rn))
-            if rn.remaining:
+            try:
+                rn = await apply_nutrition(
+                    deps.nutrition_deps, store, nchanges, thread_id, overrides=overrides or None
+                )
+            except GraphBubbleUp:
+                raise
+            except Exception as exc:  # noqa: BLE001 - reported and held
+                reports.append(raised_report("nutrition", len(nchanges), exc))
                 held.append(
                     Proposal(
                         id=HELD_IDS["nutrition"],
                         domain="nutrition",
-                        summary=f"{len(rn.remaining)} nutrition changes held from the last apply",
-                        changes=rn.remaining,
+                        summary=f"{len(nchanges)} nutrition changes held unverified: apply raised",
+                        changes=nchanges,
                         overrides=overrides or None,
                     )
                 )
+            else:
+                reports.append(report_from_nutrition(rn))
+                if rn.remaining:
+                    held.append(
+                        Proposal(
+                            id=HELD_IDS["nutrition"],
+                            domain="nutrition",
+                            summary=(
+                                f"{len(rn.remaining)} nutrition changes held from the last apply"
+                            ),
+                            changes=rn.remaining,
+                            overrides=overrides or None,
+                        )
+                    )
 
+        kept = merge_held(list(state.get("carried") or []), held)
         errors = [rep.error for rep in reports if rep.error]
         return {
             "reports": reports,
-            "pending": ChangeSet(narration=pending.narration, proposals=held) if held else None,
+            "pending": ChangeSet(narration=pending.narration, proposals=kept) if kept else None,
+            "carried": [],
             "review_decision": None,
             "last_error": "; ".join(errors) or None,
             "messages": [AIMessage("\n".join(rep.line() for rep in reports))],

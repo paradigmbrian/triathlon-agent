@@ -42,6 +42,7 @@ def start_node(state: CoachState) -> dict[str, Any]:
         "brief": None,
         "proposals": [],
         "proposal_request": None,
+        "carried": [],
         "review_decision": None,
         "reports": [],
         "last_error": None,

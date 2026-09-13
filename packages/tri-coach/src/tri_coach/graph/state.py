@@ -24,6 +24,7 @@ class CoachState(TypedDict, total=False):
     proposals: list[Proposal]  # accumulated this turn
     proposal_request: ProposalRequest | None  # set by propose_changes, consumed by review
     pending: ChangeSet | None  # what review shows; remainder after a partial apply
+    carried: list[Proposal]  # held proposals the change set did not name; review -> apply
     review_decision: ReviewDecision | None
     reports: list[ApplyReport]
     last_error: str | None
