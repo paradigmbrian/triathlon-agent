@@ -1,10 +1,10 @@
 # tri-coach — The Coaching Orchestrator (package `tri_coach`)
 
 **Date:** 2026-09-11
-**Status:** Approved design; milestone 1 merged 2026-09-12 (plan 01), milestone 2 in progress (plan 02); revised 2026-09-11 against `main` at d66a54b after planning plan 4 landed (see §1, §7.3, §8, §13)
-**Purpose:** The agent the athlete talks to. It answers questions by consulting the analyst, decides on its own authority when a change to the training plan or the nutrition targets is warranted, briefs the planning and nutrition agents to produce that change, and presents one change set for approval. It is the sole decider: sub-agents never initiate a change under the coach.
+**Status:** Approved design; milestones 1 and 2 merged (plans 01, 02; `main` at 00ed820 on 2026-09-13); milestone 3, the wellness consult, planned 2026-09-13 (plan 03); revised 2026-09-13 to compose `tri-wellness` as a read-only consult (see §4, §6.3, §6.4, §6.6, §9, §10, §11, §13, §14)
+**Purpose:** The agent the athlete talks to. It answers questions by consulting the analyst and, for lab work, the wellness interpreter; it decides on its own authority when a change to the training plan or the nutrition targets is warranted, briefs the planning and nutrition agents to produce that change, and presents one change set for approval. It is the sole decider: sub-agents never initiate a change under the coach.
 
-Companion specs: `tri-analyze` (2026-09-06), `tri-planning` (2026-09-07), `tri-nutrition` (2026-09-10). Both the planning and nutrition specs deferred "an orchestrator composing the agents as subgraphs" to this spec. The `tri-wellness` spec (2026-09-10) is not composed here; see §14.
+Companion specs: `tri-analyze` (2026-09-06), `tri-planning` (2026-09-07), `tri-nutrition` (2026-09-10). Both the planning and nutrition specs deferred "an orchestrator composing the agents as subgraphs" to this spec. The `tri-wellness` spec (2026-09-10) is composed here as a read-only consult (§6.6), added 2026-09-13; it deferred "findings flowing into planning intake as constraints" to a later spec, and the coach's briefs are how that now happens.
 
 ## 1. Decisions already made
 
@@ -57,10 +57,11 @@ Installed: langgraph 1.2.11, langgraph-prebuilt 1.1.0, langchain 1.4.0, langchai
 ```
 packages/tri-coach/
   pyproject.toml                 tri-coach; depends on tri-core, tri-analyze, tri-planning,
-                                 tri-nutrition; script tri-coach
+                                 tri-nutrition, tri-wellness; script tri-coach
   src/tri_coach/
     cli.py                       chat, check-in, memory, reset
-    config.py                    TRI_COACH_LANGSMITH_PROJECT (tri_coach), consult limits
+    config.py                    TRI_COACH_LANGSMITH_PROJECT (tri_coach), consult limits,
+                                 TRI_ATHLETE_SEX (optional; enables the wellness consult)
     allowlist.py                 union of the sub-agents' Garmin server tools; analyst read tools
     servers.py                   open_servers(stack, settings, no_live) -> Servers: the Garmin and
                                  TrainingPeaks tools from one open_live_tools call over the union
@@ -68,13 +69,14 @@ packages/tri-coach/
                                  package's GraphDeps from them
     memory.py                    MemoryEntry; NAMESPACE = ("athlete", "coach"); get/put/forget;
                                  render(entries, today)
-    context.py                   CoachContext loaded from the database and the Stores;
-                                 render_context(ctx) for the system prompt
+    context.py                   CoachContext loaded from the database and the Stores,
+                                 including the lab summary (§6.6); render_context(ctx)
     models.py                    Brief, Proposal, ChangeSet, ReviewDecision, ApplyReport
     graph/
       state.py                   CoachState TypedDict
       deps.py                    CoachDeps: model, connect, db_url, servers, store,
-                                 planning_deps, nutrition_deps, analyst_tools, today
+                                 planning_deps, nutrition_deps, analyst_tools,
+                                 wellness_model, wellness_registry (None when unconfigured), today
       llm.py                     make_model, make_subagent (copied from nutrition)
       checkpointer.py            open_checkpointer with the state's Pydantic types registered
       graph.py                   build_graph(deps, checkpointer, store)
@@ -86,6 +88,7 @@ packages/tri-coach/
         apply.py                 dispatch to planning.apply_changes then nutrition.apply_changes
     tools/
       analyst.py                 ask_analyst
+      wellness.py                ask_wellness (agent-as-tool over tri_wellness's chat agent)
       handoff.py                 consult_planning, consult_nutrition, propose_changes
       memory.py                  remember, forget
     prompts/
@@ -196,6 +199,7 @@ apply     -> END
 
 - **coach**: a `create_agent` sub-agent built with `make_subagent`, the same helper the intake and check-in nodes use. Its system prompt is rendered per turn: the stable part first (persona, decision policy, routing guide, check-in checklist), then the context block (§6.4), then memory. Tools, and nothing else:
   - `ask_analyst(question)`: runs `tri_analyze.agent.build_agent` over `query_training_db` and the analyst read tools built from the coach's own sessions (§7.3), on a throwaway `InMemorySaver` thread, and returns the final text. Agent-as-tool.
+  - `ask_wellness(question)`: runs `tri_wellness.agent.build_agent` over `query_training_db` (with the lab schema doc) and the three findings tools, with wellness's own chat prompt, on a throwaway `InMemorySaver` thread, and returns the final text. Agent-as-tool; read-only by construction (§6.6). Bound only when `TRI_ATHLETE_SEX` is set.
   - `consult_planning(instruction)`, `consult_nutrition(instruction)`: return `Command(goto=<node>, graph=Command.PARENT, update={"brief": Brief(...), "messages": [ToolMessage(ack)]})`. Handoff. The `ToolMessage` closes the tool call so the message history stays valid.
   - `propose_changes(narration, proposal_ids)`: selects proposals by id, sets `pending`, and returns a `ToolMessage`; the route after the coach node goes to `review` when `pending` is set. The coach never edits a change payload; if it wants something different it re-consults with a revised instruction. The athlete can edit YAML at review.
   - `remember(kind, text, until?)`, `forget(id)`: coach memory (§5.1), through the injected Store.
@@ -212,17 +216,27 @@ Stable part, in this order so prompt caching covers it:
 
 1. Persona: the athlete's head coach; direct, specific, no generic encouragement (the analyst's feedback rules apply to the coach's own prose too).
 2. Decision policy. Sub-agents never initiate a change. A change is warranted only when the coach can name the signal (from context, the analyst, or what the athlete said), the lever, and the constraint. The brief names all three, for example: "Knee pain reported today. No running for 7 days, hold weekly TSS within 10 percent of target, keep Saturday's ride." Pure questions never trigger a consultation. At most two consultations per domain per turn; then explain and stop.
-3. Routing guide: analyst for anything about past sessions, trends, readiness, sleep, comparisons to plan; planning for anything that changes the calendar, the goal or the horizon; nutrition for anything that changes targets, fueling notes, the profile or the race plan; both, in that order, when a plan change alters training load.
-4. Memory policy: what to `remember`, what not to (nothing the sub-agents already store), and to say when a memory entry influenced a decision.
+3. Routing guide: analyst for anything about past sessions, trends, readiness, sleep, comparisons to plan; wellness for anything about lab markers, functional ranges, the retest plan, supplements, or whether a symptom could be lab-related; planning for anything that changes the calendar, the goal or the horizon; nutrition for anything that changes targets, fueling notes, the profile or the race plan; both, in that order, when a plan change alters training load. A lab finding that bears on training load or fueling is named as the signal in the brief ("Ferritin 18 ng/mL, functional low, on the 2026-08-30 panel"); the coach never briefs a sub-agent to change a lab value.
+4. Memory policy: what to `remember`, what not to (nothing the sub-agents already store, lab values included), and to say when a memory entry influenced a decision.
 5. The check-in checklist (§8), used when the message is the fixed check-in request.
 
-Context block, rendered per turn from the database and the two Store namespaces: today; athlete thresholds; active goal, plan phase, this week's target versus actual TSS and hours, designed weeks remaining; nutrition goal, weight and body fat trend, targets through date; the last seven days of load and recovery; then memory entries. The coach has no data tool of its own; anything deeper goes through `ask_analyst`.
+Context block, rendered per turn from the database and the two Store namespaces: today; athlete thresholds; active goal, plan phase, this week's target versus actual TSS and hours, designed weeks remaining; nutrition goal, weight and body fat trend, targets through date; the lab summary (§6.6); the last seven days of load and recovery; then memory entries. The coach has no data tool of its own; anything deeper goes through `ask_analyst` or `ask_wellness`.
 
 `PROMPT_VERSION` in `prompts/coach.py` is bumped whenever the prompt changes and names the LangSmith experiment (§12).
 
 ### 6.5 The follow-on gate
 
 After `apply` sets `regenerate_after_apply`, the nutrition node runs with a regenerate brief, its proposal (new day targets for today if changed, and fueling notes for changed sessions) returns to the coach, and the coach narrates the consequence and calls `propose_changes` again. The athlete sees a second gate in the same command. When regeneration changes nothing, the coach says so and the turn ends. This is the only path where two gates occur in one turn, and it exists because nutrition targets are derived from the stored plan (§2).
+
+### 6.6 The wellness consult
+
+`tri-wellness` stores lab panels, evaluates markers against curated functional ranges, and writes interpretations grounded in the athlete's training load around the draw (its spec, 2026-09-10). Its writes (`ingest`, `report`) are athlete-driven CLI commands that produce audit rows, never a calendar or nutrition change, so there is nothing for the review gate to approve. The coach therefore composes it as a **read-only consult**, not a handoff:
+
+- **`ask_wellness(question)`** mirrors `ask_analyst`: a throwaway thread, wellness's own chat prompt (`render_chat_prompt` over the profile, the stored panels and the latest report's priorities and retest plan), and wellness's tools, `query_training_db` with `WELLNESS_SCHEMA_DOC` plus `get_panel_findings`, `get_marker_spec` and `get_marker_history`. None of them writes. The coach sees the final text only.
+- **Lab summary in the context block**, one line rendered per turn from `lab_panels` and `lab_reports` through `tri_wellness.repo`: the latest panel's draw date and lab, whether it has a report, how many markers sit outside the optimal functional band in that report's stored findings, and the report's "Priorities" section. Three states: no panel stored; a panel with no report yet (the line names `tri-wellness report`); a panel with a report. The coach knows what is off before it asks anything.
+- **Configuration.** The wellness registry is loaded for `TRI_ATHLETE_SEX`, which `tri-wellness` requires. The coach treats it as optional: when it is unset, `ask_wellness` is not bound and the lab line says labs are not configured, so a coach setup without labs behaves exactly as milestone 2 did.
+- **Routing and briefs.** The routing guide sends lab questions to wellness. When a finding bears on load or fueling, the coach names it as the signal in a planning or nutrition brief; the sub-agents never read lab tables themselves, which keeps the lab interpretation in one place.
+- **Invariants.** No wellness write function is imported by the coach; `tri_wellness.repo`'s readers and the findings tools are the only entry points. Wellness binds no MCP session, so `servers.py` is unchanged.
 
 ## 7. Changes to existing packages
 
@@ -261,19 +275,21 @@ After `apply` sets `regenerate_after_apply`, the nutrition node runs with a rege
 | A server is unavailable | That package's `apply_changes` holds its changes pending, as today; the coach reports which domain is held; consultations that need a live read say so |
 | Planning apply fails mid-batch | Nutrition dispatch still runs for nutrition-only proposals; the regenerate step is skipped; the report names the failed change; remaining changes stay pending |
 | Analyst error | Returned as the tool result; the prompt forbids guessing at data the analyst could not read |
+| Wellness error, or `TRI_ATHLETE_SEX` unset | An error is returned as the tool result; when unset the tool is not bound and the context block says labs are not configured, so the coach answers that labs are unavailable instead of guessing |
 | Coach consults in a loop | Prompt rule of at most two consultations per domain per turn; `recursion_limit` on the run as the hard stop |
 | Anthropic API error | Caught per turn, printed, the REPL continues; state at the last checkpoint |
 | Checkpointer or Store tables missing | `chat` refuses to start and prints the setup command |
 
 ## 10. Configuration
 
-`tri_core.config` is shared. `tri_coach.config` adds `TRI_COACH_LANGSMITH_PROJECT` (default `tri_coach`) and `TRI_COACH_MAX_CONSULTS_PER_DOMAIN` (default 2). No new dependencies. The root `pyproject.toml` adds `tri-coach` to the workspace sources, the mypy files list and ruff's first-party list.
+`tri_core.config` is shared. `tri_coach.config` adds `TRI_COACH_LANGSMITH_PROJECT` (default `tri_coach`), `TRI_COACH_MAX_CONSULTS_PER_DOMAIN` (default 2) and reads `TRI_ATHLETE_SEX` as optional (`male` | `female` | unset; wellness's own settings require it). `tri-coach` depends on `tri-wellness` from milestone 3; no new third-party dependencies. The root `pyproject.toml` adds `tri-coach` to the workspace sources, the mypy files list and ruff's first-party list.
 
 ## 11. Testing
 
 - **Unit, no database, no model:** memory entry expiry and rendering; prompt rendering from a fixed context (byte-stable for a fixed input); proposal id assignment and selection; combined YAML edit round trip across both domains; `ApplyReport` from each package's `ApplyResult`; `ToolsCaller` over fake tools, including the empty-result and error text conventions `parse_tool_text` handles; the check-in refusal and exit codes against a scripted thread state.
 - **Planning and nutrition, `ScriptedChatModel`:** embedded mode ends with `pending_changes` and the compiled graph has no `review` node; nutrition's regenerate entry routes to `targets`; planning's `route` derives all three phases from the database; the existing apply tests pass unchanged through the thin node and again through `apply_changes` directly; the directed adjust sub-agent ends on `propose_calendar_changes` and merges `design_next_week` output.
 - **Coach graph, `ScriptedChatModel` at every level, sub-graphs scripted too, `InMemoryStore`:** a pure question calls `ask_analyst` and ends without a handoff; a handoff runs the planning node and its proposal lands in `proposals`; `propose_changes` reaches the review interrupt with the narration; approve dispatches to fakes in order and each package records its audit row with `thread_id = "coach"`; reject returns to the coach with the note in messages; a planning apply that changed sessions triggers the regenerate brief and a second gate; a sub-agent question returns as a proposal with `question`; `remember` writes the Store and the next rendered prompt contains the entry; a second process resumes the paused review from Postgres.
+- **Wellness consult, `ScriptedChatModel`, seeded panels through the rolled-back `db` fixture:** `ask_wellness` runs wellness's agent on a throwaway thread with the findings tools and returns its text, and a second question starts fresh; the lab summary renders byte-stable in all three states (no panel, panel without report, panel with report) with the outside-optimal count and the priorities text; a lab question in the coach graph calls `ask_wellness` and consults nothing; with `TRI_ATHLETE_SEX` unset the tool is absent and the line says labs are not configured; no tool named in the coach's bound list or the wellness tool list writes.
 - **Database tests** use `tri_analyze_test` and the rolled-back `db` fixture. **Live, opt-in:** one coach turn with both servers up that answers a question through the analyst and consults nothing.
 - Definition of done per task: `uv run pytest`, `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy`.
 
@@ -287,11 +303,12 @@ Dataset `tri_coach_routing`: single-turn cases whose inputs hold prior messages 
 
 1. **Sub-package preparation.** Planning `route` node with database-derived phase and ids; embedded mode and `apply_changes` in planning and nutrition; nutrition regenerate entry; the directed sections in planning's adjust prompt and nutrition's check-in prompt with their tests; `open_live_servers` and `ToolsCaller` in tri-core. No coach yet; every existing CLI behaves as before.
 2. **Coach v1.** Package, state, coach node with memory, the analyst tool and the handoffs, review, dispatching apply, REPL, `chat`, `memory`, `reset`. First adjustment made through the coach.
-3. **Check-in and follow-on.** `tri-coach check-in` with its refusal and exit codes, the `checkin` memory entry, the post-apply nutrition regeneration and second gate, the routing dataset, evaluators and `eval`. Root `README.md` gains the package row, run lines and a status entry.
+3. **Wellness consult.** `tri-wellness` as a coach dependency; `ask_wellness` agent-as-tool; the lab summary in the context block; the routing-guide and memory-policy lines for labs; `PROMPT_VERSION` 2. First coaching decision that cites a lab finding in a brief.
+4. **Check-in and follow-on.** `tri-coach check-in` with its refusal and exit codes, the `checkin` memory entry, the post-apply nutrition regeneration and second gate, the routing dataset, evaluators and `eval`. The routing dataset gains lab-question cases (expected trajectory: wellness only).
 
 ## 14. Out of scope
 
-`tri-wellness` (a fourth handoff added the same way once that package exists); multi-athlete; scheduled execution; any UI beyond the terminal; the coach editing change payloads directly; retiring the per-agent chats; writing to Garmin or TrainingPeaks by any path other than the packages' `apply_changes`.
+A wellness handoff or any coach-driven wellness write (`ingest`, `report` stay athlete-driven CLI commands); multi-athlete; scheduled execution; any UI beyond the terminal; the coach editing change payloads directly; retiring the per-agent chats; writing to Garmin or TrainingPeaks by any path other than the packages' `apply_changes`.
 
 ## 15. Open items to verify in milestone 1
 
