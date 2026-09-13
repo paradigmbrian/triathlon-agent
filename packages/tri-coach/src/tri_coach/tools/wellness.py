@@ -14,6 +14,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage
 from langchain_core.tools import BaseTool, StructuredTool
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.errors import GraphBubbleUp
 
 from tri_coach.text import last_ai_text
 from tri_core.db.repo import Conn
@@ -53,20 +54,30 @@ def make_wellness_tool(
         functional range, what is outside optimal and why, the retest plan, supplements, or
         whether a symptom could be lab-related. It reads stored panels and reports; it changes
         nothing. Ask one specific question at a time."""
-        with connect() as conn:
-            profile = athlete_profile(conn)
-            panels = repo.list_panels(conn)
-            latest = repo.latest_panel_id(conn)
-            latest_report = repo.latest_report_for_panel(conn, latest) if latest else None
-        prompt = render_chat_prompt(profile, registry.sex, panels, latest_report, today(), names)
-        agent = build_agent(model, tools, prompt, InMemorySaver())
-        out = await agent.ainvoke(
-            {"messages": [HumanMessage(question)]},
-            {
-                "configurable": {"thread_id": f"wellness-{uuid4()}"},
-                "recursion_limit": WELLNESS_RECURSION_LIMIT,
-            },
-        )
+        try:
+            with connect() as conn:
+                profile = athlete_profile(conn)
+                panels = repo.list_panels(conn)
+                latest = repo.latest_panel_id(conn)
+                latest_report = repo.latest_report_for_panel(conn, latest) if latest else None
+            prompt = render_chat_prompt(
+                profile, registry.sex, panels, latest_report, today(), names
+            )
+            agent = build_agent(model, tools, prompt, InMemorySaver())
+            out = await agent.ainvoke(
+                {"messages": [HumanMessage(question)]},
+                {
+                    "configurable": {"thread_id": f"wellness-{uuid4()}"},
+                    "recursion_limit": WELLNESS_RECURSION_LIMIT,
+                },
+            )
+        except GraphBubbleUp:
+            raise  # interrupts and other langgraph control flow must keep propagating
+        except Exception as exc:
+            return (
+                f"The lab interpreter failed ({type(exc).__name__}: {exc}); "
+                "answer without lab data."
+            )
         return last_ai_text(out["messages"]) or (
             "The lab interpreter returned no answer; ask a narrower question."
         )

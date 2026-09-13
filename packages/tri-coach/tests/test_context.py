@@ -2,7 +2,13 @@ from datetime import date, timedelta
 
 import pytest
 
-from tri_coach.context import CoachContext, load_context, render_context
+from tri_coach.context import (
+    PRIORITIES_CHARS,
+    CoachContext,
+    LabSummary,
+    load_context,
+    render_context,
+)
 from tri_coach.models import ChangeSet, Proposal
 from tri_nutrition import repo as nrepo
 from tri_nutrition import store as S
@@ -158,3 +164,69 @@ async def test_labs_line_in_each_stored_state(ldb, mem_store, registry):
     assert "1 of 2 markers outside optimal. Priorities: " in text
     assert text.index("Nutrition:") < text.index("Labs:")
     assert render_context(ctx) == text  # byte-stable
+
+
+async def test_labs_line_when_the_lab_tables_are_missing(nocommit, mem_store, monkeypatch):
+    """A missing lab_panels table (migrations/005_wellness.sql not applied) must not render as
+    'no panels stored': that line would leave ask_wellness bound and doomed to fail."""
+    import tri_coach.context as context_mod
+
+    monkeypatch.setattr(context_mod, "_lab_tables_present", lambda conn: False)
+    ctx = await load_context(nocommit, mem_store, MONDAY, None, labs_enabled=True)
+    assert ctx.labs_missing is True and ctx.labs is None
+    lines = render_context(ctx).splitlines()
+    labs_line = next(line for line in lines if line.startswith("Labs:"))
+    assert labs_line == "Labs: lab tables missing (apply migrations/005_wellness.sql)."
+
+
+def test_labs_line_omits_the_lab_name_when_none():
+    ctx = CoachContext(
+        today=date(2026, 9, 16),
+        thresholds=None,
+        phase="active",
+        goal=None,
+        plan=None,
+        this_week=None,
+        actual_tss=0.0,
+        actual_hours=0.0,
+        designed_remaining=0,
+        profile=None,
+        targets_through=None,
+        labs_enabled=True,
+        labs=LabSummary(
+            panel_id=1,
+            drawn_on=date(2026, 8, 30),
+            lab_name=None,
+            report_on=None,
+            outside_optimal=None,
+            markers=None,
+            priorities=None,
+        ),
+    )
+    text = render_context(ctx)
+    assert "Labs: latest panel 2026-08-30 has no report yet (run tri-wellness report)." in text
+    assert " ()" not in text
+
+
+async def test_priorities_is_clipped_at_priorities_chars(ldb, mem_store, registry):
+    pid = seed_panel(ldb, date(2026, 8, 30), [("ferritin", 18.0, "ng/mL")])
+    long_priorities = "word " * 100  # well over PRIORITIES_CHARS once collapsed
+    report_md = f"## Priorities\n{long_priorities}\n\n## Training implications\nHold.\n"
+    findings = [
+        Finding(
+            marker="ferritin",
+            display="Ferritin",
+            system="iron",
+            value=18.0,
+            unit="ng/mL",
+            conventional_status="in_range",
+            functional_status="low",
+            functional_range=(50.0, 150.0),
+        )
+    ]
+    wrepo.insert_report(ldb, pid, registry.version, findings, report_md)
+    ctx = await load_context(ldb, mem_store, MONDAY, None, labs_enabled=True)
+    assert ctx.labs is not None and ctx.labs.priorities is not None
+    assert ctx.labs.priorities.endswith("…")
+    assert len(ctx.labs.priorities) <= PRIORITIES_CHARS
+    assert ctx.labs.priorities in render_context(ctx)

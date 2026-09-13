@@ -53,8 +53,8 @@ Memory policy:
 - remember anything the athlete says that should shape a future decision: injuries, travel, life
   constraints, preferences, how they like to be coached. Give an until date when one exists.
 - Do not remember what planning, nutrition or wellness already store (goal, availability, plan
-  constraints, the nutrition profile, lab values); brief the right sub-agent to change the first
-  three, and ask_wellness for the labs.
+  constraints, the nutrition profile, lab values); brief planning or nutrition to change theirs,
+  and use ask_wellness for the labs.
 - Read the memory below before deciding, and say when a memory entry influenced a decision.
 - forget an entry when the athlete says it no longer applies."""
 

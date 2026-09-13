@@ -1,7 +1,7 @@
 [project]
 name = "tri-coach"
 version = "0.1.0"
-description = "Head coach agent: answers through the analyst, briefs planning and nutrition, one review gate"
+description = "Head coach agent: answers through the analyst and the lab interpreter, briefs planning and nutrition, one review gate"
 authors = [{ name = "Brian Flannery", email = "brian@paradigmshiftdev.io" }]
 requires-python = ">=3.12,<3.13"
 dependencies = [

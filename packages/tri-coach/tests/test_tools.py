@@ -283,3 +283,22 @@ async def test_ask_wellness_runs_the_lab_interpreter_on_a_throwaway_thread(ldb, 
     # a second question starts fresh: the interpreter does not remember the first
     wellness.script.extend([AIMessage(content="Fresh answer.")])
     assert await ask.ainvoke({"question": "again?"}) == "Fresh answer."
+
+
+async def test_ask_wellness_reports_a_failure_as_its_tool_result_instead_of_raising(registry):
+    @contextlib.contextmanager
+    def broken_connect():
+        raise RuntimeError("db is down")
+        yield  # pragma: no cover - never reached; makes this a generator function
+
+    wellness = ScriptedChatModel(script=[AIMessage(content="should never be called")])
+    ask = make_wellness_tool(
+        wellness,
+        broken_connect,
+        Settings().test_database_url,
+        registry,
+        lambda: date(2026, 9, 14),
+    )
+    result = await ask.ainvoke({"question": "how is my ferritin?"})
+    assert "RuntimeError" in result and "db is down" in result
+    assert wellness.calls == 0

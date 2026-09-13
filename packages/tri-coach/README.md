@@ -1,9 +1,9 @@
 # tri-coach
 
-The agent the athlete talks to. It answers questions by consulting the analyst, decides on its
-own authority when the training plan or the nutrition targets should change, briefs the planning
-and nutrition agents to produce that change, and presents one change set for approval. Nothing
-is written to Garmin or TrainingPeaks until the athlete approves.
+The agent the athlete talks to. It answers questions by consulting the analyst and the lab
+interpreter, decides on its own authority when the training plan or the nutrition targets should
+change, briefs the planning and nutrition agents to produce that change, and presents one change
+set for approval. Nothing is written to Garmin or TrainingPeaks until the athlete approves.
 
 ## Commands
 
@@ -87,7 +87,8 @@ finding that bears on load or fueling is named as the signal in a planning or nu
 the sub-agents never read lab tables. The coach never runs `ingest` or `report`.
 
 `TRI_ATHLETE_SEX` is optional for the coach: unset, the tool is not bound and the line says labs
-are not configured.
+are not configured. If it is set but `migrations/005_wellness.sql` has not been applied, the
+line says the lab tables are missing instead of misreading that as no panels stored.
 
 ## Sessions
 

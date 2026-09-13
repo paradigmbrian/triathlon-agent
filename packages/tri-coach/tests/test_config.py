@@ -37,3 +37,5 @@ def test_athlete_sex_is_optional_for_the_coach(monkeypatch):
     assert CoachSettings(_env_file=None).tri_athlete_sex is None
     monkeypatch.setenv("TRI_ATHLETE_SEX", "female")
     assert CoachSettings(_env_file=None).tri_athlete_sex == "female"
+    monkeypatch.setenv("TRI_ATHLETE_SEX", "")
+    assert CoachSettings(_env_file=None).tri_athlete_sex is None

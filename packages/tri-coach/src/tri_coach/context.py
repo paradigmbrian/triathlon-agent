@@ -35,12 +35,15 @@ class LabSummary:
     priorities: str | None  # the report's Priorities section, whitespace collapsed, clipped
 
 
-def load_lab_summary(conn: Conn) -> LabSummary | None:
-    """The latest stored panel and its latest report, or None when no panel is stored (or the
-    lab tables are not there: the coach must not fail a turn because wellness is not set up)."""
+def _lab_tables_present(conn: Conn) -> bool:
     row = conn.execute("select to_regclass('lab_panels') as t").fetchone()
-    if row is None or row["t"] is None:
-        return None
+    return row is not None and row["t"] is not None
+
+
+def load_lab_summary(conn: Conn) -> LabSummary | None:
+    """The latest stored panel and its latest report, or None when no panel is stored. Callers
+    check _lab_tables_present first; the coach must not fail a turn because wellness is not
+    set up."""
     pid = wrepo.latest_panel_id(conn)
     if pid is None:
         return None
@@ -83,6 +86,7 @@ class CoachContext:
     pending: ChangeSet | None = None
     labs_enabled: bool = False  # TRI_ATHLETE_SEX set: the wellness consult is bound
     labs: LabSummary | None = None
+    labs_missing: bool = False  # labs_enabled but lab_panels is not there: migrations not applied
 
 
 async def load_context(
@@ -115,6 +119,8 @@ async def load_context(
     ).fetchone()
     profile = await S.get_profile(store)
     stored = nrepo.list_targets(conn, today, today + timedelta(days=365))
+    labs_missing = labs_enabled and not _lab_tables_present(conn)
+    labs = load_lab_summary(conn) if labs_enabled and not labs_missing else None
     return CoachContext(
         today=today,
         thresholds=repo.athlete_thresholds(conn),
@@ -130,7 +136,8 @@ async def load_context(
         recent_days=load_athlete_context(conn, today).recent_days,
         pending=pending,
         labs_enabled=labs_enabled,
-        labs=load_lab_summary(conn) if labs_enabled else None,
+        labs=labs,
+        labs_missing=labs_missing,
     )
 
 
@@ -182,6 +189,8 @@ def _nutrition_line(ctx: CoachContext) -> str:
 def _labs_line(ctx: CoachContext) -> str:
     if not ctx.labs_enabled:
         return "Labs: not configured (set TRI_ATHLETE_SEX to enable the wellness consult)."
+    if ctx.labs_missing:
+        return "Labs: lab tables missing (apply migrations/005_wellness.sql)."
     s = ctx.labs
     if s is None:
         return "Labs: no panels stored (tri-wellness ingest)."
