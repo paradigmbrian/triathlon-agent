@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import yaml
-from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
 from langgraph.types import Command, Interrupt
 
 from tri_coach.models import ChangeSet, Proposal
@@ -364,6 +364,16 @@ async def test_run_turn_reports_a_non_anthropic_failure_instead_of_raising():
     printer = await run_turn(Boom(), {"messages": []}, "coach", buf.append)
     assert printer.error is not None and "psycopg went away" in printer.error
     assert "psycopg went away" in "".join(buf)
+
+
+def test_printer_prints_the_follow_on_message_once():
+    out: list[str] = []
+    p = TurnPrinter(out.append)
+    msg = HumanMessage("[follow-on] The approved plan change moved sessions.")
+    p.on_event((), "updates", {"nutrition": {"messages": [msg]}})
+    text = "".join(out)
+    assert text.count("[follow-on] The approved plan change moved sessions.") == 1
+    assert p.final_text == ""
 
 
 async def test_chat_loop_keeps_going_after_a_failed_turn():

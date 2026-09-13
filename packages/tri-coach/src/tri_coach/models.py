@@ -15,9 +15,9 @@ Domain = Literal["planning", "nutrition"]
 class Brief(BaseModel):
     domain: Domain
     instruction: str  # the coach's bounded instruction: signal, lever, constraint
-    tool_call_id: str  # the consult_* call this brief came from
-    message_id: str  # the handoff ToolMessage the sub-graph's result replaces
-    regenerate: bool = False  # nutrition only (plan 3): skip the sub-agent, go to targets
+    tool_call_id: str | None = None  # the consult_* call; None for the post-apply regenerate brief
+    message_id: str | None = None  # the handoff ToolMessage the result replaces; None likewise
+    regenerate: bool = False  # nutrition only: skip the sub-agent, go straight to targets
 
 
 class Proposal(BaseModel):

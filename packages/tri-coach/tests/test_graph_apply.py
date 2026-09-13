@@ -11,8 +11,9 @@ from tri_coach.graph.nodes.apply import merge_held
 from tri_coach.models import ChangeSet, Proposal
 from tri_coach.testing import CFG, consult, move_call, propose, seed_active_plan
 from tri_core.testing import ScriptedChatModel, tool_call
+from tri_nutrition import repo as nrepo
 from tri_nutrition import store as S
-from tri_nutrition.nutrition.models import NutritionProfile
+from tri_nutrition.nutrition.models import DayTarget, NutritionProfile
 from tri_nutrition.testing import PROFILE_ARGS, FakeGarmin
 from tri_nutrition.testing import FakeTp as NutritionFakeTp
 from tri_planning import repo
@@ -410,3 +411,75 @@ def test_merge_held_joins_a_shared_stable_id():
     assert [p.id for p in merged] == ["held-planning", "held-nutrition"]
     assert len(merged[0].changes) == 2 and merged[0].summary.startswith("2 planning changes")
     assert merge_held([], [nut]) == [nut] and merge_held([nut], []) == [nut]
+
+
+async def test_a_plan_change_that_moves_sessions_regenerates_nutrition_and_opens_a_second_gate(
+    ndb, make_deps, mem_store
+):
+    seed_active_plan(ndb)
+    await S.put_profile(mem_store, NutritionProfile(**PROFILE_ARGS))
+    nrepo.upsert_targets(
+        ndb,
+        [
+            DayTarget(
+                day=MONDAY + timedelta(days=i),
+                day_type="easy",
+                session_kcal=0,
+                total_kcal=2000,
+                carbs_g=200,
+                protein_g=150,
+                fat_g=70,
+                fluid_baseline_ml=2500,
+                source="plan",
+            )
+            for i in range(3)
+        ],
+    )
+    tp, garmin = FakeTp(), FakeGarmin()
+    graph, models = graph_for(
+        make_deps,
+        mem_store,
+        tp=tp,
+        garmin=garmin,
+        coach=[
+            consult("planning", "Move w1."),
+            propose("Move it.", ["p1"]),
+            propose("Today's targets follow the moved session.", ["p1"], "c10"),
+        ],
+        planning=[move_call(), AIMessage(content="ok")],
+    )
+    out = await graph.ainvoke({"messages": [HumanMessage("move it")]}, CFG)
+    assert out["__interrupt__"][0].value["proposals"][0]["domain"] == "planning"
+
+    out = await graph.ainvoke(Command(resume={"action": "approve"}), CFG)
+    assert [c[0] for c in tp.calls] == ["tp_update_workout"]
+    second = out["__interrupt__"][0].value
+    assert second["narration"].startswith("Today's targets")
+    assert [(p["id"], p["domain"]) for p in second["proposals"]] == [("p1", "nutrition")]
+    assert second["proposals"][0]["changes"][0]["op"] == "set_day_targets"
+    assert any(
+        isinstance(m, HumanMessage) and m.content.startswith("[follow-on]") for m in out["messages"]
+    )
+    assert garmin.calls == [] and models["nutrition"].calls == 0 and models["coach"].calls == 3
+
+    out = await graph.ainvoke(Command(resume={"action": "approve"}), CFG)
+    assert [c[0] for c in garmin.calls] == ["set_nutrition_daily_settings"]
+    assert [r.domain for r in out["reports"]] == ["nutrition"]
+    assert out["regenerate_after_apply"] is False and out["pending"] is None
+    assert (await graph.aget_state(CFG)).next == ()
+
+
+async def test_no_regeneration_without_targets_in_the_horizon(nocommit, make_deps, mem_store):
+    seed_active_plan(nocommit)
+    graph, models = graph_for(
+        make_deps,
+        mem_store,
+        tp=FakeTp(),
+        coach=[consult("planning", "Move w1."), propose("Move it.", ["p1"])],
+        planning=[move_call(), AIMessage(content="ok")],
+    )
+    await graph.ainvoke({"messages": [HumanMessage("move it")]}, CFG)
+    out = await graph.ainvoke(Command(resume={"action": "approve"}), CFG)
+    assert out["reports"][0].sessions_changed is True and out["regenerate_after_apply"] is False
+    assert out["proposals"] == [] and models["coach"].calls == 2
+    assert (await graph.aget_state(CFG)).next == ()

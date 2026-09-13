@@ -7,6 +7,7 @@ reported and that domain's changes are held unverified; the other domain still r
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any, cast
 
 from langchain_core.messages import AIMessage
@@ -16,7 +17,8 @@ from langgraph.store.base import BaseStore
 
 from tri_coach.graph.deps import CoachDeps
 from tri_coach.graph.state import CoachState
-from tri_coach.models import ApplyReport, ChangeSet, Domain, Proposal
+from tri_coach.models import ApplyReport, Brief, ChangeSet, Domain, Proposal
+from tri_nutrition import repo as nrepo
 from tri_nutrition.graph.nodes.apply import ApplyResult as NutritionResult
 from tri_nutrition.graph.nodes.apply import apply_changes as apply_nutrition
 from tri_nutrition.nutrition.models import NutritionChange
@@ -63,6 +65,20 @@ def raised_report(domain: Domain, n: int, exc: Exception) -> ApplyReport:
 
 
 HELD_IDS: dict[str, str] = {"planning": "held-planning", "nutrition": "held-nutrition"}
+
+REGENERATE_INSTRUCTION = "Regenerate targets and fueling from the stored plan after the apply."
+
+
+def _regeneration_due(deps: CoachDeps, reports: list[ApplyReport]) -> bool:
+    """Spec 6.3: planning moved sessions without error and nutrition targets exist in the
+    horizon. A failed or partial planning apply skips it (spec 9)."""
+    plan = next((r for r in reports if r.domain == "planning"), None)
+    if plan is None or not plan.sessions_changed or plan.error is not None:
+        return False
+    today = deps.today()
+    end = today + timedelta(days=deps.nutrition_deps.horizon_days - 1)
+    with deps.connect() as conn:
+        return bool(nrepo.list_targets(conn, today, end))
 
 
 def merge_held(carried: list[Proposal], new: list[Proposal]) -> list[Proposal]:
@@ -178,11 +194,19 @@ def make_apply_node(deps: CoachDeps, planning_graph: Any) -> Any:
 
         kept = merge_held(list(state.get("carried") or []), held)
         errors = [rep.error for rep in reports if rep.error]
+        regenerate = _regeneration_due(deps, reports)
         return {
             "reports": reports,
             "pending": ChangeSet(narration=pending.narration, proposals=kept) if kept else None,
             "carried": [],
+            "proposals": [],  # consumed: the follow-on proposal is p1, an applied id is gone
             "review_decision": None,
+            "regenerate_after_apply": regenerate,
+            "brief": (
+                Brief(domain="nutrition", instruction=REGENERATE_INSTRUCTION, regenerate=True)
+                if regenerate
+                else None
+            ),
             "last_error": "; ".join(errors) or None,
             "messages": [AIMessage("\n".join(rep.line() for rep in reports))],
         }

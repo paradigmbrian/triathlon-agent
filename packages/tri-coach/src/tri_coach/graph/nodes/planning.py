@@ -8,6 +8,7 @@ from typing import Any
 
 from langchain_core.messages import HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
+from langchain_core.runnables.config import merge_configs
 
 from tri_coach.graph.state import CoachState
 from tri_coach.models import Brief, Proposal
@@ -36,6 +37,9 @@ def proposal_from_planning(out: dict[str, Any], pid: str) -> Proposal:
 
 
 def result_message(brief: Brief, proposal: Proposal) -> ToolMessage:
+    assert brief.tool_call_id is not None and brief.message_id is not None, (
+        "only a consultation brief has a tool call to answer"
+    )
     return ToolMessage(
         content=proposal.render(),
         tool_call_id=brief.tool_call_id,
@@ -51,7 +55,8 @@ def make_planning_node(graph: Any) -> Any:
             "planning node needs a planning brief"
         )
         out = await graph.ainvoke(
-            {"messages": [HumanMessage(f"{BRIEF_PREFIX} {brief.instruction}")]}, config
+            {"messages": [HumanMessage(f"{BRIEF_PREFIX} {brief.instruction}")]},
+            merge_configs(config, {"tags": ["domain:planning"]}),
         )
         proposals = list(state.get("proposals") or [])
         proposal = proposal_from_planning(out, f"p{len(proposals) + 1}")

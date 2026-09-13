@@ -119,7 +119,7 @@ class TurnPrinter:
                     self.out(f"← {msg.name}: {_text_of(msg)}\n")
                 elif (
                     not where
-                    and node in ("apply", "review")
+                    and node in ("apply", "review", "nutrition")
                     and isinstance(msg, AIMessage | HumanMessage)
                 ):
                     text = _text_of(msg)

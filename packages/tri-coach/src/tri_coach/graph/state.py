@@ -25,6 +25,7 @@ class CoachState(TypedDict, total=False):
     proposal_request: ProposalRequest | None  # set by propose_changes, consumed by review
     pending: ChangeSet | None  # what review shows; remainder after a partial apply
     carried: list[Proposal]  # held proposals the change set did not name; review -> apply
+    regenerate_after_apply: bool  # set by apply when planning moved sessions; routes to nutrition
     review_decision: ReviewDecision | None
     reports: list[ApplyReport]
     last_error: str | None

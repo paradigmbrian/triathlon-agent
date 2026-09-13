@@ -8,7 +8,10 @@ coach  => planning | nutrition          (Command from consult_*); each -> coach
 coach  => review                        (Command from propose_changes)
 review -> apply                         (approve or edit)
 review -> coach                         (reject, or unknown proposal ids)
-apply  -> END
+apply  -> nutrition                     (regenerate_after_apply: planning moved sessions and
+                                         nutrition targets exist in the horizon)
+apply  -> END                           (otherwise)
+nutrition -> coach                      (a consultation, or the "[follow-on]" regeneration)
 """
 
 from __future__ import annotations
@@ -43,6 +46,7 @@ def start_node(state: CoachState) -> dict[str, Any]:
         "proposals": [],
         "proposal_request": None,
         "carried": [],
+        "regenerate_after_apply": False,
         "review_decision": None,
         "reports": [],
         "last_error": None,
@@ -54,6 +58,10 @@ def after_review(state: CoachState) -> str:
     if decision is not None and decision.action in ("approve", "edit"):
         return "apply"
     return "coach"
+
+
+def after_apply(state: CoachState) -> str:
+    return "nutrition" if state.get("regenerate_after_apply") else END
 
 
 def build_graph(deps: CoachDeps, checkpointer: BaseCheckpointSaver[Any], store: BaseStore) -> Any:
@@ -83,5 +91,5 @@ def build_graph(deps: CoachDeps, checkpointer: BaseCheckpointSaver[Any], store: 
     g.add_edge("planning", "coach")
     g.add_edge("nutrition", "coach")
     g.add_conditional_edges("review", after_review, ["apply", "coach"])
-    g.add_edge("apply", END)
+    g.add_conditional_edges("apply", after_apply, ["nutrition", END])
     return g.compile(checkpointer=checkpointer, store=store, name="tri-coach")
