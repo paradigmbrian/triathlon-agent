@@ -15,10 +15,19 @@ def test_help_lists_chat():
     assert result.exit_code == 0 and "chat" in result.output
 
 
-def test_langsmith_project_is_set_on_import():
-    assert (
-        os.environ["LANGSMITH_PROJECT"] == cli.get_analyze_settings().tri_analyze_langsmith_project
-    )
+def test_langsmith_project_is_set_on_import(monkeypatch):
+    import importlib
+
+    from tri_analyze.config import get_analyze_settings
+
+    monkeypatch.setenv("LANGSMITH_PROJECT", "something-else")  # restored on teardown
+    monkeypatch.setenv("TRI_ANALYZE_LANGSMITH_PROJECT", "analyst-import-test")
+    get_analyze_settings.cache_clear()
+    try:
+        importlib.reload(cli)
+        assert os.environ["LANGSMITH_PROJECT"] == "analyst-import-test"
+    finally:
+        get_analyze_settings.cache_clear()
     assert THREAD_ID == "analyze"
 
 
