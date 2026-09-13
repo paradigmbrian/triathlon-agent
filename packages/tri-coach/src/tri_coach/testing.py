@@ -12,12 +12,13 @@ from langchain_core.messages import AIMessage
 
 from tri_coach.graph.deps import CoachDeps
 from tri_core.config import Settings
-from tri_core.testing import tool_call
+from tri_core.testing import ScriptedChatModel, tool_call
 from tri_nutrition.graph.deps import GraphDeps as NutritionDeps
 from tri_planning import repo
 from tri_planning.graph.deps import GraphDeps as PlanningDeps
 from tri_planning.planning.models import CalendarChange, PlannedSession, TrainingGoal, WeekTarget
 from tri_planning.testing import GOAL_ARGS, MONDAY
+from tri_wellness.ranges.registry import MarkerRegistry
 
 CFG: dict[str, Any] = {"configurable": {"thread_id": "coach"}, "recursion_limit": 60}
 
@@ -29,6 +30,8 @@ def make_test_deps(
     planning: BaseChatModel,
     nutrition: BaseChatModel,
     analyst: BaseChatModel,
+    wellness: BaseChatModel | None = None,
+    registry: MarkerRegistry | None = None,
     tp: Any = None,
     garmin: Any = None,
     today: date = MONDAY,
@@ -59,6 +62,8 @@ def make_test_deps(
             today=lambda: today,
         ),
         analyst_tools=[],
+        wellness_model=wellness or ScriptedChatModel(script=[]),
+        wellness_registry=registry,
         max_consults=max_consults,
         today=lambda: today,
     )

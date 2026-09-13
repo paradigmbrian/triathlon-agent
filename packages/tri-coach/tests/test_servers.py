@@ -114,3 +114,14 @@ def test_make_deps_wires_sub_agent_deps():
     assert [t.name for t in deps.planning_deps.garmin_tools] == ["get_training_readiness"]
     assert deps.max_consults == 2 and deps.today() == date(2026, 9, 14)
     assert deps.planning_deps.today() == date(2026, 9, 14) == deps.nutrition_deps.today()
+
+
+def test_make_deps_loads_the_wellness_registry_only_when_sex_is_set(monkeypatch):
+    servers = Servers()
+    model = ScriptedChatModel(script=[])
+    monkeypatch.delenv("TRI_ATHLETE_SEX", raising=False)
+    deps = make_deps(CoachSettings(_env_file=None), model, servers)
+    assert deps.wellness_registry is None and deps.wellness_model is model
+    monkeypatch.setenv("TRI_ATHLETE_SEX", "male")
+    deps = make_deps(CoachSettings(_env_file=None), model, servers)
+    assert deps.wellness_registry is not None and deps.wellness_registry.sex == "male"

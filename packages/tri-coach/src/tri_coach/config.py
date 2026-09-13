@@ -3,11 +3,14 @@
 from functools import lru_cache
 
 from tri_core.config import Settings
+from tri_wellness.config import Sex
 
 
 class CoachSettings(Settings):
     tri_coach_langsmith_project: str = "tri_coach"
     tri_coach_max_consults_per_domain: int = 2
+    # Optional here (required by tri-wellness itself): unset means no wellness consult.
+    tri_athlete_sex: Sex | None = None
 
 
 @lru_cache(maxsize=1)

@@ -30,3 +30,10 @@ def test_the_env_example_values_parse(monkeypatch):
     s = CoachSettings(_env_file=None)
     assert s.tri_coach_max_consults_per_domain == 2
     assert s.tri_coach_langsmith_project == "tri_coach"
+
+
+def test_athlete_sex_is_optional_for_the_coach(monkeypatch):
+    monkeypatch.delenv("TRI_ATHLETE_SEX", raising=False)
+    assert CoachSettings(_env_file=None).tri_athlete_sex is None
+    monkeypatch.setenv("TRI_ATHLETE_SEX", "female")
+    assert CoachSettings(_env_file=None).tri_athlete_sex == "female"

@@ -9,6 +9,7 @@ dependencies = [
     "tri-analyze",
     "tri-planning",
     "tri-nutrition",
+    "tri-wellness",
     "langchain==1.4.0",
     "langchain-anthropic==1.7.1",
     "langchain-mcp-adapters==0.3.2",
@@ -36,3 +37,4 @@ tri-core = { workspace = true }
 tri-analyze = { workspace = true }
 tri-planning = { workspace = true }
 tri-nutrition = { workspace = true }
+tri-wellness = { workspace = true }

@@ -26,6 +26,7 @@ from tri_planning import allowlist as planning_allow
 from tri_planning.config import get_planning_settings
 from tri_planning.graph.deps import GraphDeps as PlanningDeps
 from tri_planning.graph.deps import make_deps as make_planning_deps
+from tri_wellness.ranges.registry import MarkerRegistry, load_registry
 
 ConnectFactory = Callable[[], AbstractContextManager[Conn]]
 
@@ -41,6 +42,8 @@ class CoachDeps:
     planning_deps: PlanningDeps
     nutrition_deps: NutritionDeps
     analyst_tools: list[BaseTool]
+    wellness_model: BaseChatModel  # the lab interpreter run inside ask_wellness
+    wellness_registry: MarkerRegistry | None = None  # None: labs not configured, no tool bound
     max_consults: int = 2
     today: Callable[[], date] = date.today
 
@@ -69,6 +72,7 @@ def make_deps(
     planning.today = today
     nutrition = make_nutrition_deps(get_nutrition_settings(), model, servers.garmin, servers.tp)
     nutrition.today = today
+    registry = load_registry(settings.tri_athlete_sex) if settings.tri_athlete_sex else None
     return CoachDeps(
         model=model,
         analyst_model=model,
@@ -77,6 +81,8 @@ def make_deps(
         planning_deps=planning,
         nutrition_deps=nutrition,
         analyst_tools=analyst_tools_for(servers, url, today),
+        wellness_model=model,
+        wellness_registry=registry,
         max_consults=settings.tri_coach_max_consults_per_domain,
         today=today,
     )

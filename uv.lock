@@ -1189,6 +1189,7 @@ dependencies = [
     { name = "tri-core" },
     { name = "tri-nutrition" },
     { name = "tri-planning" },
+    { name = "tri-wellness" },
     { name = "typer" },
 ]
 
@@ -1207,6 +1208,7 @@ requires-dist = [
     { name = "tri-core", editable = "packages/tri-core" },
     { name = "tri-nutrition", editable = "packages/tri-nutrition" },
     { name = "tri-planning", editable = "packages/tri-planning" },
+    { name = "tri-wellness", editable = "packages/tri-wellness" },
     { name = "typer", specifier = ">=0.15" },
 ]
 
