@@ -1,11 +1,15 @@
 from datetime import date
+from types import SimpleNamespace
+from typing import Any
 
 import yaml
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
+from langgraph.types import Command, Interrupt
 
 from tri_coach.models import Proposal
 from tri_coach.repl import (
     TurnPrinter,
+    chat_loop,
     label,
     parse_decision,
     proposals_from_yaml,
@@ -169,3 +173,76 @@ def test_yaml_round_trip_keeps_both_domains_and_overrides():
     assert [p.id for p in back] == ["p1", "p2"]
     assert back[0].changes[0].new_date == date(2026, 9, 19)
     assert back[1].changes == [] and back[1].overrides == {"activity_factor": 1.45}
+
+
+def interrupt_payload() -> dict[str, Any]:
+    return {
+        "narration": "Knee pain: move Wednesday.",
+        "proposals": [p.model_dump(mode="json") for p in proposals()],
+    }
+
+
+def interrupt_event() -> tuple[tuple[str, ...], str, dict[str, Any]]:
+    return ((), "updates", {"__interrupt__": (Interrupt(value=interrupt_payload()),)})
+
+
+class StubGraph:
+    """Yields a scripted event list per astream call; records the payloads it was given."""
+
+    def __init__(self, turns: list[list[Any]], state: Any = None) -> None:
+        self.turns = list(turns)
+        self.inputs: list[Any] = []
+        self.state = state
+
+    async def astream(self, payload, config=None, stream_mode=None, subgraphs=False):
+        self.inputs.append(payload)
+        for ev in self.turns.pop(0):
+            yield ev
+
+    async def aget_state(self, config: Any) -> Any:
+        return self.state
+
+
+def scripted(lines: list[str]) -> Any:
+    it = iter(lines)
+
+    async def read() -> str | None:
+        return next(it, None)
+
+    return read
+
+
+async def test_chat_loop_reviews_then_resumes_the_graph_with_the_decision():
+    done = ((), "updates", {"apply": {"messages": [AIMessage(content="planning: applied 1")]}})
+    graph = StubGraph([[interrupt_event()], [done]])
+    buf: list[str] = []
+
+    await chat_loop(
+        graph, read=scripted(["move my long ride", "huh", "approve", "/quit"]), out=buf.append
+    )
+
+    text = "".join(buf)
+    assert "-- planning (p1): move it" in text and "2026-09-14" in text
+    assert "approve / reject <note> / edit" in text  # reprinted after the unparsable "huh"
+    assert "planning: applied 1" in text
+    assert graph.inputs[0]["messages"][0].content == "move my long ride"
+    assert isinstance(graph.inputs[1], Command)
+    assert graph.inputs[1].resume == {"action": "approve"}
+
+
+async def test_chat_loop_survives_a_bare_slash_and_shows_a_paused_review():
+    snapshot = SimpleNamespace(
+        next=("review",),
+        values={},
+        tasks=(SimpleNamespace(interrupts=(Interrupt(value=interrupt_payload()),)),),
+    )
+    graph = StubGraph([[]], state=snapshot)
+    buf: list[str] = []
+
+    await chat_loop(graph, read=scripted(["/", "/pending", "approve", "/quit"]), out=buf.append)
+
+    text = "".join(buf)
+    assert "unknown command" not in text
+    assert "-- nutrition (p2): targets" in text
+    assert isinstance(graph.inputs[0], Command)
+    assert graph.inputs[0].resume == {"action": "approve"}

@@ -258,7 +258,10 @@ async def chat_loop(
         if not line:
             continue
         if line.startswith("/"):
-            name = line[1:].split()[0]
+            parts = line[1:].split()
+            if not parts:  # a bare "/" is not a command
+                continue
+            name = parts[0]
             if name == "quit":
                 return
             if name == "pending":
