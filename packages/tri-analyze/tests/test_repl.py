@@ -3,8 +3,8 @@ import httpx
 from langchain_core.messages import AIMessage
 from langchain_core.tools import tool
 
-from tri_analyze.agent.agent import build_agent
-from tri_analyze.agent.repl import TurnPrinter, chat_loop, run_turn
+from tri_analyze._old_agent.agent import build_agent
+from tri_analyze._old_agent.repl import TurnPrinter, chat_loop, run_turn
 from tri_core.testing import ScriptedChatModel, tool_call
 
 

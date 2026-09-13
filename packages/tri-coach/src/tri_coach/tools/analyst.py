@@ -16,8 +16,8 @@ from langchain_core.tools import BaseTool, StructuredTool
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.errors import GraphBubbleUp
 
-from tri_analyze.agent.agent import build_agent
-from tri_analyze.agent.prompt import load_athlete_context, render_system_prompt
+from tri_analyze._old_agent.agent import build_agent
+from tri_analyze._old_agent.prompt import load_athlete_context, render_system_prompt
 from tri_coach.text import last_ai_text
 from tri_core.db.repo import Conn
 

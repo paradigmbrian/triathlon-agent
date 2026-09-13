@@ -9,7 +9,7 @@ from typing import Any
 
 from langgraph.store.base import BaseStore
 
-from tri_analyze.agent.prompt import load_athlete_context
+from tri_analyze._old_agent.prompt import load_athlete_context
 from tri_coach.models import ChangeSet
 from tri_core.db.repo import Conn
 from tri_nutrition import repo as nrepo

@@ -42,10 +42,10 @@ async def _chat(*, no_live: bool) -> None:
 
     from langgraph.checkpoint.memory import InMemorySaver
 
-    from tri_analyze.agent.agent import build_agent, make_model
-    from tri_analyze.agent.live_tools import open_live_tools
-    from tri_analyze.agent.prompt import load_athlete_context, render_system_prompt
-    from tri_analyze.agent.repl import chat_loop
+    from tri_analyze._old_agent.agent import build_agent, make_model
+    from tri_analyze._old_agent.live_tools import open_live_tools
+    from tri_analyze._old_agent.prompt import load_athlete_context, render_system_prompt
+    from tri_analyze._old_agent.repl import chat_loop
     from tri_core.db.connection import connect
     from tri_core.db.sql_tool import make_query_tool
 
