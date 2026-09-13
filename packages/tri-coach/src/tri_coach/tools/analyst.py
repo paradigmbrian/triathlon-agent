@@ -10,24 +10,16 @@ from datetime import date
 from uuid import uuid4
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import HumanMessage
 from langchain_core.tools import BaseTool, StructuredTool
 from langgraph.checkpoint.memory import InMemorySaver
 
 from tri_analyze.agent.agent import build_agent
 from tri_analyze.agent.prompt import load_athlete_context, render_system_prompt
+from tri_coach.text import last_ai_text
 from tri_core.db.repo import Conn
 
 ANALYST_RECURSION_LIMIT = 40
-
-
-def _text(msg: AIMessage) -> str:
-    content = msg.content
-    if isinstance(content, str):
-        return content
-    return "".join(
-        str(b.get("text", "")) for b in content if isinstance(b, dict) and b.get("type") == "text"
-    )
 
 
 def make_analyst_tool(
@@ -52,12 +44,9 @@ def make_analyst_tool(
                 "recursion_limit": ANALYST_RECURSION_LIMIT,
             },
         )
-        for msg in reversed(out["messages"]):
-            if isinstance(msg, AIMessage) and not msg.tool_calls:
-                text = _text(msg)
-                if text:
-                    return text
-        return "The analyst returned no answer; ask a narrower question."
+        return last_ai_text(out["messages"]) or (
+            "The analyst returned no answer; ask a narrower question."
+        )
 
     return StructuredTool.from_function(
         coroutine=ask_analyst,

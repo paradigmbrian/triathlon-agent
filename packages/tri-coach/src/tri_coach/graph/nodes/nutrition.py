@@ -8,9 +8,10 @@ from typing import Any
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 
-from tri_coach.graph.nodes.planning import last_ai_text, result_message
+from tri_coach.graph.nodes.planning import result_message
 from tri_coach.graph.state import CoachState
 from tri_coach.models import Proposal
+from tri_coach.text import last_ai_text
 from tri_nutrition.prompts.checkin import BRIEF_PREFIX
 
 

@@ -6,26 +6,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 
 from tri_coach.graph.state import CoachState
 from tri_coach.models import Brief, Proposal
+from tri_coach.text import last_ai_text
 from tri_planning.prompts.adjust import BRIEF_PREFIX
-
-
-def last_ai_text(messages: list[Any]) -> str:
-    for msg in reversed(messages):
-        if isinstance(msg, AIMessage) and not msg.tool_calls:
-            content = msg.content
-            if isinstance(content, str):
-                return content
-            return "".join(
-                str(b.get("text", ""))
-                for b in content
-                if isinstance(b, dict) and b.get("type") == "text"
-            )
-    return ""
 
 
 def proposal_from_planning(out: dict[str, Any], pid: str) -> Proposal:

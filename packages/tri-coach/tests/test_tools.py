@@ -10,9 +10,13 @@ from langgraph.graph.message import add_messages
 
 from tri_coach.graph.llm import make_subagent
 from tri_coach.models import Brief, ProposalRequest
+from tri_coach.text import last_ai_text
 from tri_coach.tools.analyst import make_analyst_tool
 from tri_coach.tools.handoff import make_handoff_tools, turn_messages
+from tri_coach.tools.wellness import make_wellness_tool, wellness_tools
+from tri_core.config import Settings
 from tri_core.testing import ScriptedChatModel, tool_call
+from tri_wellness.testing import seed_panel
 
 
 def test_turn_messages_is_everything_after_the_last_human_message():
@@ -230,4 +234,52 @@ async def test_ask_analyst_runs_the_analyst_on_a_throwaway_thread(nocommit):
     assert analyst.calls == 2
     # a second question starts fresh: the analyst does not remember the first
     analyst.script.extend([AIMessage(content="Fresh answer.")])
+    assert await ask.ainvoke({"question": "again?"}) == "Fresh answer."
+
+
+def test_last_ai_text_takes_the_last_answer_without_tool_calls():
+    calls = AIMessage(
+        content="", tool_calls=[{"name": "x", "args": {}, "id": "c1", "type": "tool_call"}]
+    )
+    assert last_ai_text([AIMessage(content="first"), calls]) == "first"
+    assert last_ai_text([AIMessage(content=[{"type": "text", "text": "blocks"}])]) == "blocks"
+    assert last_ai_text([HumanMessage("only human")]) == ""
+
+
+def test_wellness_tools_are_read_only(registry):
+    tools = wellness_tools(
+        lambda: contextlib.nullcontext(None), Settings().test_database_url, registry
+    )
+    assert [t.name for t in tools] == [
+        "query_training_db",
+        "get_panel_findings",
+        "get_marker_spec",
+        "get_marker_history",
+    ]
+
+
+@pytest.mark.db
+async def test_ask_wellness_runs_the_lab_interpreter_on_a_throwaway_thread(ldb, registry):
+    seed_panel(ldb, date(2026, 8, 30), [("ferritin", 18.0, "ng/mL"), ("hs_crp", 0.4, "mg/L")])
+    wellness = ScriptedChatModel(
+        script=[
+            tool_call("get_panel_findings", {"panel": "latest"}),
+            AIMessage(content="Ferritin 18 ng/mL is functionally low."),
+        ]
+    )
+    ask = make_wellness_tool(
+        wellness,
+        lambda: contextlib.nullcontext(ldb),
+        Settings().test_database_url,
+        registry,
+        lambda: date(2026, 9, 14),
+    )
+    assert ask.name == "ask_wellness"
+    assert "\n " not in ask.description
+    assert await ask.ainvoke({"question": "how is my ferritin?"}) == (
+        "Ferritin 18 ng/mL is functionally low."
+    )
+    assert wellness.calls == 2
+    # a second question starts fresh: the interpreter does not remember the first
+    wellness.script.extend([AIMessage(content="Fresh answer.")])
     assert await ask.ainvoke({"question": "again?"}) == "Fresh answer."
