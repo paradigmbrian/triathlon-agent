@@ -1,7 +1,7 @@
 # tri-coach — The Coaching Orchestrator (package `tri_coach`)
 
 **Date:** 2026-09-11
-**Status:** Approved design, pending implementation plan; revised 2026-09-11 against `main` at d66a54b after planning plan 4 landed (see §1, §7.3, §8, §13)
+**Status:** Approved design; milestone 1 merged 2026-09-12 (plan 01), milestone 2 in progress (plan 02); revised 2026-09-11 against `main` at d66a54b after planning plan 4 landed (see §1, §7.3, §8, §13)
 **Purpose:** The agent the athlete talks to. It answers questions by consulting the analyst, decides on its own authority when a change to the training plan or the nutrition targets is warranted, briefs the planning and nutrition agents to produce that change, and presents one change set for approval. It is the sole decider: sub-agents never initiate a change under the coach.
 
 Companion specs: `tri-analyze` (2026-09-06), `tri-planning` (2026-09-07), `tri-nutrition` (2026-09-10). Both the planning and nutrition specs deferred "an orchestrator composing the agents as subgraphs" to this spec. The `tri-wellness` spec (2026-09-10) is not composed here; see §14.

@@ -10,6 +10,7 @@ TrainingPeaks data, synced into a local Postgres store.
 | `packages/tri-planning` | `tri_planning` | `tri-planning chat` | Planning agent: goal intake, periodized plan, approved writes to the TrainingPeaks calendar. |
 | `packages/tri-nutrition` | `tri_nutrition` | `tri-nutrition chat \| today \| check-in \| eval` | Nutrition agent: profile intake, periodized daily targets and fueling plans, approved writes to Garmin Connect and TrainingPeaks. |
 | `packages/tri-wellness` | `tri_wellness` | `tri-wellness ingest \| report \| chat \| panels \| eval` | Lab interpreter: PDF and export ingest with review, functional-range evaluation, written interpretation grounded in training data. |
+| `packages/tri-coach` | `tri_coach` | `tri-coach chat \| memory \| reset` | Head coach: answers through the analyst, briefs planning and nutrition, one review gate over both, approved writes only. |
 
 `tri-analyze`, `tri-planning`, `tri-nutrition` and `tri-wellness` depend on `tri-core`; no agent depends on another.
 Repo: github.com/paradigmbrian/triathlon-agent.
@@ -78,6 +79,9 @@ uv run tri-wellness report [--panel ID] [--out path.md]   # interpret a stored p
 uv run tri-wellness chat                                   # ask about panels and reports
 uv run tri-wellness panels                                 # list stored panels
 uv run tri-wellness eval [--recreate-dataset]              # LangSmith report evaluators
+uv run tri-coach chat [--no-live]       # the front door: one conversation over the analyst, planning and nutrition
+uv run tri-coach memory [--forget ID]   # the coach's athlete memory
+uv run tri-coach reset [--yes] [--forget-memory]
 ```
 
 In chat: `/tools` lists bound tools, `/prompt` prints the system prompt, `/sync` refreshes
@@ -160,3 +164,5 @@ Module-level READMEs: `packages/tri-core/src/tri_core/{mcp,db,sync}/README.md`,
   planning and nutrition, nutrition regenerate entry, directed prompt sections, tri-core
   `open_live_servers` and `ToolsCaller`; tracked in
   `docs/superpowers/plans/2026-09-12-tri-coach-01-sub-package-preparation.md`. Coach v1 pending.
+- tri-coach milestone 2 (2026-09): coach v1 (chat, memory, reset; handoffs, review, apply);
+  tracked in `docs/superpowers/plans/2026-09-12-tri-coach-02-coach-v1.md`. Check-in and eval pending.
