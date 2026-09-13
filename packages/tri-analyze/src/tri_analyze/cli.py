@@ -99,12 +99,16 @@ async def _chat(*, no_live: bool) -> int:
             return render_system_prompt(current[0], [t.name for t in tools])
 
         async def cmd_sync() -> str:
-            report = await run_sync(settings, log=lambda m: _out(m + "\n"))
-            status = "sync " + ("ok" if report.ok else "had errors")
+            report = None
             try:
+                report = await run_sync(settings, log=lambda m: _out(m + "\n"))
                 current[0] = load_context()
             except psycopg.OperationalError as exc:
+                if report is None:
+                    return f"sync failed: database unreachable: {exc}"
+                status = "sync " + ("ok" if report.ok else "had errors")
                 return f"{status}; athlete context not refreshed: database unreachable: {exc}"
+            status = "sync " + ("ok" if report.ok else "had errors")
             return f"{status}; athlete context refreshed"
 
         await chat_loop(

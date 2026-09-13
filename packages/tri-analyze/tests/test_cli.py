@@ -51,3 +51,44 @@ def test_chat_exits_2_when_the_database_is_unreachable(monkeypatch):
     result = runner.invoke(app, ["chat", "--no-live"])
     assert result.exit_code == 2
     assert "database unreachable: connection refused" in result.output
+
+
+def test_cmd_sync_reports_a_down_database_instead_of_raising(monkeypatch):
+    monkeypatch.setattr(
+        cli, "get_analyze_settings", lambda: AnalyzeSettings(_env_file=None, anthropic_api_key="k")
+    )
+
+    class _FakeCursor:
+        def fetchone(self):
+            return None
+
+        def fetchall(self):
+            return []
+
+    class _FakeConnection:
+        def execute(self, *args, **kwargs):
+            return _FakeCursor()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    monkeypatch.setattr("tri_core.db.connection.connect", lambda url: _FakeConnection())
+
+    async def down(*args, **kwargs):
+        raise psycopg.OperationalError("down")
+
+    monkeypatch.setattr("tri_core.sync.runner.run_sync", down)
+
+    lines = iter(["/sync", None])
+
+    async def fake_read():
+        return next(lines)
+
+    monkeypatch.setattr(cli, "_read", fake_read)
+
+    result = runner.invoke(app, ["chat", "--no-live"])
+    assert result.exit_code == 0
+    assert "sync failed: database unreachable: down" in result.output
