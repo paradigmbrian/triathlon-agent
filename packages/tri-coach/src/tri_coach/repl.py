@@ -129,10 +129,17 @@ class TurnPrinter:
 
 
 async def run_turn(
-    graph: Any, payload: dict[str, Any] | Command[Any], thread_id: str, out: Out
+    graph: Any,
+    payload: dict[str, Any] | Command[Any],
+    thread_id: str,
+    out: Out,
+    *,
+    tags: list[str] | None = None,
 ) -> TurnPrinter:
     printer = TurnPrinter(out)
-    cfg = {"configurable": {"thread_id": thread_id}, "recursion_limit": 60}
+    cfg: dict[str, Any] = {"configurable": {"thread_id": thread_id}, "recursion_limit": 60}
+    if tags:
+        cfg["tags"] = list(tags)
     try:
         async for namespace, mode, data in graph.astream(
             payload, config=cfg, stream_mode=["messages", "updates"], subgraphs=True
@@ -215,16 +222,27 @@ async def _review_dialogue(
     read: Callable[[], Awaitable[str | None]],
     out: Out,
     edit: EditFn | None,
+    commands: dict[str, CommandFn],
 ) -> ReviewDecision | None:
     out(render_review(payload) + "\n")
     while True:
         line = await read()
         if line is None or line.strip() == "/quit":
             return None
-        if line.strip() == "/pending":
+        text = line.strip()
+        if text == "/pending":
             out(render_review(payload) + "\n")
             continue
-        decision = parse_decision(line)
+        if text.startswith("/"):
+            parts = text[1:].split()
+            name = parts[0] if parts else ""
+            handler = commands.get(name)
+            if handler is None:
+                out(f"unknown command: /{name}; {REVIEW_PROMPT}\n")
+            else:
+                out(await handler() + "\n")
+            continue
+        decision = parse_decision(text)
         if decision is None:
             out(f"{REVIEW_PROMPT}\n")
             continue
@@ -240,7 +258,7 @@ async def _review_dialogue(
         return decision
 
 
-def _paused_review(snap: Any) -> dict[str, Any] | None:
+def paused_review(snap: Any) -> dict[str, Any] | None:
     """The interrupt payload of a review that is still waiting, from a state snapshot."""
     if snap is None or getattr(snap, "next", ()) != ("review",):
         return None
@@ -264,10 +282,10 @@ async def chat_loop(
     out(f"tri-coach chat. Type a message, /quit to exit, /<command> for: {names}\n")
     # A review the athlete walked away from is still paused in the checkpoint: finish it first,
     # or the next typed message makes LangGraph drop the unfinished task and the change set.
-    pending = _paused_review(await graph.aget_state({"configurable": {"thread_id": thread_id}}))
+    pending = paused_review(await graph.aget_state({"configurable": {"thread_id": thread_id}}))
     while True:
         if pending is not None:
-            decision = await _review_dialogue(pending, read, out, edit)
+            decision = await _review_dialogue(pending, read, out, edit, commands)
             if decision is None:
                 out("\n")
                 return
@@ -293,7 +311,7 @@ async def chat_loop(
                 return
             if name == "pending":
                 snap = await graph.aget_state({"configurable": {"thread_id": thread_id}})
-                paused = _paused_review(snap)
+                paused = paused_review(snap)
                 if paused is not None:
                     pending = paused
                 elif snap.values.get("pending") is not None:

@@ -394,3 +394,36 @@ async def test_chat_loop_keeps_going_after_a_failed_turn():
 
     assert "psycopg went away" in "".join(buf)
     assert len(graph.inputs) == 2
+
+
+async def test_slash_commands_work_at_the_review_gate():
+    done = ((), "updates", {"apply": {"messages": [AIMessage(content="planning: applied 1")]}})
+    graph = StubGraph([[interrupt_event()], [done]])
+    buf: list[str] = []
+
+    async def status() -> str:
+        return "STATUS LINE"
+
+    await chat_loop(
+        graph,
+        read=scripted(["move it", "/status", "/nope", "approve", "/quit"]),
+        out=buf.append,
+        commands={"status": status},
+    )
+    text = "".join(buf)
+    assert "STATUS LINE" in text and "unknown command: /nope" in text
+    assert isinstance(graph.inputs[1], Command) and graph.inputs[1].resume == {"action": "approve"}
+
+
+async def test_run_turn_passes_tags_to_the_run():
+    graph = StubGraph([[]])
+    seen: list[Any] = []
+
+    async def astream(payload, config=None, stream_mode=None, subgraphs=False):
+        seen.append(config)
+        return
+        yield  # pragma: no cover - makes this an async generator
+
+    graph.astream = astream  # type: ignore[method-assign]
+    await run_turn(graph, {"messages": []}, "coach", lambda s: None, tags=["checkin"])
+    assert seen[0]["tags"] == ["checkin"] and seen[0]["recursion_limit"] == 60

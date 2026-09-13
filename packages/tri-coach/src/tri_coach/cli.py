@@ -1,4 +1,4 @@
-"""Command-line entry points for the head coach: chat, memory, reset."""
+"""Command-line entry points for the head coach: chat, check-in, memory, reset."""
 
 from __future__ import annotations
 
@@ -183,6 +183,47 @@ async def _chat(*, no_live: bool) -> None:
                 "sync": cmd_sync,
             },
             edit=edit_in_editor,
+        )
+
+
+@app.command("check-in")
+def check_in(
+    yes: bool = typer.Option(
+        False, "--yes", help="Approve the change set and its nutrition follow-on without asking"
+    ),
+    no_sync: bool = typer.Option(False, "--no-sync", help="Skip `tri sync` first"),
+    no_live: bool = typer.Option(False, "--no-live", help="Do not start the MCP servers"),
+) -> None:
+    """Sync, run the coach's weekly check-in, and pause at review (exit 3) unless --yes."""
+    raise typer.Exit(code=asyncio.run(_check_in(yes=yes, no_sync=no_sync, no_live=no_live)))
+
+
+async def _check_in(*, yes: bool, no_sync: bool, no_live: bool) -> int:
+    from tri_coach.checkin import run_checkin
+    from tri_core.db.connection import connect
+    from tri_core.sync.runner import run_sync
+    from tri_nutrition import store as S
+    from tri_planning import repo
+
+    settings = get_coach_settings()
+    code = _ready(settings)
+    if code is not None:
+        return code
+    if not no_sync:
+        report = await run_sync(settings, log=lambda m: _out(m + "\n"))
+        if not report.ok:
+            _out("check-in: sync had errors; continuing with existing data\n")
+    with connect(settings.database_url) as conn:
+        phase, _, _ = repo.derive_phase(conn)
+    async with _open_graph(no_live=no_live) as (graph, store, _servers):
+        profile = await S.get_profile(store)
+        return await run_checkin(
+            graph,
+            has_plan=phase == "active",
+            has_profile=profile is not None,
+            yes=yes,
+            out=_out,
+            thread_id=THREAD_ID,
         )
 
 
