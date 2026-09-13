@@ -8,6 +8,7 @@ from langchain_core.messages import AIMessage
 
 from tri_analyze.allowlist import GARMIN_LIVE_TOOLS, TP_LIVE_TOOLS
 from tri_analyze.evals.cases import CASES, EXTRA_TOOLS, KINDS, TODAY, EvalCase, jsonable
+from tri_analyze.evals.evaluators import pulls_splits, states_window, uses_sql
 from tri_analyze.evals.target import Canned, athlete_from_inputs, make_target, stub_tools
 from tri_analyze.repo import AthleteContext
 from tri_core.db.sql_tool import make_query_tool
@@ -145,3 +146,58 @@ async def test_target_propagates_an_exception_so_langsmith_records_an_error():
     c = case("last_z2_ride")
     with pytest.raises(IndexError):
         await make_target(ScriptedChatModel(script=[]))(c.inputs())
+
+
+def calls(*names: str) -> dict:
+    return {"calls": [{"name": n, "args": {}} for n in names], "answer": ""}
+
+
+def test_uses_sql_pass_fail_and_not_applicable():
+    ref = case("last_z2_ride").outputs()
+    assert uses_sql(calls("query_training_db", "get_activity"), ref) == {
+        "key": "uses_sql",
+        "score": 1,
+        "comment": "1 query_training_db call(s)",
+    }
+    assert uses_sql(calls("get_activity"), ref)["score"] == 0
+    assert uses_sql(calls(), case("go_hard_today").outputs())["score"] is None
+
+
+def test_pulls_splits_pass_fail_and_not_applicable():
+    live = case("run_intervals")
+    assert (
+        pulls_splits(
+            live.inputs(), calls("query_training_db", "get_activity_splits"), live.outputs()
+        )["score"]
+        == 1
+    )
+    r = pulls_splits(live.inputs(), calls("query_training_db", "get_activity"), live.outputs())
+    assert r["score"] == 0 and r["key"] == "pulls_splits"
+    no_live = case("intervals_no_live")
+    assert (
+        pulls_splits(no_live.inputs(), calls("query_training_db"), no_live.outputs())["score"]
+        is None
+    )
+    plain = case("last_z2_ride")
+    assert (
+        pulls_splits(plain.inputs(), calls("query_training_db"), plain.outputs())["score"] is None
+    )
+
+
+def test_states_window_accepts_iso_month_day_and_relative_windows():
+    ref = case("weekly_tss_8w").outputs()
+
+    def answer(text: str) -> dict:
+        return {"calls": [], "answer": text}
+
+    for text in (
+        "Weeks from 2026-07-20 to 2026-09-13: TSS rose from 388 to 470.",
+        "Between Jul 20 and Sep 13 the weekly TSS climbed steadily.",
+        "Over the last 8 weeks TSS averaged 412.",
+        "Looking at the past two months, volume grew.",
+        "Since 20 July the trend is up.",
+    ):
+        assert states_window(answer(text), ref)["score"] == 1, text
+    r = states_window(answer("TSS averaged 412 with one recovery week."), ref)
+    assert r["score"] == 0 and r["key"] == "states_window"
+    assert states_window(answer("anything"), case("last_z2_ride").outputs())["score"] is None
