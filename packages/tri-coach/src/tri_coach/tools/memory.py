@@ -6,7 +6,7 @@ from __future__ import annotations
 import inspect
 import json
 from collections.abc import Callable
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from langchain_core.tools import BaseTool, StructuredTool
@@ -14,13 +14,17 @@ from langgraph.config import get_store
 
 from tri_coach import memory as M
 
+CHECKIN_DAYS = 14  # spec 5.1: a check-in summary stays in the prompt for two weeks
+
 
 def make_memory_tools(today: Callable[[], date]) -> list[BaseTool]:
     async def remember(kind: M.MemoryKind, text: str, until: str | None = None) -> str:
         """Remember something the athlete said that should shape a later decision and that
-        planning (goal, availability, constraints) and nutrition (profile) do not already store.
-        kind: injury | constraint | preference | event | coaching_style | note. until: ISO date
-        when an injury or event ends, else omit."""
+        planning (goal, availability, constraints) and nutrition (profile) do not already store,
+        or the one-paragraph summary at the end of a check-in.
+        kind: injury | constraint | preference | event | coaching_style | note | checkin.
+        until: ISO date when an injury or event ends, else omit; a checkin entry defaults to
+        two weeks out."""
         end: date | None = None
         if until:
             try:
@@ -29,6 +33,8 @@ def make_memory_tools(today: Callable[[], date]) -> list[BaseTool]:
                 return json.dumps(
                     {"error": f"until must be an ISO date (YYYY-MM-DD), got {until!r}"}
                 )
+        if kind == "checkin" and end is None:
+            end = today() + timedelta(days=CHECKIN_DAYS)
         entry = await M.add_entry(get_store(), kind, text, today(), end)
         return json.dumps({"remembered": True, "id": entry.id})
 

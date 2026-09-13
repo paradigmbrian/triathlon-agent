@@ -113,3 +113,18 @@ async def test_remember_and_forget_tools_write_the_store():
         is False
     )
     assert [e.kind for e in await M.get_entries(store)] == ["constraint"]
+
+
+async def test_a_checkin_entry_is_kept_for_fourteen_days_by_default():
+    store = InMemoryStore()
+    remember, _ = make_memory_tools(lambda: TODAY)
+    out = json.loads(
+        await call_tool_in_graph(
+            store,
+            remember,
+            {"kind": "checkin", "text": "Week on plan; watch the left knee.", "until": None},
+        )
+    )
+    assert out["remembered"] is True
+    entry = (await M.get_entries(store))[0]
+    assert entry.kind == "checkin" and entry.until == date(2026, 9, 28)
