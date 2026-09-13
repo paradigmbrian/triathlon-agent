@@ -6,7 +6,16 @@ case scores None, which the pass rate leaves out."""
 from __future__ import annotations
 
 import re
+from collections.abc import Awaitable, Callable
 from typing import Any
+
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import HumanMessage, SystemMessage
+from langsmith.evaluation import EvaluationResult, EvaluationResults
+from pydantic import BaseModel, Field
+
+from tri_analyze.evals.target import athlete_from_inputs, stub_tools
+from tri_analyze.prompts.analyst import render_system_prompt
 
 _MONTH = r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*"
 _DAY = r"\d{1,2}(?:st|nd|rd|th)?"
@@ -66,3 +75,109 @@ def states_window(outputs: dict[str, Any], reference_outputs: dict[str, Any]) ->
         "score": int(hit is not None),
         "comment": f"window: {hit}" if hit else "no date or relative window in the answer",
     }
+
+
+AsyncEvaluator = Callable[
+    [dict[str, Any], dict[str, Any], dict[str, Any]], Awaitable[EvaluationResults]
+]
+
+
+class FeedbackJudgement(BaseModel):
+    grounded: bool = Field(
+        description=(
+            "every number in the answer appears in the system prompt's context or in the tool "
+            "results, and data that is missing is stated as missing rather than guessed"
+        )
+    )
+    covers_rules: bool = Field(
+        description=(
+            "for a session review: planned vs actual, execution quality, load context "
+            "(week position, CTL/ATL/TSB, sleep, HRV, readiness), the athlete's comments and "
+            "RPE when present, and takeaways are all covered; true for a non-session answer"
+        )
+    )
+    uses_athlete_comments: bool = Field(
+        description=(
+            "when the tool results carry athlete comments, feeling or RPE, the answer uses "
+            "them; true when there are none"
+        )
+    )
+    concrete_takeaways: bool = Field(
+        description="one or two concrete takeaways for the next similar session"
+    )
+    no_generic_encouragement: bool = Field(description="no filler praise or generic encouragement")
+    problems: list[str] = Field(description="one line per ungrounded number or missing element")
+
+
+JUDGE_SYSTEM = """\
+You audit one answer a triathlon coach's analyst gave to an athlete. You are given the
+analyst's system prompt (the athlete's context, the bound tools and the feedback rules), the
+athlete's question, the tool results the analyst received, and the analyst's answer.
+
+Grounded: every number in the answer (durations, distances, watts, paces, heart rates, TSS,
+scores, dates) appears in the system prompt's context or in the tool results, possibly after
+a unit conversion or an arithmetic step you can verify; when the tool results are empty or
+lack what the question needs, the answer says so instead of inventing figures.
+
+Feedback quality applies to a session review: the five feedback rules are covered, the
+athlete's own comments, feeling and RPE are used when the tool results carry them, there are
+one or two concrete takeaways for the next similar session, and there is no generic
+encouragement. Judge the answer's text literally; return a FeedbackJudgement."""
+
+
+def render_judge_prompt(inputs: dict[str, Any], outputs: dict[str, Any]) -> str:
+    system = render_system_prompt(athlete_from_inputs(inputs), [t.name for t in stub_tools(inputs)])
+    results = inputs.get("tool_results") or {}
+    rendered = "\n".join(
+        f"{name}:\n" + "\n".join(str(r) for r in responses) for name, responses in results.items()
+    )
+    return (
+        f"Analyst system prompt:\n{system}\n\n"
+        f"Question:\n{inputs.get('question', '')}\n\n"
+        f"Tool results:\n{rendered or '(none)'}\n\n"
+        f"Answer:\n{outputs.get('answer') or ''}"
+    )
+
+
+def make_judge(model: BaseChatModel) -> AsyncEvaluator:
+    """One structured-output call per example, scoring `grounded` always and
+    `feedback_quality` for session reviews. A judge call that raises scores both keys 0 with the
+    error as the comment."""
+    judge = model.with_structured_output(FeedbackJudgement)
+
+    async def feedback_judge(
+        inputs: dict[str, Any], outputs: dict[str, Any], reference_outputs: dict[str, Any]
+    ) -> EvaluationResults:
+        session = reference_outputs.get("kind") == "session"
+        try:
+            out = await judge.ainvoke(
+                [SystemMessage(JUDGE_SYSTEM), HumanMessage(render_judge_prompt(inputs, outputs))]
+            )
+            assert isinstance(out, FeedbackJudgement)
+        except Exception as exc:
+            comment = f"judge failed: {type(exc).__name__}: {exc}"
+            return {
+                "results": [
+                    EvaluationResult(key="grounded", score=0, comment=comment),
+                    EvaluationResult(key="feedback_quality", score=0, comment=comment),
+                ]
+            }
+        problems = "; ".join(out.problems) or "ok"
+        quality = (
+            out.covers_rules
+            and out.uses_athlete_comments
+            and out.concrete_takeaways
+            and out.no_generic_encouragement
+        )
+        return {
+            "results": [
+                EvaluationResult(key="grounded", score=int(out.grounded), comment=problems),
+                EvaluationResult(
+                    key="feedback_quality",
+                    score=int(quality) if session else None,
+                    comment=problems if session else "not a session review",
+                ),
+            ]
+        }
+
+    return feedback_judge

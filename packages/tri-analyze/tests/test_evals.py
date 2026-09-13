@@ -8,8 +8,16 @@ from langchain_core.messages import AIMessage
 
 from tri_analyze.allowlist import GARMIN_LIVE_TOOLS, TP_LIVE_TOOLS
 from tri_analyze.evals.cases import CASES, EXTRA_TOOLS, KINDS, TODAY, EvalCase, jsonable
-from tri_analyze.evals.evaluators import pulls_splits, states_window, uses_sql
+from tri_analyze.evals.evaluators import (
+    FeedbackJudgement,
+    make_judge,
+    pulls_splits,
+    render_judge_prompt,
+    states_window,
+    uses_sql,
+)
 from tri_analyze.evals.target import Canned, athlete_from_inputs, make_target, stub_tools
+from tri_analyze.prompts.analyst import FEEDBACK_RULES
 from tri_analyze.repo import AthleteContext
 from tri_core.db.sql_tool import make_query_tool
 from tri_core.testing import ScriptedChatModel, tool_call
@@ -201,3 +209,82 @@ def test_states_window_accepts_iso_month_day_and_relative_windows():
     r = states_window(answer("TSS averaged 412 with one recovery week."), ref)
     assert r["score"] == 0 and r["key"] == "states_window"
     assert states_window(answer("anything"), case("last_z2_ride").outputs())["score"] is None
+
+
+def verdict(**over) -> dict:
+    base = {
+        "grounded": True,
+        "covers_rules": True,
+        "uses_athlete_comments": True,
+        "concrete_takeaways": True,
+        "no_generic_encouragement": True,
+        "problems": [],
+    }
+    base.update(over)
+    return base
+
+
+def test_judge_prompt_carries_the_rendered_system_prompt_question_results_and_answer():
+    c = case("threshold_rpe9")
+    text = render_judge_prompt(c.inputs(), {"calls": [], "answer": "Third rep fell apart."})
+    assert "Today is 2026-09-16." in text and FEEDBACK_RULES in text
+    assert "Tools bound this session: query_training_db, get_activity, get_activity_splits" in text
+    assert c.question in text
+    assert "Legs were dead from the start" in text  # the canned SQL row
+    assert text.rstrip().endswith("Third rep fell apart.")
+    bare = render_judge_prompt(case("trend_no_data").inputs(), {"calls": [], "answer": ""})
+    assert "Tool results:\n(none)" in bare
+
+
+async def test_judge_scores_grounded_and_feedback_quality_for_a_session():
+    c = case("threshold_rpe9")
+    judge = make_judge(
+        ScriptedChatModel(
+            script=[
+                tool_call(
+                    "FeedbackJudgement",
+                    verdict(
+                        uses_athlete_comments=False, problems=["ignores the athlete's comment"]
+                    ),
+                )
+            ]
+        )
+    )
+    res = await judge(c.inputs(), {"calls": [], "answer": "A hard ride."}, c.outputs())
+    by_key = {r.key: r for r in res["results"]}
+    assert set(by_key) == {"grounded", "feedback_quality"}
+    assert by_key["grounded"].score == 1
+    assert by_key["feedback_quality"].score == 0
+    assert "ignores the athlete's comment" in str(by_key["feedback_quality"].comment)
+
+
+async def test_judge_skips_feedback_quality_outside_session_reviews():
+    c = case("weekly_tss_8w")
+    judge = make_judge(
+        ScriptedChatModel(
+            script=[
+                tool_call(
+                    "FeedbackJudgement",
+                    verdict(grounded=False, problems=["470 is not in the data"]),
+                )
+            ]
+        )
+    )
+    res = await judge(c.inputs(), {"calls": [], "answer": "TSS peaked at 470."}, c.outputs())
+    by_key = {r.key: r for r in res["results"]}
+    assert by_key["grounded"].score == 0 and "470 is not in the data" in str(
+        by_key["grounded"].comment
+    )
+    assert by_key["feedback_quality"].score is None
+    assert by_key["feedback_quality"].comment == "not a session review"
+
+
+async def test_a_raising_judge_scores_both_keys_zero_with_the_error():
+    c = case("last_z2_ride")
+    res = await make_judge(ScriptedChatModel(script=[]))(
+        c.inputs(), {"calls": [], "answer": "x"}, c.outputs()
+    )
+    for r in res["results"]:
+        assert r.score == 0 and str(r.comment).startswith("judge failed: IndexError")
+    assert {r.key for r in res["results"]} == {"grounded", "feedback_quality"}
+    assert FeedbackJudgement.model_fields.keys() == verdict().keys()
