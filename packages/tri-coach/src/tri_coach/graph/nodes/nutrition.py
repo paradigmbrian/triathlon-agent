@@ -12,6 +12,7 @@ from typing import Any
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.runnables.config import merge_configs
+from langgraph.errors import GraphBubbleUp
 
 from tri_coach.graph.nodes.planning import result_message
 from tri_coach.graph.state import CoachState
@@ -56,6 +57,14 @@ def proposal_from_regenerate(out: dict[str, Any], pid: str) -> Proposal:
     )
 
 
+def regeneration_failed(exc: Exception, pid: str) -> Proposal:
+    error = (
+        f"regeneration failed: {type(exc).__name__}: {exc}; targets may not reflect the moved "
+        "sessions; consult nutrition to regenerate"
+    )
+    return Proposal(id=pid, domain="nutrition", summary=error, violations=[error])
+
+
 def follow_on_message(proposal: Proposal) -> HumanMessage:
     if proposal.changes:
         ask = f"Narrate the consequence and call propose_changes with {proposal.id}."
@@ -79,10 +88,17 @@ def make_nutrition_node(graph: Any) -> Any:
         proposals = list(state.get("proposals") or [])
         pid = f"p{len(proposals) + 1}"
         if brief.regenerate:
-            out = await graph.ainvoke(
-                {"targets_requested": True, "regenerate_from": "checkin"}, cfg
-            )
-            proposal = proposal_from_regenerate(out, pid)
+            # apply's step is already committed; a failure here must not strand the thread
+            try:
+                out = await graph.ainvoke(
+                    {"targets_requested": True, "regenerate_from": "checkin"}, cfg
+                )
+            except GraphBubbleUp:
+                raise
+            except Exception as exc:  # noqa: BLE001 - returned to the coach as a violation
+                proposal = regeneration_failed(exc, pid)
+            else:
+                proposal = proposal_from_regenerate(out, pid)
             return {
                 "brief": None,
                 "regenerate_after_apply": False,

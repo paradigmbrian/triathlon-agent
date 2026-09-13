@@ -3,7 +3,9 @@
 from datetime import date
 from types import SimpleNamespace
 
+import pytest
 from langchain_core.messages import AIMessage
+from langgraph.errors import GraphInterrupt
 from langgraph.graph import END
 
 from tri_coach.graph.graph import after_apply
@@ -101,6 +103,38 @@ async def test_the_regenerate_brief_runs_the_targets_entry_and_appends_the_follo
     assert p.id == "p1" and p.question is None and p.changes[0].op == "set_day_targets"
     msg = out["messages"][0]
     assert msg.content.startswith(FOLLOW_ON) and "call propose_changes with p1" in msg.content
+
+
+class Raising(Recorder):
+    """A sub-graph stand-in whose run fails after recording its input."""
+
+    def __init__(self, exc: BaseException) -> None:
+        super().__init__({})
+        self.exc = exc
+
+    async def ainvoke(self, payload, config):
+        await super().ainvoke(payload, config)
+        raise self.exc
+
+
+async def test_a_failing_regeneration_becomes_a_violation_not_an_exception():
+    node = make_nutrition_node(Raising(RuntimeError("model down")))
+    brief = Brief(domain="nutrition", instruction="regenerate", regenerate=True)
+    out = await node({"brief": brief, "proposals": []}, CONFIG)
+    assert out["brief"] is None and out["regenerate_after_apply"] is False
+    p = out["proposals"][0]
+    assert p.id == "p1" and p.changes == [] and p.question is None
+    assert p.violations[0].startswith("regeneration failed: RuntimeError: model down")
+    assert "consult nutrition to regenerate" in p.violations[0]
+    msg = out["messages"][0].content
+    assert msg.startswith(FOLLOW_ON) and "state the violations" in msg
+
+
+async def test_a_regeneration_interrupt_still_bubbles_up():
+    node = make_nutrition_node(Raising(GraphInterrupt()))
+    brief = Brief(domain="nutrition", instruction="regenerate", regenerate=True)
+    with pytest.raises(GraphInterrupt):
+        await node({"brief": brief, "proposals": []}, CONFIG)
 
 
 def test_a_regeneration_that_changes_nothing_or_breaks_a_bound_says_so():

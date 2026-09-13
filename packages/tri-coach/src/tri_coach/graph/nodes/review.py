@@ -70,4 +70,8 @@ def review_node(state: CoachState) -> dict[str, Any]:
         update["messages"] = [HumanMessage(f"Review rejected: {note}")]
     elif decision.action == "edit" and decision.proposals is not None:
         update["pending"] = ChangeSet(narration=pending.narration, proposals=decision.proposals)
+        # A carried id the athlete pulled into the edit is applied now; holding it too would
+        # apply it twice later.
+        edited = {p.id for p in decision.proposals}
+        update["carried"] = [p for p in carried if p.id not in edited]
     return update

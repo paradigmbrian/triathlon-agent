@@ -3,7 +3,9 @@
 Exit codes, as `tri-planning check-in`: 0 a clean week, or every gate approved and applied;
 1 a model or API error, or an apply that did not complete; 2 neither an active plan nor a
 nutrition profile; 3 paused at review, or refused because a review or a held change set is
-already pending (its owner decides it in chat, and --yes must not approve it)."""
+already pending (its owner decides it in chat, and --yes must not approve it) or the thread
+stopped mid-run. --yes approves the change set and a second gate only when it is the nutrition
+follow-on."""
 
 from __future__ import annotations
 
@@ -21,6 +23,11 @@ MAX_GATES = 2  # the change set and its nutrition follow-on (spec 6.5)
 PAUSED_HINT = "check-in: paused at review; run `tri-coach chat` and type /pending to decide"
 
 
+def _is_nutrition_follow_on(payload: dict[str, Any]) -> bool:
+    proposals = payload.get("proposals") or []
+    return bool(proposals) and all(p.get("domain") == "nutrition" for p in proposals)
+
+
 async def run_checkin(
     graph: Any,
     *,
@@ -34,7 +41,14 @@ async def run_checkin(
     snap = await graph.aget_state(cfg)
     paused = paused_review(snap)
     held = (snap.values or {}).get("pending") if snap is not None else None
-    if paused is not None or held is not None or (snap is not None and snap.next):
+    if paused is None and held is None and snap is not None and snap.next:
+        at = ", ".join(snap.next)
+        out(
+            f"check-in: the coach thread stopped mid-run at {at}; "
+            "send any message in `tri-coach chat` to clear it\n"
+        )
+        return EXIT_PAUSED
+    if paused is not None or held is not None:
         if paused is not None:
             out(render_review(paused) + "\n")
         elif held is not None:
@@ -55,6 +69,11 @@ async def run_checkin(
             break
         out("\n" + render_review(printer.interrupt) + "\n")
         if not yes or gates >= MAX_GATES:
+            out(PAUSED_HINT + "\n")
+            return EXIT_PAUSED
+        if gates == 1 and not _is_nutrition_follow_on(printer.interrupt):
+            # --yes covers the change set and its nutrition follow-on, never a second plan change
+            out("check-in: the second gate is not the nutrition follow-on; --yes stops here\n")
             out(PAUSED_HINT + "\n")
             return EXIT_PAUSED
         gates += 1

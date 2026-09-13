@@ -410,7 +410,75 @@ def test_merge_held_joins_a_shared_stable_id():
     merged = merge_held([plan, nut], [plan.model_copy(update={"summary": "new"})])
     assert [p.id for p in merged] == ["held-planning", "held-nutrition"]
     assert len(merged[0].changes) == 2 and merged[0].summary.startswith("2 planning changes")
+    assert "unverified" not in merged[0].summary
     assert merge_held([], [nut]) == [nut] and merge_held([nut], []) == [nut]
+
+
+def test_merge_held_keeps_the_unverified_warning_from_either_side():
+    plan = held_set().proposals[0]
+    unverified = plan.model_copy(
+        update={"summary": "1 planning changes held unverified: apply raised"}
+    )
+    expected = "2 planning changes held from earlier applies, some unverified: apply raised"
+    assert merge_held([plan], [unverified])[0].summary == expected
+    assert merge_held([unverified], [plan])[0].summary == expected
+    again = merge_held(merge_held([unverified], [plan]), [plan])[0]
+    assert again.summary.startswith("3 planning changes") and "unverified" in again.summary
+
+
+async def test_an_edit_naming_a_carried_held_proposal_does_not_hold_it_again(
+    ndb, make_deps, mem_store
+):
+    await S.put_profile(mem_store, NutritionProfile(**PROFILE_ARGS))
+    garmin = FakeGarmin()
+    graph, _ = graph_for(
+        make_deps,
+        mem_store,
+        tp=NutritionFakeTp(),
+        garmin=garmin,
+        coach=[propose("Retry the plan part.", ["held-planning"])],
+    )
+    await graph.aupdate_state(CFG, {"pending": held_set()}, as_node="start")
+    out = await graph.ainvoke({"messages": [HumanMessage("retry the plan part")]}, CFG)
+    assert [p["id"] for p in out["__interrupt__"][0].value["proposals"]] == ["held-planning"]
+    edited = [held_set().proposals[1].model_dump(mode="json")]  # swapped for the carried one
+    full = {"calorie_goal": 2800, "carbs_grams": 350, "protein_grams": 150, "fat_grams": 80}
+    edited[0]["changes"][0]["payload"] = full
+    out = await graph.ainvoke(Command(resume={"action": "edit", "proposals": edited}), CFG)
+    assert [c[0] for c in garmin.calls] == ["set_nutrition_daily_settings"]
+    assert out["reports"][0].domain == "nutrition" and out["reports"][0].applied == 1
+    assert out["pending"] is None and out["carried"] == []
+
+
+async def test_a_failing_regeneration_check_is_reported_and_the_apply_committed(
+    nocommit, make_deps, mem_store, monkeypatch
+):
+    from types import SimpleNamespace
+
+    from tri_coach.graph import nodes
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("targets table went away")
+
+    # only apply's binding: the coach's context loader reads targets through the real repo
+    monkeypatch.setattr(nodes.apply, "nrepo", SimpleNamespace(list_targets=boom))
+    seed_active_plan(nocommit)
+    tp = FakeTp()
+    graph, _ = graph_for(
+        make_deps,
+        mem_store,
+        tp=tp,
+        coach=[consult("planning", "Move w1."), propose("Move it.", ["p1"])],
+        planning=[move_call(), AIMessage(content="ok")],
+    )
+    await graph.ainvoke({"messages": [HumanMessage("move it")]}, CFG)
+    out = await graph.ainvoke(Command(resume={"action": "approve"}), CFG)
+    assert [c[0] for c in tp.calls] == ["tp_update_workout"]
+    skip = "regeneration skipped: RuntimeError: targets table went away"
+    assert out["pending"] is None and out["regenerate_after_apply"] is False
+    assert skip in out["last_error"] and skip in out["messages"][-1].content
+    assert out["reports"][0].applied == 1
+    assert (await graph.aget_state(CFG)).next == ()
 
 
 async def test_a_plan_change_that_moves_sessions_regenerates_nutrition_and_opens_a_second_gate(

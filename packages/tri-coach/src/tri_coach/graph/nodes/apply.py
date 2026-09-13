@@ -90,10 +90,13 @@ def merge_held(carried: list[Proposal], new: list[Proposal]) -> list[Proposal]:
             by_id[p.id] = p
             continue
         changes = [*prev.changes, *p.changes]
+        summary = f"{len(changes)} {p.domain} changes held from earlier applies"
+        if "unverified" in prev.summary or "unverified" in p.summary:
+            summary += ", some unverified: apply raised"
         by_id[p.id] = prev.model_copy(
             update={
                 "changes": changes,
-                "summary": f"{len(changes)} {p.domain} changes held from earlier applies",
+                "summary": summary,
                 "overrides": {**(prev.overrides or {}), **(p.overrides or {})} or None,
             }
         )
@@ -194,7 +197,16 @@ def make_apply_node(deps: CoachDeps, planning_graph: Any) -> Any:
 
         kept = merge_held(list(state.get("carried") or []), held)
         errors = [rep.error for rep in reports if rep.error]
-        regenerate = _regeneration_due(deps, reports)
+        lines = [rep.line() for rep in reports]
+        try:
+            regenerate = _regeneration_due(deps, reports)
+        except GraphBubbleUp:
+            raise
+        except Exception as exc:  # noqa: BLE001 - the writes above are done; report, never raise
+            regenerate = False
+            skipped = f"regeneration skipped: {type(exc).__name__}: {exc}"
+            errors.append(skipped)
+            lines.append(skipped)
         return {
             "reports": reports,
             "pending": ChangeSet(narration=pending.narration, proposals=kept) if kept else None,
@@ -208,7 +220,7 @@ def make_apply_node(deps: CoachDeps, planning_graph: Any) -> Any:
                 else None
             ),
             "last_error": "; ".join(errors) or None,
-            "messages": [AIMessage("\n".join(rep.line() for rep in reports))],
+            "messages": [AIMessage("\n".join(lines))],
         }
 
     return apply

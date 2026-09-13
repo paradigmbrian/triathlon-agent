@@ -30,12 +30,32 @@ def proposal() -> Proposal:
     )
 
 
-def payload(narration: str = "Knee: move Wednesday.") -> dict[str, Any]:
-    return {"narration": narration, "proposals": [proposal().model_dump(mode="json")]}
+def nutrition_proposal() -> Proposal:
+    return Proposal.model_validate(
+        {
+            "id": "p1",
+            "domain": "nutrition",
+            "summary": "targets follow the moved session",
+            "changes": [
+                {
+                    "op": "set_day_targets",
+                    "target_key": "2026-09-14",
+                    "day": "2026-09-14",
+                    "payload": {"calorie_goal": 2800},
+                    "reason": "easy day",
+                }
+            ],
+        }
+    )
 
 
-def interrupt_event(narration: str = "Knee: move Wednesday.") -> tuple:
-    return ((), "updates", {"__interrupt__": (Interrupt(value=payload(narration)),)})
+def payload(narration: str = "Knee: move Wednesday.", domain: str = "planning") -> dict[str, Any]:
+    p = proposal() if domain == "planning" else nutrition_proposal()
+    return {"narration": narration, "proposals": [p.model_dump(mode="json")]}
+
+
+def interrupt_event(narration: str = "Knee: move Wednesday.", domain: str = "planning") -> tuple:
+    return ((), "updates", {"__interrupt__": (Interrupt(value=payload(narration, domain)),)})
 
 
 # TurnPrinter prints the coach's own text as it streams (namespace ("coach:<id>",), node "model");
@@ -126,8 +146,18 @@ async def test_a_proposed_change_set_pauses_without_yes():
     assert "Knee: move Wednesday." in text and "/pending" in text
 
 
+async def test_refuses_while_the_thread_stopped_mid_run():
+    stopped = SimpleNamespace(next=("nutrition",), values={}, tasks=())
+    graph = Graph([], [stopped])
+    code, text = await run(graph, yes=True)
+    assert code == EXIT_PAUSED and graph.inputs == []
+    assert "stopped mid-run at nutrition" in text and "tri-coach chat" in text
+    assert "already pending" not in text
+
+
 async def test_yes_approves_the_change_set_and_its_follow_on():
-    graph = Graph([[interrupt_event()], [interrupt_event("Targets follow.")], [DONE]], [IDLE])
+    follow_on = interrupt_event("Targets follow.", "nutrition")
+    graph = Graph([[interrupt_event()], [follow_on], [DONE]], [IDLE])
     code, text = await run(graph, yes=True)
     assert code == EXIT_OK and "Targets follow." in text
     assert [type(i) for i in graph.inputs[1:]] == [Command, Command]
@@ -137,10 +167,22 @@ async def test_yes_approves_the_change_set_and_its_follow_on():
 
 
 async def test_yes_stops_after_two_gates():
-    turns = [[interrupt_event()], [interrupt_event("two")], [interrupt_event("three")]]
+    turns = [
+        [interrupt_event()],
+        [interrupt_event("two", "nutrition")],
+        [interrupt_event("three", "nutrition")],
+    ]
     graph = Graph(turns, [IDLE])
     code, _ = await run(graph, yes=True)
     assert code == EXIT_PAUSED and len(graph.inputs) == 3
+
+
+async def test_yes_does_not_approve_a_second_gate_that_is_not_the_nutrition_follow_on():
+    turns = [[interrupt_event()], [interrupt_event("Also move Friday.")], [DONE]]
+    graph = Graph(turns, [IDLE])
+    code, text = await run(graph, yes=True)
+    assert code == EXIT_PAUSED and len(graph.inputs) == 2
+    assert "Also move Friday." in text and "/pending" in text
 
 
 async def test_yes_with_an_incomplete_apply_exits_1():
