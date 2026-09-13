@@ -302,3 +302,16 @@ async def test_ask_wellness_reports_a_failure_as_its_tool_result_instead_of_rais
     result = await ask.ainvoke({"question": "how is my ferritin?"})
     assert "RuntimeError" in result and "db is down" in result
     assert wellness.calls == 0
+
+
+async def test_ask_analyst_reports_a_failure_as_its_tool_result_instead_of_raising():
+    @contextlib.contextmanager
+    def broken_connect():
+        raise RuntimeError("db is down")
+        yield  # pragma: no cover - never reached; makes this a generator function
+
+    analyst = ScriptedChatModel(script=[AIMessage(content="should never be called")])
+    ask = make_analyst_tool(analyst, [], broken_connect, lambda: date(2026, 9, 14))
+    result = await ask.ainvoke({"question": "what is my CTL?"})
+    assert "RuntimeError" in result and "db is down" in result
+    assert "do not guess" in result and analyst.calls == 0

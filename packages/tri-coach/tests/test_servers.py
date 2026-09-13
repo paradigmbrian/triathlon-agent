@@ -1,3 +1,4 @@
+import contextlib
 from contextlib import asynccontextmanager
 from datetime import date
 
@@ -88,7 +89,10 @@ def test_analyst_tools_are_read_only_and_include_body_composition():
         tp=ToolsCaller([]),
     )
     tools = analyst_tools_for(
-        servers, CoachSettings(_env_file=None).test_database_url, lambda: date(2026, 9, 14)
+        servers,
+        CoachSettings(_env_file=None).test_database_url,
+        lambda: date(2026, 9, 14),
+        lambda: contextlib.nullcontext(None),
     )
     names = [t.name for t in tools]
     assert names == [
@@ -97,7 +101,9 @@ def test_analyst_tools_are_read_only_and_include_body_composition():
         "get_hrv_data",
         "tp_get_workout",
         "read_body_composition",
+        "read_intake_vs_targets",
     ]
+    assert not {"record_fuel_feedback", "propose_target_changes"} & set(names)
 
 
 def test_make_deps_wires_sub_agent_deps():
