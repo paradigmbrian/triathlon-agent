@@ -4,6 +4,7 @@ from datetime import date
 
 from langchain_core.tools import tool
 
+from tri_analyze.prompts.analyst import TOOL_GUIDE
 from tri_coach.config import CoachSettings
 from tri_coach.graph.deps import analyst_tools_for, make_deps
 from tri_coach.servers import Servers, open_servers
@@ -104,6 +105,7 @@ def test_analyst_tools_are_read_only_and_include_body_composition():
         "read_intake_vs_targets",
     ]
     assert not {"record_fuel_feedback", "propose_target_changes"} & set(names)
+    assert set(names) <= set(TOOL_GUIDE)
 
 
 def test_make_deps_wires_sub_agent_deps():
