@@ -7,8 +7,8 @@ from langgraph.types import Command
 
 from tri_coach.graph.checkpointer import make_serde
 from tri_coach.graph.graph import build_graph
-from tri_coach.graph.nodes.apply import merge_held
-from tri_coach.models import ChangeSet, Proposal
+from tri_coach.graph.nodes.apply import _regeneration_due, merge_held
+from tri_coach.models import ApplyReport, ChangeSet, Proposal
 from tri_coach.testing import CFG, consult, move_call, propose, seed_active_plan
 from tri_core.testing import ScriptedChatModel, tool_call
 from tri_nutrition import repo as nrepo
@@ -483,3 +483,29 @@ async def test_no_regeneration_without_targets_in_the_horizon(nocommit, make_dep
     assert out["reports"][0].sessions_changed is True and out["regenerate_after_apply"] is False
     assert out["proposals"] == [] and models["coach"].calls == 2
     assert (await graph.aget_state(CFG)).next == ()
+
+
+def test_regeneration_is_due_when_planning_moved_sessions_and_targets_exist(ndb, make_deps):
+    deps = make_deps(
+        **{k: ScriptedChatModel(script=[]) for k in ("coach", "planning", "nutrition", "analyst")}
+    )
+    nrepo.upsert_targets(
+        ndb,
+        [
+            DayTarget(
+                day=MONDAY,
+                day_type="easy",
+                session_kcal=0,
+                total_kcal=2000,
+                carbs_g=200,
+                protein_g=150,
+                fat_g=70,
+                fluid_baseline_ml=2500,
+                source="plan",
+            )
+        ],
+    )
+    clean_apply = ApplyReport(
+        domain="planning", applied=1, skipped=[], remaining=0, error=None, sessions_changed=True
+    )
+    assert _regeneration_due(deps, [clean_apply]) is True

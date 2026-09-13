@@ -1,9 +1,13 @@
 """Coach graph nodes over stub sub-graphs: no database, no model."""
 
+from datetime import date
+from types import SimpleNamespace
+
 from langchain_core.messages import AIMessage
 from langgraph.graph import END
 
 from tri_coach.graph.graph import after_apply
+from tri_coach.graph.nodes.apply import _regeneration_due
 from tri_coach.graph.nodes.nutrition import (
     FOLLOW_ON,
     follow_on_message,
@@ -11,9 +15,26 @@ from tri_coach.graph.nodes.nutrition import (
     proposal_from_regenerate,
 )
 from tri_coach.graph.nodes.planning import make_planning_node
-from tri_coach.models import Brief
+from tri_coach.models import ApplyReport, Brief
 
 CONFIG = {"configurable": {"thread_id": "coach"}}
+
+
+class ExplodingConnect:
+    """Raises if called: proves a guard short-circuited before touching the database."""
+
+    def __call__(self):
+        raise AssertionError("connect must not be reached when regeneration is not due")
+
+
+class StubDeps:
+    nutrition_deps = SimpleNamespace(horizon_days=3)
+
+    def __init__(self) -> None:
+        self.connect = ExplodingConnect()
+
+    def today(self) -> date:
+        return date(2026, 9, 14)
 
 
 class Recorder:
@@ -34,6 +55,24 @@ def test_after_apply_routes_to_nutrition_only_when_regeneration_is_due():
     assert after_apply({"regenerate_after_apply": True}) == "nutrition"
     assert after_apply({"regenerate_after_apply": False}) == END
     assert after_apply({}) == END
+
+
+def test_regeneration_is_not_due_without_a_planning_report():
+    nutrition_only = ApplyReport(
+        domain="nutrition", applied=1, skipped=[], remaining=0, error=None, sessions_changed=False
+    )
+    assert _regeneration_due(StubDeps(), [nutrition_only]) is False
+
+
+def test_regeneration_is_skipped_after_a_planning_apply_that_errored_mid_batch():
+    """Spec 9: a planning ApplyResult can have sessions_changed=True from an applied op and
+    error set from a later failed call in the same batch; that must not trigger regeneration.
+    StubDeps.connect blows up if called, so this also proves the guard alone decides here,
+    without ever checking whether nutrition targets exist in the horizon."""
+    partial_batch = ApplyReport(
+        domain="planning", applied=1, skipped=[], remaining=1, error="boom", sessions_changed=True
+    )
+    assert _regeneration_due(StubDeps(), [partial_batch]) is False
 
 
 def test_a_regenerate_brief_needs_no_tool_call():
