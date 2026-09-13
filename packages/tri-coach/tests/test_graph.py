@@ -1,4 +1,5 @@
 import logging
+from datetime import date
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
@@ -13,6 +14,7 @@ from tri_coach.models import ReviewDecision
 from tri_coach.testing import CFG, consult, move_call, propose, seed_active_plan
 from tri_core.testing import ScriptedChatModel, tool_call
 from tri_planning.testing import FakeTp
+from tri_wellness.testing import seed_panel
 
 pytestmark = pytest.mark.db
 
@@ -177,17 +179,25 @@ async def test_a_parallel_call_beside_a_handoff_leaves_no_dangling_tool_use(
     assert (await graph.aget_state(CFG)).next == ()
 
 
-async def test_remember_writes_the_store_and_the_next_prompt_shows_it(
-    nocommit, make_deps, mem_store, monkeypatch
-):
+def _recording(monkeypatch):
+    """Capture the tool names and the system prompt each coach turn binds."""
+    bound: list[list[str]] = []
     prompts: list[str] = []
     real = nodes.coach.make_subagent
 
     def record(model, tools, system_prompt):
+        bound.append([t.name for t in tools])
         prompts.append(system_prompt)
         return real(model, tools, system_prompt)
 
     monkeypatch.setattr(nodes.coach, "make_subagent", record)
+    return bound, prompts
+
+
+async def test_remember_writes_the_store_and_the_next_prompt_shows_it(
+    nocommit, make_deps, mem_store, monkeypatch
+):
+    _, prompts = _recording(monkeypatch)
     graph, _ = graph_for(
         make_deps,
         mem_store,
@@ -274,3 +284,48 @@ def test_after_review():
     assert after_review({"review_decision": ReviewDecision(action="edit")}) == "apply"
     assert after_review({"review_decision": ReviewDecision(action="reject")}) == "coach"
     assert after_review({"review_decision": None}) == "coach"
+
+
+async def test_lab_question_uses_the_wellness_consult_and_ends_without_a_handoff(
+    ldb, make_deps, mem_store, registry, monkeypatch
+):
+    bound, prompts = _recording(monkeypatch)
+    seed_panel(ldb, date(2026, 8, 30), [("ferritin", 18.0, "ng/mL")])
+    models = scripted(
+        coach=[
+            tool_call("ask_wellness", {"question": "ferritin?"}),
+            AIMessage(content="Ferritin is functionally low; I will fuel for iron."),
+        ],
+        planning=[],
+        nutrition=[],
+        analyst=[],
+        wellness=[
+            tool_call("get_panel_findings", {"panel": "latest"}),
+            AIMessage(content="Ferritin 18 ng/mL, functional low."),
+        ],
+    )
+    deps = make_deps(registry=registry, **models)
+    graph = build_graph(deps, InMemorySaver(serde=make_serde()), mem_store)
+    out = await graph.ainvoke({"messages": [HumanMessage("how is my ferritin?")]}, CFG)
+    tool_msgs = [m for m in out["messages"] if isinstance(m, ToolMessage)]
+    assert [m.name for m in tool_msgs] == ["ask_wellness"]
+    assert tool_msgs[0].content == "Ferritin 18 ng/mL, functional low."
+    assert out["messages"][-1].content.startswith("Ferritin is functionally low")
+    assert models["planning"].calls == 0 and models["nutrition"].calls == 0
+    assert models["analyst"].calls == 0 and models["wellness"].calls == 2
+    assert "ask_wellness" in bound[0]
+    assert not any(
+        n.startswith(("set_", "tp_create", "tp_update", "tp_delete", "tp_apply")) for n in bound[0]
+    )
+    assert "Labs: latest panel 2026-08-30 (Quest) has no report yet" in prompts[0]
+    assert (await graph.aget_state(CFG)).next == ()
+
+
+async def test_wellness_tool_is_absent_when_labs_are_not_configured(
+    nocommit, make_deps, mem_store, monkeypatch
+):
+    bound, prompts = _recording(monkeypatch)
+    graph, _ = graph_for(make_deps, mem_store, coach=[AIMessage(content="Hello.")])
+    await graph.ainvoke({"messages": [HumanMessage("hi")]}, CFG)
+    assert "ask_wellness" not in bound[0] and "ask_analyst" in bound[0]
+    assert "Labs: not configured" in prompts[0]

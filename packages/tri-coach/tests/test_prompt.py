@@ -30,7 +30,7 @@ def test_prompt_order_is_rules_context_memory_and_names_the_limit():
     assert text.index("Today is") < text.index("Athlete memory")
     assert "at most 2 consultations per domain per turn" in text
     assert "ab12cd injury" in text
-    assert PROMPT_VERSION == "1"
+    assert PROMPT_VERSION == "2"
 
 
 def test_rules_cover_policy_routing_and_memory():
@@ -44,8 +44,12 @@ def test_rules_cover_policy_routing_and_memory():
         "consult_nutrition",
         "propose_changes",
         "remember",
-        "Do not remember what planning or nutrition already store",
+        "Do not remember what planning, nutrition or wellness already store",
         "say when a memory entry influenced a decision",
         "[review]",
+        "ask_wellness",
+        "Never brief a sub-agent to change a lab value",
+        "lab values",
+        "labs are not configured",
     ):
         assert phrase in COACH_RULES, phrase

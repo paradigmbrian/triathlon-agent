@@ -18,17 +18,30 @@ from tri_coach.prompts.coach import render_system_prompt
 from tri_coach.tools.analyst import make_analyst_tool
 from tri_coach.tools.handoff import make_handoff_tools
 from tri_coach.tools.memory import make_memory_tools
+from tri_coach.tools.wellness import make_wellness_tool
 
 
 def make_coach_node(deps: CoachDeps) -> Any:
     analyst = make_analyst_tool(deps.analyst_model, deps.analyst_tools, deps.connect, deps.today)
-    tools = [analyst, *make_handoff_tools(), *make_memory_tools(deps.today)]
+    labs_enabled = deps.wellness_registry is not None
+    wellness = (
+        [
+            make_wellness_tool(
+                deps.wellness_model, deps.connect, deps.db_url, deps.wellness_registry, deps.today
+            )
+        ]
+        if deps.wellness_registry is not None
+        else []
+    )
+    tools = [analyst, *wellness, *make_handoff_tools(), *make_memory_tools(deps.today)]
 
     async def coach(
         state: CoachState, config: RunnableConfig, *, store: BaseStore
     ) -> dict[str, Any]:
         with deps.connect() as conn:
-            ctx = await load_context(conn, store, deps.today(), state.get("pending"))
+            ctx = await load_context(
+                conn, store, deps.today(), state.get("pending"), labs_enabled=labs_enabled
+            )
         entries = await M.get_entries(store)
         prompt = render_system_prompt(ctx, entries, max_consults=deps.max_consults)
         agent = make_subagent(deps.model, tools, prompt)

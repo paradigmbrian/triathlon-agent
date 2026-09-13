@@ -112,7 +112,13 @@ async def _chat(*, no_live: bool) -> None:
         async def snapshot() -> tuple[Any, Any]:
             snap = await graph.aget_state(cfg)
             with connect(settings.database_url) as conn:
-                ctx = await load_context(conn, store, _today(), (snap.values or {}).get("pending"))
+                ctx = await load_context(
+                    conn,
+                    store,
+                    _today(),
+                    (snap.values or {}).get("pending"),
+                    labs_enabled=settings.tri_athlete_sex is not None,
+                )
             return snap, ctx
 
         async def cmd_status() -> str:
