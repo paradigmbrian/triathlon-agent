@@ -29,8 +29,8 @@ Repo: github.com/paradigmbrian/triathlon-agent.
 
 Deeper context lives next to the code:
 
-- [`packages/tri-analyze/src/tri_analyze/agent/README.md`](packages/tri-analyze/src/tri_analyze/agent/README.md):
-  how the LangChain agent works, module by module, one question traced end to end.
+- [`packages/tri-analyze/README.md`](packages/tri-analyze/README.md):
+  how the analyst agent works, module by module, one question traced end to end.
 - [`packages/tri-core/src/tri_core/sync/README.md`](packages/tri-core/src/tri_core/sync/README.md):
   the ETL, what each source provides, matching, windows and watermarks.
 - [`packages/tri-core/src/tri_core/db/README.md`](packages/tri-core/src/tri_core/db/README.md):
@@ -139,15 +139,15 @@ pyproject.toml          workspace root: members, shared ruff/mypy/pytest config
 conftest.py             pytest options and the shared `db` fixture plugin
 migrations/             001_initial.sql (sync tables), 002_planning.sql and 003_rename_skeleton_to_targets.sql (planning tables), 004_nutrition.sql (nutrition tables), 005_wellness.sql (lab tables)
 packages/tri-core/      src/tri_core/{config,cli,mcp,db,sync,testing}
-packages/tri-analyze/   src/tri_analyze/{cli,allowlist,agent}
+packages/tri-analyze/   src/tri_analyze/{config,cli,llm,agent,repo,repl,testing,allowlist,prompts,tools}
 packages/tri-planning/  src/tri_planning/{config,cli,repo,repl,testing,planning,graph,tools,prompts}
 packages/tri-nutrition/ src/tri_nutrition/{config,cli,repo,repl,store,plan_loader,testing,nutrition,graph,tools,prompts,evals}
 packages/tri-wellness/  src/tri_wellness/{config,cli,repo,repl,report,agent,testing,ranges,labs,graph,prompts,tools,evals}
 docs/superpowers/       specs and implementation plans
 ```
 
-Module-level READMEs: `packages/tri-core/src/tri_core/{mcp,db,sync}/README.md`,
-`packages/tri-analyze/src/tri_analyze/agent/README.md`.
+Module-level READMEs: `packages/tri-core/src/tri_core/{mcp,db,sync}/README.md`; each agent
+package documents itself in its own `README.md`.
 
 ## Status
 
@@ -172,3 +172,6 @@ Module-level READMEs: `packages/tri-core/src/tri_core/{mcp,db,sync}/README.md`,
   tracked in `docs/superpowers/plans/2026-09-13-tri-coach-03-wellness-consult.md`. Merged 2026-09-13.
 - tri-coach milestone 4 (2026-09): check-in, the follow-on nutrition gate, prompt v3 and the routing eval;
   tracked in `docs/superpowers/plans/2026-09-13-tri-coach-04-checkin-and-follow-on.md`.
+- tri-analyze alignment (2026-09): flat layout, settings and LangSmith project, prompt rendered per call
+  from runtime context with a tool guide, chat hardening, coach passes the context; tracked in
+  `docs/superpowers/plans/2026-09-13-tri-analyze-01-alignment.md`. Eval pending (plan 2).

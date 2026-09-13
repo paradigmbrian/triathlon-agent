@@ -1,7 +1,7 @@
 # tri-analyze-agent — Triathlon Training Analysis Agent (package `tri_analyze`)
 
 **Date:** 2026-09-06
-**Status:** Approved design, pending implementation plan
+**Status:** Implemented 2026-09-06 (plans `2026-09-06-foundation-and-sync.md`, `2026-09-06-agent-v1.md`). Superseded for the agent by `2026-09-13-tri-analyze-alignment-design.md`; sync and the data layer now live in `tri-core`.
 **Purpose:** A learning project for LangChain that also produces a useful tool: an agent that gives feedback on completed triathlon sessions and analyzes training trends over time, using data from Garmin Connect and TrainingPeaks.
 
 ## 1. Decisions already made
