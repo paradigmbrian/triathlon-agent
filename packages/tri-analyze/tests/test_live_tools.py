@@ -1,7 +1,7 @@
 import pytest
 
-from tri_analyze._old_agent.live_tools import open_live_tools
 from tri_analyze.allowlist import GARMIN_LIVE_TOOLS, TP_LIVE_TOOLS
+from tri_analyze.tools.live import open_live_tools
 from tri_core.config import Settings
 
 
