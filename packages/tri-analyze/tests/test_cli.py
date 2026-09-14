@@ -92,3 +92,57 @@ def test_cmd_sync_reports_a_down_database_instead_of_raising(monkeypatch):
     result = runner.invoke(app, ["chat", "--no-live"])
     assert result.exit_code == 0
     assert "sync failed: database unreachable: down" in result.output
+
+
+def test_help_lists_eval():
+    result = runner.invoke(app, ["--help"])
+    assert "eval" in result.output
+
+
+def test_eval_exits_2_without_langsmith_key(monkeypatch):
+    monkeypatch.setattr(
+        cli,
+        "get_analyze_settings",
+        lambda: AnalyzeSettings(_env_file=None, anthropic_api_key="k", langsmith_api_key=None),
+    )
+    result = runner.invoke(app, ["eval"])
+    assert result.exit_code == 2 and "LANGSMITH_API_KEY" in result.output
+
+
+def test_eval_exits_2_without_anthropic_key(monkeypatch):
+    monkeypatch.setattr(
+        cli,
+        "get_analyze_settings",
+        lambda: AnalyzeSettings(_env_file=None, anthropic_api_key=None, langsmith_api_key="ls"),
+    )
+    result = runner.invoke(app, ["eval"])
+    assert result.exit_code == 2 and "ANTHROPIC_API_KEY" in result.output
+
+
+def test_eval_exit_code_follows_rates_and_errors(monkeypatch):
+    monkeypatch.setattr(
+        cli,
+        "get_analyze_settings",
+        lambda: AnalyzeSettings(_env_file=None, anthropic_api_key="k", langsmith_api_key="ls"),
+    )
+    seen: list[dict] = []
+
+    def stub(rates, errors):
+        async def run_eval(settings, model, **kw):
+            seen.append(kw)
+            kw["log"]("experiment: analyst-v1-test")
+            return rates, errors
+
+        monkeypatch.setattr("tri_analyze.evals.run.run_eval", run_eval)
+
+    stub({"uses_sql": 1.0, "grounded": 1.0}, 0)
+    result = runner.invoke(app, ["eval", "--prefix", "try", "--recreate-dataset"])
+    assert result.exit_code == 0 and "experiment: analyst-v1-test" in result.output
+    assert seen[-1]["prefix"] == "try" and seen[-1]["recreate"] is True
+    stub({"uses_sql": 0.5, "grounded": 1.0}, 0)
+    assert runner.invoke(app, ["eval"]).exit_code == 1
+    stub({"uses_sql": 1.0}, 2)
+    assert runner.invoke(app, ["eval"]).exit_code == 1
+    stub({}, 0)
+    assert runner.invoke(app, ["eval"]).exit_code == 1
+    assert seen[-1]["prefix"] is None and seen[-1]["recreate"] is False
