@@ -11,6 +11,7 @@ TrainingPeaks data, synced into a local Postgres store.
 | `packages/tri-nutrition` | `tri_nutrition` | `tri-nutrition chat \| today \| check-in \| eval` | Nutrition agent: profile intake, periodized daily targets and fueling plans, approved writes to Garmin Connect and TrainingPeaks. |
 | `packages/tri-wellness` | `tri_wellness` | `tri-wellness ingest \| report \| chat \| panels \| eval` | Lab interpreter: PDF and export ingest with review, functional-range evaluation, written interpretation grounded in training data. |
 | `packages/tri-coach` | `tri_coach` | `tri-coach chat \| check-in \| memory \| reset \| eval` | Head coach: answers through the analyst and the lab interpreter, briefs planning and nutrition, one review gate over both, approved writes only. |
+| `packages/tri-web` | `tri_web` | `tri-web serve \| openapi` | Local web UI over the coach: FastAPI server streaming the coach graph on localhost; React app in `web/`. |
 
 `tri-analyze`, `tri-planning`, `tri-nutrition` and `tri-wellness` depend on `tri-core` and on nothing else; `tri-coach` sits above them and depends on `tri-analyze`, `tri-planning`, `tri-nutrition` and `tri-wellness`.
 Repo: github.com/paradigmbrian/triathlon-agent.
@@ -85,6 +86,7 @@ uv run tri-coach check-in [--yes] [--no-sync] [--no-live]   # sync, weekly check
 uv run tri-coach eval [--recreate-dataset]                   # LangSmith routing eval
 uv run tri-coach memory [--forget ID]   # the coach's athlete memory
 uv run tri-coach reset [--yes] [--forget-memory]
+uv run tri-web serve [--no-live] [--port 8321]   # the coach in the browser, same thread and memory as tri-coach chat
 ```
 
 In chat: `/tools` lists bound tools, `/prompt` prints the system prompt, `/sync` refreshes
@@ -144,6 +146,7 @@ packages/tri-analyze/   src/tri_analyze/{config,cli,llm,agent,repo,repl,testing,
 packages/tri-planning/  src/tri_planning/{config,cli,repo,repl,testing,planning,graph,tools,prompts}
 packages/tri-nutrition/ src/tri_nutrition/{config,cli,repo,repl,store,plan_loader,testing,nutrition,graph,tools,prompts,evals}
 packages/tri-wellness/  src/tri_wellness/{config,cli,repo,repl,report,agent,testing,ranges,labs,graph,prompts,tools,evals}
+packages/tri-web/       src/tri_web/{config,cli,app,runtime,events,thread,review,schemas,routes}
 docs/superpowers/       specs and implementation plans
 ```
 
