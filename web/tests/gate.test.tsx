@@ -16,7 +16,7 @@ function stubApi(validate: unknown = { ok: true, proposals: paused().proposals, 
   });
 }
 
-type Pending = { resolve: (body: unknown) => void };
+type Pending = { resolve: (body: unknown) => void; fail: (status: number, body: unknown) => void };
 
 /** Every validate call stays pending until the test resolves it, in whatever order it likes. */
 function stubDeferredValidate() {
@@ -28,7 +28,10 @@ function stubDeferredValidate() {
     if (url === "/api/coach/review/validate") {
       return new Promise<Response>((resolve) => {
         // a minimal Response so resolution settles in microtasks alone
-        pending.push({ resolve: (body) => resolve({ ok: true, status: 200, text: async () => JSON.stringify(body) } as unknown as Response) });
+        pending.push({
+          resolve: (body) => resolve({ ok: true, status: 200, text: async () => JSON.stringify(body) } as unknown as Response),
+          fail: (status, body) => resolve({ ok: false, status, text: async () => JSON.stringify(body) } as unknown as Response),
+        });
       });
     }
     return Promise.resolve(json({ detail: `unexpected ${url}` }, 500));
@@ -147,6 +150,43 @@ test("a validate response landing after a 422 keeps the 422's field errors", asy
   await settle(pending[0], { ok: true, proposals: paused().proposals, errors: [] });
   expect(screen.getByText("bad date")).toBeInTheDocument();
   expect(screen.getByText("edit rejected")).toBeInTheDocument();
+});
+
+test("a validate failure's message clears when a later validate succeeds", async () => {
+  const pending = stubDeferredValidate();
+  const user = userEvent.setup();
+  renderWith(<Gate payload={paused()} mode="paused" onDecide={vi.fn()} />);
+  await user.click(screen.getByRole("button", { name: "Edit" }));
+  const date = await screen.findByLabelText("new_date");
+  fireEvent.change(date, { target: { value: "2026-09-19" } });
+  await waitFor(() => expect(pending).toHaveLength(1));
+  await act(async () => {
+    pending[0].fail(503, { detail: "validator unavailable" });
+    await new Promise((r) => setTimeout(r, 0));
+  });
+  expect(screen.getByText("validator unavailable")).toBeInTheDocument();
+  fireEvent.change(date, { target: { value: "2026-09-20" } });
+  await waitFor(() => expect(pending).toHaveLength(2));
+  await settle(pending[1], { ok: true, proposals: paused().proposals, errors: [] });
+  expect(screen.queryByText("validator unavailable")).not.toBeInTheDocument();
+});
+
+test("a 422 whose detail is a list (request validation) still reads edit rejected", async () => {
+  stubApi();
+  const user = userEvent.setup();
+  const onDecide = vi.fn().mockRejectedValue(new ApiError(422, { detail: [{ loc: ["body", "proposals"], msg: "field required", type: "missing" }] }));
+  renderWith(<Gate payload={paused()} mode="paused" onDecide={onDecide} />);
+  await user.click(screen.getByRole("button", { name: "Edit" }));
+  await screen.findByLabelText("new_date");
+  await user.click(screen.getByRole("button", { name: "Send edited" }));
+  expect(await screen.findByText("edit rejected")).toBeInTheDocument();
+});
+
+test("a change row names its op once", async () => {
+  stubApi();
+  renderWith(<Gate payload={paused()} mode="held" onDecide={vi.fn()} />);
+  expect(screen.getByRole("listitem")).toHaveTextContent(/^move w1 to Fri, Sep 18 — knee$/);
+  await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/coach/review/schema", expect.anything()));
 });
 
 test("two proposals in form mode have unique ids and each label binds inside its own proposal", async () => {

@@ -2,7 +2,9 @@ export class ApiError extends Error {
   status: number;
   body: unknown;
   constructor(status: number, body: unknown) {
-    super(typeof body === "object" && body && "detail" in body ? String((body as { detail: unknown }).detail) : `HTTP ${status}`);
+    // `detail` is a message string, except FastAPI's request-validation 422 where it is a list.
+    const detail = typeof body === "object" && body && "detail" in body ? (body as { detail: unknown }).detail : undefined;
+    super(typeof detail === "string" ? detail : `HTTP ${status}`);
     this.status = status;
     this.body = body;
   }

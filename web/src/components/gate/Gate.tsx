@@ -65,7 +65,10 @@ function GateBody({ payload, mode, onDecide, disabled }: Props) {
     pending.current.timer = window.setTimeout(async () => {
       try {
         const result = await api<Validated>("/api/coach/review/validate", { method: "POST", body: JSON.stringify(body) });
-        if (seq === pending.current.seq) setValidated(result);
+        if (seq === pending.current.seq) {
+          setValidated(result);
+          setRefused(null);
+        }
       } catch (e) {
         if (seq === pending.current.seq) setRefused(e instanceof Error ? e.message : String(e));
       }
@@ -84,9 +87,10 @@ function GateBody({ payload, mode, onDecide, disabled }: Props) {
       await onDecide(d);
     } catch (e) {
       if (e instanceof ApiError && e.status === 422) {
-        const body = e.body as { errors?: ValidationItem[]; detail?: string } | null;
+        const body = e.body as { errors?: ValidationItem[]; detail?: unknown } | null;
         setValidated({ ok: false, proposals: [], errors: body?.errors ?? [] });
-        setRefused(body?.detail ?? "edit rejected");
+        // FastAPI's own request validation sends `detail` as a list; only a string is copy.
+        setRefused(typeof body?.detail === "string" ? body.detail : "edit rejected");
       }
       // anything else is already surfaced by the chat's error bubble
     }
