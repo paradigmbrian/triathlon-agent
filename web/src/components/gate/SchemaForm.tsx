@@ -56,16 +56,19 @@ function KeyValues({ id, value, onChange }: { id: string; value: Obj; onChange: 
   );
 }
 
-type FieldProps = { field: Field; value: unknown; path: string; errors: Errors; onChange: (v: unknown) => void };
+// `path` is the error-lookup path relative to the proposal (`changes.0.op`); `scope` (the proposal
+// id) prefixes DOM ids so several proposals on one page never share an id.
+type FieldProps = { field: Field; value: unknown; path: string; scope: string; errors: Errors; onChange: (v: unknown) => void };
 
-function FieldInput({ field, value, path, errors, onChange }: FieldProps) {
+function FieldInput({ field, value, path, scope, errors, onChange }: FieldProps) {
   const cls = "w-full rounded border border-line bg-surface px-2 py-1 text-sm";
+  const id = `${scope}.${path}`;
   let input: ReactNode;
   let control = true;
   switch (field.kind) {
     case "enum":
       input = (
-        <select id={path} value={String(value ?? "")} onChange={(e) => onChange(e.target.value || (field.required ? "" : null))} className={cls}>
+        <select id={id} value={String(value ?? "")} onChange={(e) => onChange(e.target.value || (field.required ? "" : null))} className={cls}>
           {!field.required && <option value="">–</option>}
           {(field.enum ?? []).map((o) => (
             <option key={o} value={o}>
@@ -76,12 +79,12 @@ function FieldInput({ field, value, path, errors, onChange }: FieldProps) {
       );
       break;
     case "date":
-      input = <input id={path} type="date" value={String(value ?? "")} onChange={(e) => onChange(e.target.value || null)} className={cls} />;
+      input = <input id={id} type="date" value={String(value ?? "")} onChange={(e) => onChange(e.target.value || null)} className={cls} />;
       break;
     case "number":
       input = (
         <input
-          id={path}
+          id={id}
           type="number"
           value={value == null ? "" : String(value)}
           onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
@@ -90,11 +93,11 @@ function FieldInput({ field, value, path, errors, onChange }: FieldProps) {
       );
       break;
     case "boolean":
-      input = <input id={path} type="checkbox" checked={Boolean(value)} onChange={(e) => onChange(e.target.checked)} />;
+      input = <input id={id} type="checkbox" checked={Boolean(value)} onChange={(e) => onChange(e.target.checked)} />;
       break;
     case "dict":
       control = false;
-      input = <KeyValues id={path} value={(value ?? {}) as Obj} onChange={onChange} />;
+      input = <KeyValues id={id} value={(value ?? {}) as Obj} onChange={onChange} />;
       break;
     case "object": {
       control = false;
@@ -102,7 +105,15 @@ function FieldInput({ field, value, path, errors, onChange }: FieldProps) {
       input = obj ? (
         <div className="ml-3 border-l border-line pl-3">
           {(field.nested ?? []).map((f) => (
-            <FieldInput key={f.name} field={f} value={obj[f.name]} path={`${path}.${f.name}`} errors={errors} onChange={(v) => onChange({ ...obj, [f.name]: v })} />
+            <FieldInput
+              key={f.name}
+              field={f}
+              value={obj[f.name]}
+              path={`${path}.${f.name}`}
+              scope={scope}
+              errors={errors}
+              onChange={(v) => onChange({ ...obj, [f.name]: v })}
+            />
           ))}
         </div>
       ) : (
@@ -113,7 +124,7 @@ function FieldInput({ field, value, path, errors, onChange }: FieldProps) {
     case "json":
       input = (
         <input
-          id={path}
+          id={id}
           defaultValue={JSON.stringify(value ?? null)}
           onBlur={(e) => {
             try {
@@ -127,12 +138,12 @@ function FieldInput({ field, value, path, errors, onChange }: FieldProps) {
       );
       break;
     default:
-      input = <input id={path} value={String(value ?? "")} onChange={(e) => onChange(e.target.value || (field.required ? "" : null))} className={cls} />;
+      input = <input id={id} value={String(value ?? "")} onChange={(e) => onChange(e.target.value || (field.required ? "" : null))} className={cls} />;
   }
   return (
     <div className="mb-2">
       <div className="text-xs text-ink-2">
-        {control ? <label htmlFor={path}>{field.name}</label> : <span>{field.name}</span>}
+        {control ? <label htmlFor={id}>{field.name}</label> : <span>{field.name}</span>}
         {!field.required && <span> (optional)</span>}
       </div>
       {input}
@@ -150,7 +161,7 @@ export default function SchemaForm({ schema, proposal, errors, onChange, onRemov
   const changes = proposal.changes;
   const setChange = (i: number, next: Obj) => onChange({ ...proposal, changes: changes.map((c, j) => (j === i ? next : c)) });
   return (
-    <div className="rounded-md border border-line bg-surface p-3">
+    <div role="group" aria-label={`proposal ${proposal.id}`} className="rounded-md border border-line bg-surface p-3">
       <div className="flex items-center gap-2 text-sm">
         <span className="font-mono">{proposal.id}</span>
         <span className={domain === "planning" ? "text-planning" : "text-nutrition"}>{domain}</span>
@@ -161,11 +172,11 @@ export default function SchemaForm({ schema, proposal, errors, onChange, onRemov
         )}
       </div>
       <div className="mt-2">
-        <label htmlFor={`${proposal.id}-summary`} className="block text-xs text-ink-2">
+        <label htmlFor={`${proposal.id}.summary`} className="block text-xs text-ink-2">
           summary
         </label>
         <input
-          id={`${proposal.id}-summary`}
+          id={`${proposal.id}.summary`}
           aria-label="summary"
           value={proposal.summary}
           onChange={(e) => onChange({ ...proposal, summary: e.target.value })}
@@ -178,7 +189,15 @@ export default function SchemaForm({ schema, proposal, errors, onChange, onRemov
         <fieldset key={i} className="mt-3 rounded border border-line p-2">
           <legend className="px-1 text-xs text-ink-2">change {i + 1}</legend>
           {fields.map((f) => (
-            <FieldInput key={f.name} field={f} value={c[f.name]} path={`changes.${i}.${f.name}`} errors={errors} onChange={(v) => setChange(i, { ...c, [f.name]: v })} />
+            <FieldInput
+              key={f.name}
+              field={f}
+              value={c[f.name]}
+              path={`changes.${i}.${f.name}`}
+              scope={proposal.id}
+              errors={errors}
+              onChange={(v) => setChange(i, { ...c, [f.name]: v })}
+            />
           ))}
           <button
             type="button"
@@ -193,7 +212,11 @@ export default function SchemaForm({ schema, proposal, errors, onChange, onRemov
       {domain === "nutrition" && (
         <div className="mt-3">
           <span className="block text-xs text-ink-2">overrides</span>
-          <KeyValues id="overrides" value={proposal.overrides ?? {}} onChange={(v) => onChange({ ...proposal, overrides: Object.keys(v).length ? v : null })} />
+          <KeyValues
+            id={`${proposal.id}.overrides`}
+            value={proposal.overrides ?? {}}
+            onChange={(v) => onChange({ ...proposal, overrides: Object.keys(v).length ? v : null })}
+          />
           <Err path="overrides" errors={errors} />
         </div>
       )}

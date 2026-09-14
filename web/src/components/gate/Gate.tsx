@@ -45,22 +45,38 @@ function GateBody({ payload, mode, onDecide, disabled }: Props) {
   const [validated, setValidated] = useState<Validated | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
   const schema = useSchema();
-  const timer = useRef<{ id?: number }>({});
+  // `seq` identifies the latest validate request; a response for any other request is stale.
+  const pending = useRef<{ timer?: number; seq: number }>({ seq: 0 });
 
   useEffect(() => {
-    const t = timer.current;
-    return () => window.clearTimeout(t.id);
+    const p = pending.current;
+    return () => window.clearTimeout(p.timer);
   }, []);
 
+  /** Cancel an unfired validate and make any in-flight response stale. */
+  const dropPending = () => {
+    window.clearTimeout(pending.current.timer);
+    pending.current.seq += 1;
+  };
+
   const validate = (body: { proposals: unknown[] } | { yaml: string }) => {
-    window.clearTimeout(timer.current.id);
-    timer.current.id = window.setTimeout(async () => {
+    dropPending();
+    const seq = pending.current.seq;
+    pending.current.timer = window.setTimeout(async () => {
       try {
-        setValidated(await api<Validated>("/api/coach/review/validate", { method: "POST", body: JSON.stringify(body) }));
+        const result = await api<Validated>("/api/coach/review/validate", { method: "POST", body: JSON.stringify(body) });
+        if (seq === pending.current.seq) setValidated(result);
       } catch (e) {
-        setRefused(e instanceof Error ? e.message : String(e));
+        if (seq === pending.current.seq) setRefused(e instanceof Error ? e.message : String(e));
       }
     }, 300);
+  };
+
+  const switchTo = (next: "none" | "form" | "yaml") => {
+    dropPending();
+    setEditing(next);
+    setValidated(null);
+    setRefused(null);
   };
 
   const decide = async (d: ReviewDecision) => {
@@ -77,12 +93,11 @@ function GateBody({ payload, mode, onDecide, disabled }: Props) {
   };
 
   const startYaml = async () => {
+    dropPending();
     try {
       const { yaml: text } = await api<{ yaml: string }>("/api/coach/review/yaml");
       setYaml(text);
-      setEditing("yaml");
-      setValidated(null);
-      setRefused(null);
+      switchTo("yaml");
     } catch (e) {
       setRefused(e instanceof Error ? e.message : String(e));
     }
@@ -95,7 +110,7 @@ function GateBody({ payload, mode, onDecide, disabled }: Props) {
       setRefused("removing every proposal is not an edit; reject instead");
       return;
     }
-    window.clearTimeout(timer.current.id);
+    dropPending();
     setRefused(null);
     await decide({ action: "edit", proposals });
   };
@@ -151,6 +166,7 @@ function GateBody({ payload, mode, onDecide, disabled }: Props) {
             value={yaml}
             onChange={(v) => {
               setYaml(v);
+              setValidated(null); // Send stays disabled until this text validates
               validate({ yaml: v });
             }}
             errors={lines(items)}
@@ -175,16 +191,7 @@ function GateBody({ payload, mode, onDecide, disabled }: Props) {
               <button type="button" disabled={disabled} onClick={() => void decide({ action: "reject", note: note || null })} className={btn}>
                 Reject
               </button>
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={() => {
-                  setEditing("form");
-                  setValidated(null);
-                  setRefused(null);
-                }}
-                className={btn}
-              >
+              <button type="button" disabled={disabled} onClick={() => switchTo("form")} className={btn}>
                 Edit
               </button>
             </>
@@ -198,26 +205,15 @@ function GateBody({ payload, mode, onDecide, disabled }: Props) {
                   Edit as YAML
                 </button>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditing("form");
-                    setValidated(null);
-                    setRefused(null);
-                  }}
-                  className={btn}
-                >
+                <button type="button" onClick={() => switchTo("form")} className={btn}>
                   Edit as form
                 </button>
               )}
               <button
                 type="button"
                 onClick={() => {
-                  window.clearTimeout(timer.current.id);
-                  setEditing("none");
+                  switchTo("none");
                   setDrafts(payload.proposals);
-                  setValidated(null);
-                  setRefused(null);
                 }}
                 className={btn}
               >

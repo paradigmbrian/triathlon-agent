@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ApiError } from "../src/api/client";
 import Gate from "../src/components/gate/Gate";
@@ -15,6 +15,36 @@ function stubApi(validate: unknown = { ok: true, proposals: paused().proposals, 
     return json({ detail: `unexpected ${url}` }, 500);
   });
 }
+
+type Pending = { resolve: (body: unknown) => void };
+
+/** Every validate call stays pending until the test resolves it, in whatever order it likes. */
+function stubDeferredValidate() {
+  const pending: Pending[] = [];
+  vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+    const url = String(input);
+    if (url === "/api/coach/review/schema") return Promise.resolve(json(schema()));
+    if (url === "/api/coach/review/yaml") return Promise.resolve(json({ yaml: "p1:\n  summary: move it\n" }));
+    if (url === "/api/coach/review/validate") {
+      return new Promise<Response>((resolve) => {
+        // a minimal Response so resolution settles in microtasks alone
+        pending.push({ resolve: (body) => resolve({ ok: true, status: 200, text: async () => JSON.stringify(body) } as unknown as Response) });
+      });
+    }
+    return Promise.resolve(json({ detail: `unexpected ${url}` }, 500));
+  });
+  return pending;
+}
+
+/** Resolve a pending validate and let every microtask and render it triggers finish. */
+async function settle(p: Pending, body: unknown) {
+  await act(async () => {
+    p.resolve(body);
+    await new Promise((r) => setTimeout(r, 0));
+  });
+}
+
+const dateError = (msg: string) => ({ ok: false, proposals: [], errors: [{ loc: [0, "changes", 0, "new_date"], msg }] });
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -64,4 +94,71 @@ test("an edit that removes every proposal is refused locally; reject instead", a
   await user.click(send);
   expect(await screen.findByText(/reject instead/)).toBeInTheDocument();
   expect(onDecide).not.toHaveBeenCalled();
+});
+
+test("YAML mode: changing the text disables Send edited until that text validates", async () => {
+  const pending = stubDeferredValidate();
+  const user = userEvent.setup();
+  renderWith(<Gate payload={paused()} mode="paused" onDecide={vi.fn()} />);
+  await user.click(screen.getByRole("button", { name: "Edit" }));
+  await user.click(screen.getByRole("button", { name: "Edit as YAML" }));
+  const box = await screen.findByLabelText("YAML");
+  const send = screen.getByRole("button", { name: "Send edited" });
+  fireEvent.change(box, { target: { value: "p1:\n  summary: first\n" } });
+  await waitFor(() => expect(pending).toHaveLength(1));
+  await settle(pending[0], { ok: true, proposals: paused().proposals, errors: [] });
+  expect(send).toBeEnabled();
+  fireEvent.change(box, { target: { value: "p1:\n  summary: second\n" } });
+  expect(send).toBeDisabled();
+  await waitFor(() => expect(pending).toHaveLength(2));
+  expect(send).toBeDisabled();
+  await settle(pending[1], { ok: true, proposals: paused().proposals, errors: [] });
+  expect(send).toBeEnabled();
+});
+
+test("an older validate response landing after a newer one is ignored", async () => {
+  const pending = stubDeferredValidate();
+  const user = userEvent.setup();
+  renderWith(<Gate payload={paused()} mode="paused" onDecide={vi.fn()} />);
+  await user.click(screen.getByRole("button", { name: "Edit" }));
+  const date = await screen.findByLabelText("new_date");
+  fireEvent.change(date, { target: { value: "2026-09-19" } });
+  await waitFor(() => expect(pending).toHaveLength(1));
+  fireEvent.change(date, { target: { value: "2026-09-20" } });
+  await waitFor(() => expect(pending).toHaveLength(2));
+  await settle(pending[1], dateError("newer"));
+  expect(screen.getByText("newer")).toBeInTheDocument();
+  await settle(pending[0], dateError("older"));
+  expect(screen.queryByText("older")).not.toBeInTheDocument();
+  expect(screen.getByText("newer")).toBeInTheDocument();
+});
+
+test("a validate response landing after a 422 keeps the 422's field errors", async () => {
+  const pending = stubDeferredValidate();
+  const user = userEvent.setup();
+  const onDecide = vi.fn().mockRejectedValue(new ApiError(422, { detail: "edit rejected", ...dateError("bad date") }));
+  renderWith(<Gate payload={paused()} mode="paused" onDecide={onDecide} />);
+  await user.click(screen.getByRole("button", { name: "Edit" }));
+  const date = await screen.findByLabelText("new_date");
+  fireEvent.change(date, { target: { value: "2026-09-19" } });
+  await waitFor(() => expect(pending).toHaveLength(1));
+  await user.click(screen.getByRole("button", { name: "Send edited" }));
+  expect(await screen.findByText("bad date")).toBeInTheDocument();
+  await settle(pending[0], { ok: true, proposals: paused().proposals, errors: [] });
+  expect(screen.getByText("bad date")).toBeInTheDocument();
+  expect(screen.getByText("edit rejected")).toBeInTheDocument();
+});
+
+test("two proposals in form mode have unique ids and each label binds inside its own proposal", async () => {
+  stubApi();
+  const user = userEvent.setup();
+  const base = paused();
+  const second = { ...base.proposals[0], id: "p2", summary: "other one", changes: [{ ...base.proposals[0].changes[0], reason: "other reason" }] };
+  renderWith(<Gate payload={{ ...base, proposals: [base.proposals[0], second] }} mode="paused" onDecide={vi.fn()} />);
+  await user.click(screen.getByRole("button", { name: "Edit" }));
+  const p2 = await screen.findByRole("group", { name: "proposal p2" });
+  const ids = Array.from(document.querySelectorAll("[id]"), (el) => el.id);
+  expect(new Set(ids).size).toBe(ids.length);
+  expect(within(p2).getByLabelText("reason")).toHaveValue("other reason");
+  expect(within(screen.getByRole("group", { name: "proposal p1" })).getByLabelText("reason")).toHaveValue("knee");
 });
