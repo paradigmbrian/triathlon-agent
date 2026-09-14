@@ -31,7 +31,7 @@ export default function ResetButton() {
           <p>Forget the coach conversation? Garmin, TrainingPeaks, the tables and the other agents are untouched.</p>
           <label className="mt-2 flex items-center gap-2"><input type="checkbox" checked={forget} onChange={(e) => setForget(e.target.checked)} aria-label="forget memory too" />forget memory too</label>
           <div className="mt-2 flex gap-2">
-            <button type="button" disabled={loading} onClick={() => void reset()} className="rounded-md bg-danger px-3 py-1 text-white disabled:opacity-50">Confirm reset</button>
+            <button type="button" disabled={loading} onClick={() => void reset()} className="rounded-md bg-danger px-3 py-1 text-on-fill disabled:opacity-50">Confirm reset</button>
             <button type="button" onClick={() => setOpen(false)} className="rounded-md border border-line px-3 py-1">Cancel</button>
           </div>
         </div>

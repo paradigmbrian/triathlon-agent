@@ -9,8 +9,8 @@ import { formPaths, type ProposalJson } from "./schemaUtils";
 
 type Props = { payload: ReviewPayload; mode: "paused" | "held"; onDecide: (d: ReviewDecision) => Promise<void>; disabled?: boolean };
 
-const btn = "rounded-md border border-line px-3 py-1 text-sm disabled:opacity-50";
-const primary = "rounded-md bg-accent px-3 py-1 text-sm font-medium text-white disabled:opacity-50";
+const btn = "rounded-md border border-line bg-surface-2 px-3 py-1.5 text-sm hover:bg-surface disabled:opacity-50";
+const primary = "rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-on-fill disabled:opacity-50";
 
 /** Errors keyed by their full loc path, e.g. `0.changes.1.new_date`. */
 function errorMap(items: ValidationItem[]): Record<string, string> {
@@ -138,10 +138,10 @@ function GateBody({ payload, mode, onDecide, disabled }: Props) {
   };
 
   return (
-    <section aria-label="Review" className="my-2 rounded-lg border border-warn/50 bg-surface-2 p-3">
-      <p className="text-sm">{payload.narration}</p>
+    <section aria-label="Review" className="rounded-lg border border-warn/60 border-l-4 border-l-warn bg-surface-2 p-4 shadow-sm">
+      <p className="text-sm leading-relaxed font-medium">{payload.narration}</p>
       {mode === "held" && <p className="mt-1 text-xs text-warn">held from an earlier apply; ask the coach to re-propose it</p>}
-      <div className="mt-2 space-y-2">
+      <div className="mt-3 space-y-2">
         {editing === "none" && payload.proposals.map((p) => <ProposalCard key={p.id} p={p} />)}
         {editing === "form" && schema.data && (
           <>
@@ -183,7 +183,7 @@ function GateBody({ payload, mode, onDecide, disabled }: Props) {
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="note (optional)"
-                className="min-w-40 flex-1 rounded border border-line bg-surface px-2 py-1 text-sm"
+                className="min-w-40 flex-1 rounded-md border border-line bg-surface px-2 py-1.5 text-sm placeholder:text-ink-2"
               />
               <button type="button" disabled={disabled} onClick={() => void decide({ action: "approve" })} className={primary}>
                 Approve

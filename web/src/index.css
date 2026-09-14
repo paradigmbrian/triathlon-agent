@@ -11,6 +11,7 @@
   --nutrition: #b3551d;
   --warn: #9a6b00;
   --danger: #b3261e;
+  --on-fill: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -25,6 +26,7 @@
     --nutrition: #e9915a;
     --warn: #e0b449;
     --danger: #ef6a63;
+    --on-fill: #131417;
   }
 }
 
@@ -39,7 +41,16 @@
   --color-nutrition: var(--nutrition);
   --color-warn: var(--warn);
   --color-danger: var(--danger);
+  --color-on-fill: var(--on-fill);
 }
 
 html, body, #root { height: 100%; }
 body { @apply bg-surface text-ink antialiased; }
+
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  summary { list-style-position: inside; }
+}

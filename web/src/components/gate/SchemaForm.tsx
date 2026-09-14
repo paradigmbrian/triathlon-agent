@@ -31,19 +31,19 @@ function KeyValues({ id, value, onChange }: { id: string; value: Obj; onChange: 
             aria-label={`${id} key ${i + 1}`}
             defaultValue={k}
             onBlur={(e) => e.target.value !== k && set(i, e.target.value, v)}
-            className="w-1/3 rounded border border-line bg-surface px-2 py-1 text-xs"
+            className="w-1/3 min-w-0 rounded border border-line bg-surface-2 px-2 py-1 text-xs"
           />
           <input
             aria-label={`${id} value ${i + 1}`}
             defaultValue={shown(v)}
             onBlur={(e) => e.target.value !== shown(v) && set(i, k, parse(e.target.value))}
-            className="flex-1 rounded border border-line bg-surface px-2 py-1 text-xs"
+            className="min-w-0 flex-1 rounded border border-line bg-surface-2 px-2 py-1 text-xs"
           />
           <button
             type="button"
             aria-label={`remove ${id} ${k}`}
             onClick={() => onChange(Object.fromEntries(entries.filter((_, j) => j !== i)))}
-            className="text-xs text-ink-2"
+            className="px-1 text-xs text-ink-2 hover:text-danger"
           >
             ×
           </button>
@@ -61,7 +61,7 @@ function KeyValues({ id, value, onChange }: { id: string; value: Obj; onChange: 
 type FieldProps = { field: Field; value: unknown; path: string; scope: string; errors: Errors; onChange: (v: unknown) => void };
 
 function FieldInput({ field, value, path, scope, errors, onChange }: FieldProps) {
-  const cls = "w-full rounded border border-line bg-surface px-2 py-1 text-sm";
+  const cls = "w-full min-w-0 rounded border border-line bg-surface-2 px-2 py-1 text-sm";
   const id = `${scope}.${path}`;
   let input: ReactNode;
   let control = true;
@@ -162,9 +162,9 @@ export default function SchemaForm({ schema, proposal, errors, onChange, onRemov
   const setChange = (i: number, next: Obj) => onChange({ ...proposal, changes: changes.map((c, j) => (j === i ? next : c)) });
   return (
     <div role="group" aria-label={`proposal ${proposal.id}`} className="rounded-md border border-line bg-surface p-3">
-      <div className="flex items-center gap-2 text-sm">
-        <span className="font-mono">{proposal.id}</span>
-        <span className={domain === "planning" ? "text-planning" : "text-nutrition"}>{domain}</span>
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="font-mono text-xs text-ink-2">{proposal.id}</span>
+        <span className={`text-[11px] font-semibold tracking-wide uppercase ${domain === "planning" ? "text-planning" : "text-nutrition"}`}>{domain}</span>
         {canRemove && (
           <button type="button" onClick={onRemove} aria-label="remove proposal" className="ml-auto text-xs text-danger">
             remove proposal

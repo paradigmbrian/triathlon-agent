@@ -3,8 +3,8 @@ import { useState } from "react";
 export default function Activity({ text, args, where }: { text: string; args?: unknown; where: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="my-1 text-xs text-ink-2">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="font-mono hover:text-ink" aria-expanded={open}>
+    <div className="text-xs text-ink-2">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="rounded font-mono hover:text-ink" aria-expanded={open}>
         {where !== "coach" ? `[${where}] ` : ""}{text}
       </button>
       {open && args !== undefined && (

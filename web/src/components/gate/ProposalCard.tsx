@@ -5,15 +5,15 @@ export default function ProposalCard({ p }: { p: ProposalJson }) {
   const tone = p.domain === "planning" ? "text-planning" : "text-nutrition";
   return (
     <div className="rounded-md border border-line bg-surface p-3">
-      <div className="flex items-center gap-2 text-sm">
-        <span className="font-mono text-xs">{p.id}</span>
-        <span className={`text-xs font-medium uppercase ${tone}`}>{p.domain}</span>
-        <span>{p.summary}</span>
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm">
+        <span className="font-mono text-xs text-ink-2">{p.id}</span>
+        <span className={`text-[11px] font-semibold tracking-wide uppercase ${tone}`}>{p.domain}</span>
+        <span className="font-medium">{p.summary}</span>
       </div>
       {p.question ? (
         <p className="mt-1 text-sm">asked instead of proposing: {p.question}</p>
       ) : (
-        <ul className="mt-1 space-y-1">
+        <ul className="mt-2 space-y-1">
           {p.changes.map((c, i) => (
             <ChangeRow key={i} domain={p.domain} change={c} />
           ))}
