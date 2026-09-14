@@ -220,7 +220,7 @@ def make_apply_node(deps: CoachDeps, planning_graph: Any) -> Any:
                 else None
             ),
             "last_error": "; ".join(errors) or None,
-            "messages": [AIMessage("\n".join(lines))],
+            "messages": [AIMessage("\n".join(lines), name="apply")],
         }
 
     return apply

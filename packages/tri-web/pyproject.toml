@@ -1,0 +1,27 @@
+[project]
+name = "tri-web"
+version = "0.1.0"
+description = "Local web UI over the head coach: FastAPI server streaming the coach graph, React app in web/"
+authors = [{ name = "Brian Flannery", email = "brian@paradigmshiftdev.io" }]
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "tri-core",
+    "tri-coach",
+    "fastapi>=0.141,<1",
+    "uvicorn>=0.52,<1",
+    "typer>=0.15",
+]
+
+[project.scripts]
+tri-web = "tri_web.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tri_web"]
+
+[tool.uv.sources]
+tri-core = { workspace = true }
+tri-coach = { workspace = true }

@@ -39,7 +39,10 @@ TAGGED = frozenset({"planning", "nutrition"})
 ROOT_NODES = frozenset({"start", "coach", "planning", "nutrition", "review", "apply"})
 
 
-def _text_of(msg: BaseMessage) -> str:
+Event = tuple[str, dict[str, Any]]
+
+
+def text_of(msg: BaseMessage) -> str:
     content = msg.content
     if isinstance(content, str):
         return content
@@ -64,22 +67,20 @@ def _tag(where: str, node: str = "") -> str:
     return ""
 
 
-class TurnPrinter:
-    def __init__(self, out: Out) -> None:
-        self.out = out
+def where_of(namespace_label: str, node: str) -> str:
+    """Who is speaking: the tag, or "coach" for the coach's own voice and the root nodes."""
+    return _tag(namespace_label, node) or "coach"
+
+
+class TurnClassifier:
+    """Raw stream events in, (kind, payload) tuples out. Kinds: token, tool_call, assistant,
+    tool_result, consult, report, interrupt. Tracks the coach's final text and the interrupt."""
+
+    def __init__(self) -> None:
         self.final_text = ""
         self.interrupt: dict[str, Any] | None = None
-        self.error: str | None = None
-        self._line_label = ""  # tag printed at the start of the current streamed line
 
-    def _stream(self, where: str, node: str, text: str) -> None:
-        tag = _tag(where, node)
-        if self._line_label != tag:
-            self.out(f"\n[{tag}] " if tag else "\n")
-            self._line_label = tag
-        self.out(text)
-
-    def on_event(self, namespace: tuple[str, ...], mode: str, data: Any) -> None:
+    def classify(self, namespace: tuple[str, ...], mode: str, data: Any) -> list[Event]:
         where = label(namespace)
         if mode == "messages":
             chunk, meta = data
@@ -87,45 +88,107 @@ class TurnPrinter:
                 isinstance(chunk, AIMessageChunk | AIMessage)
                 and meta.get("langgraph_node") == "model"
             ):
-                text = _text_of(chunk)
+                text = text_of(chunk)
                 if text:
-                    self._stream(where, "model", text)
                     if where == "coach":
                         self.final_text += text
-            return
+                    return [("token", {"where": where_of(where, "model"), "text": text})]
+            return []
         if mode != "updates" or not isinstance(data, dict):
-            return
+            return []
         if "__interrupt__" in data:
             self.interrupt = dict(data["__interrupt__"][0].value)
-            return
+            return [("interrupt", self.interrupt)]
+        events: list[Event] = []
         for node, payload in data.items():
-            tag = _tag(where, node)
-            prefix = f"[{tag}] " if tag else ""
             for msg in (payload or {}).get("messages", []):
                 if node == "model" and isinstance(msg, AIMessage):
+                    who = where_of(where, node)
                     for tc in msg.tool_calls:
-                        self.out(f"\n{prefix}→ {tc['name']}({tc['args']})\n")
-                    if not msg.tool_calls and (where or tag):
-                        if where == "coach":
-                            self.final_text = _text_of(msg) or self.final_text
-                        self.out("\n")  # close the streamed line
-                    self._line_label = ""
+                        events.append(
+                            ("tool_call", {"where": who, "name": tc["name"], "args": tc["args"]})
+                        )
+                    if not msg.tool_calls:
+                        text = text_of(msg)
+                        if where == "coach" and text:
+                            self.final_text = text
+                        events.append(("assistant", {"where": who, "text": text}))
                 elif node == "tools" and isinstance(msg, ToolMessage):
-                    self._line_label = ""
-                    self.out(f"{prefix}← {msg.name}: {len(_text_of(msg))} chars\n")
+                    events.append(
+                        (
+                            "tool_result",
+                            {
+                                "where": where_of(where, node),
+                                "name": msg.name,
+                                "chars": len(text_of(msg)),
+                            },
+                        )
+                    )
                 elif (
                     not where and node in ("planning", "nutrition") and isinstance(msg, ToolMessage)
                 ):  # a consultation's result, once, from the coach graph's own node
-                    self.out(f"← {msg.name}: {_text_of(msg)}\n")
+                    events.append(
+                        ("consult", {"domain": node, "name": msg.name, "text": text_of(msg)})
+                    )
                 elif (
                     not where
                     and node in ("apply", "review", "nutrition")
                     and isinstance(msg, AIMessage | HumanMessage)
                 ):
-                    text = _text_of(msg)
-                    self.out(f"{text}\n")
+                    text = text_of(msg)
                     if isinstance(msg, AIMessage):
                         self.final_text = text
+                    role = "ai" if isinstance(msg, AIMessage) else "human"
+                    events.append(("report", {"text": text, "node": node, "role": role}))
+        return events
+
+
+class TurnPrinter:
+    """Formats the classifier's events for the terminal. Subclasses override print_event."""
+
+    def __init__(self, out: Out) -> None:
+        self.out = out
+        self.classifier = TurnClassifier()
+        self.error: str | None = None
+        self._line_label = ""  # tag printed at the start of the current streamed line
+
+    @property
+    def final_text(self) -> str:
+        return self.classifier.final_text
+
+    @property
+    def interrupt(self) -> dict[str, Any] | None:
+        return self.classifier.interrupt
+
+    def _stream(self, tag: str, text: str) -> None:
+        if self._line_label != tag:
+            self.out(f"\n[{tag}] " if tag else "\n")
+            self._line_label = tag
+        self.out(text)
+
+    def on_event(self, namespace: tuple[str, ...], mode: str, data: Any) -> None:
+        for kind, payload in self.classifier.classify(namespace, mode, data):
+            self.print_event(kind, payload)
+
+    def print_event(self, kind: str, payload: dict[str, Any]) -> None:
+        where = payload.get("where", "coach")
+        tag = "" if where == "coach" else where
+        prefix = f"[{tag}] " if tag else ""
+        if kind == "token":
+            self._stream(tag, payload["text"])
+        elif kind == "tool_call":
+            self.out(f"\n{prefix}→ {payload['name']}({payload['args']})\n")
+            self._line_label = ""
+        elif kind == "assistant":
+            self.out("\n")  # close the streamed line
+            self._line_label = ""
+        elif kind == "tool_result":
+            self._line_label = ""
+            self.out(f"{prefix}← {payload['name']}: {payload['chars']} chars\n")
+        elif kind == "consult":
+            self.out(f"← {payload['name']}: {payload['text']}\n")
+        elif kind == "report":
+            self.out(f"{payload['text']}\n")
 
 
 async def run_turn(
@@ -135,8 +198,9 @@ async def run_turn(
     out: Out,
     *,
     tags: list[str] | None = None,
+    printer: TurnPrinter | None = None,
 ) -> TurnPrinter:
-    printer = TurnPrinter(out)
+    printer = printer or TurnPrinter(out)
     cfg: dict[str, Any] = {"configurable": {"thread_id": thread_id}, "recursion_limit": 60}
     if tags:
         cfg["tags"] = list(tags)
