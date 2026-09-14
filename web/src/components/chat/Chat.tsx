@@ -20,10 +20,11 @@ export default function Chat({ thread, stream, gate }: Props) {
     if (el) pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
   };
   const busy = state.status === "busy";
-  const hint = busy
-    ? `a ${state.busyWith} is running`
-    : state.lost
-      ? "connection lost, reloading the conversation"
+  // A lost stream stays busy while the thread catches up; the lost sentence wins over the busy one.
+  const hint = state.lost
+    ? "connection lost, reloading the conversation"
+    : busy
+      ? `a ${state.busyWith} is running`
       : thread?.stuck
         ? "the last run stopped early, send any message to continue"
         : undefined;
@@ -51,7 +52,7 @@ export default function Chat({ thread, stream, gate }: Props) {
               </Bubble>
             ),
           )}
-          {state.status === "streaming" && state.bubbles.length === 0 && <div className="text-xs text-ink-2">thinking…</div>}
+          {state.status === "streaming" && state.bubbles.every((b) => b.role === "user") && <div className="text-xs text-ink-2">thinking…</div>}
           {state.error && (
             <Bubble role="error">
               {state.error}
@@ -65,7 +66,14 @@ export default function Chat({ thread, stream, gate }: Props) {
           {gate}
         </div>
       </div>
-      <Composer disabled={busy || state.status === "streaming"} hint={hint} onSend={(t) => void stream.send(t)} />
+      {/* a new draft (text a busy 409 turned away) remounts the composer prefilled with it */}
+      <Composer
+        key={state.draft?.id ?? "composer"}
+        initialText={state.draft?.text}
+        disabled={busy || state.status === "streaming"}
+        hint={hint}
+        onSend={(t) => void stream.send(t)}
+      />
     </div>
   );
 }

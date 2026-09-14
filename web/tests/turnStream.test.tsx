@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useTurnStream } from "../src/components/chat/useTurnStream";
+import { threadEmpty } from "./fixtures";
 
 function sse(frames: [string, unknown][]): Response {
   const body = frames.map(([n, d]) => `event: ${n}\ndata: ${JSON.stringify(d)}\n\n`).join("");
@@ -39,8 +40,9 @@ test("a turn groups tokens by where, records activity, and clears after done", a
   act(() => {
     sending = result.current.send("how fit am I?");
   });
-  await waitFor(() => expect(result.current.state.bubbles.length).toBeGreaterThan(0));
+  await waitFor(() => expect(result.current.state.bubbles.some((b) => b.role === "assistant")).toBe(true));
   const seen = result.current.state.bubbles.map((b) => `${b.role}:${b.where}:${b.text}`);
+  expect(seen[0]).toBe("user:coach:how fit am I?");
   expect(seen).toContain("assistant:coach:Let me check.");
   await waitFor(() => expect(releaseInvalidate.length).toBe(2));
   await act(async () => {
@@ -74,8 +76,9 @@ test("bubbles while streaming: one per where run, activity rows in between", asy
   });
   await waitFor(() => expect(result.current.state.interrupt).not.toBeNull());
   const b = result.current.state.bubbles;
-  expect(b.map((x) => x.role)).toEqual(["assistant", "activity", "assistant", "consult", "report"]);
-  expect(b[2]).toMatchObject({ where: "planning", text: "B" });
+  expect(b.map((x) => x.role)).toEqual(["user", "assistant", "activity", "assistant", "consult", "report"]);
+  expect(b[0]).toMatchObject({ role: "user", text: "x" });
+  expect(b[3]).toMatchObject({ where: "planning", text: "B" });
   expect(result.current.state.interrupt).toEqual({ narration: "n", proposals: [] });
 });
 
@@ -86,6 +89,9 @@ test("a 409 marks the page busy with the running kind", async () => {
   await act(() => result.current.send("x"));
   expect(result.current.state.status).toBe("busy");
   expect(result.current.state.busyWith).toBe("checkin");
+  // nothing was sent: no live bubble, the text is handed back as a composer draft
+  expect(result.current.state.bubbles).toEqual([]);
+  expect(result.current.state.draft).toMatchObject({ text: "x" });
 });
 
 test("a 409 without a running kind is not busy: idle, a specific message, both invalidations", async () => {
@@ -123,9 +129,17 @@ test("send resolves after a non-409 failure (error is recorded, not thrown); res
   await act(() => result.current.send("x")); // must not reject
   await waitFor(() => expect(result.current.state.status).toBe("idle"));
   expect(result.current.state.error).toBe("boom");
+  // the unsent text stays recoverable: its bubble stays up next to the error's retry
+  expect(result.current.state.lastText).toBe("x");
+  expect(result.current.state.bubbles).toMatchObject([{ role: "user", text: "x" }]);
 
-  f.mockResolvedValueOnce(new Response(JSON.stringify({ errors: ["bad edit"] }), { status: 422 }));
-  await expect(act(() => result.current.resume({ action: "edit", proposals: [] }))).rejects.toMatchObject({ status: 422 });
+  f.mockResolvedValueOnce(new Response(JSON.stringify({ detail: "edit rejected", errors: ["bad edit"] }), { status: 422 }));
+  // caught inside act: an act whose callback rejects drops the updates it queued
+  let thrown: unknown;
+  await act(() => result.current.resume({ action: "edit", proposals: [] }).catch((e: unknown) => void (thrown = e)));
+  expect(thrown).toMatchObject({ status: 422 });
+  expect(result.current.state.status).toBe("idle");
+  expect(result.current.state.error).toBeNull(); // the gate shows the 422, not a chat bubble
 });
 
 test("an error event keeps the text for retry; a lost stream is flagged", async () => {
@@ -142,4 +156,48 @@ test("an error event keeps the text for retry; a lost stream is flagged", async 
   await act(() => result.current.retry());
   expect(f).toHaveBeenLastCalledWith("/api/coach/turns", expect.objectContaining({ body: JSON.stringify({ text: "again" }) }));
   await waitFor(() => expect(result.current.state.lost).toBe(true));
+});
+
+describe("catching up with a run the page did not start", () => {
+  beforeEach(() => vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] }));
+  afterEach(() => vi.useRealTimers());
+
+  /** Fire the 2 s poll and let its invalidate, state update and query notifications settle. */
+  const poll = () =>
+    act(async () => {
+      vi.advanceTimersByTime(2000);
+      for (let i = 0; i < 3; i++) await new Promise((r) => setTimeout(r, 0));
+    });
+
+  test("mounting while the thread says a check-in is running is busy with it until running clears", async () => {
+    const client = new QueryClient();
+    client.setQueryData(["thread"], { ...threadEmpty(), running: "checkin" });
+    const invalidate = vi.spyOn(client, "invalidateQueries").mockImplementation(async ({ queryKey } = {}) => {
+      if (queryKey?.[0] === "thread") client.setQueryData(["thread"], threadEmpty());
+    });
+    const { result } = renderHook(() => useTurnStream(), { wrapper: wrapper(client) });
+    expect(result.current.state.status).toBe("busy");
+    expect(result.current.state.busyWith).toBe("checkin");
+    await poll();
+    expect(result.current.state.status).toBe("idle");
+    expect(result.current.state.busyWith).toBeNull();
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["today"] });
+  });
+
+  test("a stream that ends without done while the run goes on stays busy and lost until the thread catches up", async () => {
+    const client = new QueryClient();
+    const views = [{ ...threadEmpty(), running: "turn" }, threadEmpty()];
+    vi.spyOn(client, "invalidateQueries").mockImplementation(async ({ queryKey } = {}) => {
+      if (queryKey?.[0] === "thread") client.setQueryData(["thread"], views.shift());
+    });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(sse([["token", { where: "coach", text: "half" }]])); // no done
+    const { result } = renderHook(() => useTurnStream(), { wrapper: wrapper(client) });
+    await act(async () => {
+      await result.current.send("how fit am I?");
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(result.current.state).toMatchObject({ status: "busy", busyWith: "turn", lost: true, bubbles: [] });
+    await poll();
+    expect(result.current.state).toMatchObject({ status: "idle", busyWith: null, lost: false });
+  });
 });

@@ -41,8 +41,11 @@ export const keys = {
 };
 
 export const useToday = () => useQuery({ queryKey: keys.today, queryFn: () => api<TodayView>("/api/today") });
-export const useThread = (refetchInterval?: number | false) =>
-  useQuery({ queryKey: keys.thread, queryFn: () => api<ThreadView>("/api/coach/thread"), refetchInterval });
+const fetchThread = () => api<ThreadView>("/api/coach/thread");
+export const useThread = (refetchInterval?: number | false) => useQuery({ queryKey: keys.thread, queryFn: fetchThread, refetchInterval });
+/** What the cached thread says is running; never fetches (a disabled observer on the same key). */
+export const useThreadRunning = () =>
+  useQuery({ queryKey: keys.thread, queryFn: fetchThread, enabled: false, select: (v: ThreadView) => v.running }).data ?? null;
 export const useMemory = () => useQuery({ queryKey: keys.memory, queryFn: () => api<MemoryOut>("/api/coach/memory") });
 export const useStatus = () => useQuery({ queryKey: keys.status, queryFn: () => api<StatusOut>("/api/system/status") });
 export const useSchema = () =>

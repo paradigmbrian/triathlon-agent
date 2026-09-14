@@ -1,7 +1,9 @@
 import { useState, type FormEvent, type KeyboardEvent } from "react";
 
-export default function Composer({ disabled, hint, onSend }: { disabled: boolean; hint?: string; onSend: (text: string) => void }) {
-  const [text, setText] = useState("");
+type Props = { disabled: boolean; hint?: string; initialText?: string; onSend: (text: string) => void };
+
+export default function Composer({ disabled, hint, initialText = "", onSend }: Props) {
+  const [text, setText] = useState(initialText);
   const doSend = () => {
     const t = text.trim();
     if (!t || disabled) return;
