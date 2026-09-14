@@ -7,7 +7,7 @@ Spec: `docs/superpowers/specs/2026-09-14-tri-web-design.md`.
 ## Run
 
 ```
-uv run tri-web serve [--no-live] [--port 8321]   # the API only for now; plan 2 adds web/dist
+uv run tri-web serve [--no-live] [--port 8321]   # serves the API; when web/dist is built, also serves the web app
 uv run tri-web openapi > web/openapi.json        # the document web/src/api/types.ts is generated from
 ```
 
@@ -26,7 +26,7 @@ Startup takes 10 to 20 s while the MCP servers launch; `--no-live` skips them an
 | `GET /coach/review/yaml` | | `{yaml}` of the paused proposals |
 | `GET /coach/memory` | | `{entries, active_ids}` |
 | `DELETE /coach/memory/{id}` | | 204, or 404 |
-| `POST /coach/reset` | `{confirm: true, forget_memory}` | 204; 409 when busy |
+| `POST /coach/reset` | `{confirm: true, forget_memory}` | 204; 409 when busy; 422 when confirm is not true |
 | `POST /jobs/sync` | `{since?, full?}` | `{id}` |
 | `POST /jobs/checkin` | `{sync}` | `{id}`; 409 when busy |
 | `GET /jobs/{id}` | | `{id, kind, status, result?, error?}` |
