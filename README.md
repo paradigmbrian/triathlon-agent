@@ -181,3 +181,4 @@ package documents itself in its own `README.md`.
   `docs/superpowers/plans/2026-09-13-tri-analyze-01-alignment.md`. Eval (2026-09): `tri-analyze eval`,
   twelve cases, three code checks and a judge; tracked in
   `docs/superpowers/plans/2026-09-13-tri-analyze-02-eval.md`.
+- tri-web server (2026-09): `tri-web serve` streams the coach over SSE, recovers a paused review after a reload, runs sync and check-in as jobs, memory and reset; tracked in `docs/superpowers/plans/2026-09-14-tri-web-0*.md`. React app pending (plan 3).
