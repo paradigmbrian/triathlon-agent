@@ -1,9 +1,10 @@
-"""`tri-web serve`: open the coach runtime, serve the API (and web/dist when built) on localhost.
+"""`tri-web serve`: open the coach runtime, serve the API on localhost (plan 2 adds web/dist).
 `tri-web openapi`: print the OpenAPI document the frontend's types are generated from."""
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 from typing import TYPE_CHECKING
 
@@ -15,6 +16,8 @@ from rich.console import Console
 from tri_web.config import WebSettings, get_web_settings
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
+
     from tri_web.runtime import Log, Runtime
 
 load_dotenv()
@@ -38,7 +41,7 @@ def serve(
     host: str | None = typer.Option(None, "--host", help="Bind address (default TRI_WEB_HOST)"),
     port: int | None = typer.Option(None, "--port", help="Port (default TRI_WEB_PORT, 8321)"),
 ) -> None:
-    """Serve the coach API on localhost; the built frontend too when web/dist exists."""
+    """Serve the coach API on localhost (the API only for now; plan 2 adds serving web/dist)."""
     settings = get_web_settings()
     raise typer.Exit(
         code=asyncio.run(
@@ -50,6 +53,26 @@ def serve(
             )
         )
     )
+
+
+class _Server(uvicorn.Server):
+    """uvicorn re-raises the captured signal when serve() returns; clearing it lets _serve finish
+    the running turn and close the runtime before the process exits. A second Ctrl-C still
+    interrupts."""
+
+    @contextlib.contextmanager
+    def capture_signals(self) -> Generator[None, None, None]:
+        with super().capture_signals():
+            yield
+            self._captured_signals.clear()
+
+
+def _allowed_hosts(host: str) -> list[str]:
+    """Host header values the app accepts: loopback names plus the bind address when it is one."""
+    hosts = ["127.0.0.1", "localhost"]
+    if host not in ("0.0.0.0", "::") and host not in hosts:
+        hosts.append(host)
+    return hosts
 
 
 async def _finish_running_turn(rt: Runtime, log: Log) -> None:
@@ -67,8 +90,13 @@ async def _serve(settings: WebSettings, *, no_live: bool, host: str, port: int) 
 
     try:
         async with open_runtime(settings, no_live=no_live, log=_log) as rt:
-            server = uvicorn.Server(
-                uvicorn.Config(create_app(rt), host=host, port=port, log_level="info")
+            server = _Server(
+                uvicorn.Config(
+                    create_app(rt, allowed_hosts=_allowed_hosts(host)),
+                    host=host,
+                    port=port,
+                    log_level="info",
+                )
             )
             _log(
                 f"tri-web: http://{host}:{port}  (thread coach, live={'no' if no_live else 'yes'})"

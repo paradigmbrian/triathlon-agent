@@ -1,9 +1,13 @@
-"""create_app(runtime): the FastAPI app over one Runtime. Error bodies carry a message only."""
+"""create_app(runtime): the FastAPI app over one Runtime. Error bodies carry a message only.
+Only loopback Host headers are served, so a DNS-rebound page cannot reach the API."""
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from tri_web.events import Busy
 from tri_web.routes import coach, system
@@ -18,9 +22,16 @@ def runtime_of(request: Request) -> Runtime:
     return rt
 
 
-def create_app(runtime: Runtime | None) -> FastAPI:
+DEFAULT_ALLOWED_HOSTS = ("127.0.0.1", "localhost")
+
+
+def create_app(runtime: Runtime | None, *, allowed_hosts: Sequence[str] | None = None) -> FastAPI:
     app = FastAPI(title="tri-web", version="0.1.0")
     app.state.runtime = runtime
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=list(allowed_hosts if allowed_hosts is not None else DEFAULT_ALLOWED_HOSTS),
+    )
     app.include_router(coach.router, prefix="/api/coach", tags=["coach"])
     app.include_router(system.router, prefix="/api/system", tags=["system"])
 

@@ -78,7 +78,7 @@ def client() -> Callable[[Runtime], contextlib.AbstractAsyncContextManager[httpx
     @contextlib.asynccontextmanager
     async def _open(rt: Runtime) -> AsyncIterator[httpx.AsyncClient]:
         transport = httpx.ASGITransport(app=create_app(rt), raise_app_exceptions=False)
-        async with httpx.AsyncClient(transport=transport, base_url="http://tri-web") as c:
+        async with httpx.AsyncClient(transport=transport, base_url="http://127.0.0.1") as c:
             yield c
 
     return _open

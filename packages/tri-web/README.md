@@ -7,7 +7,7 @@ Spec: `docs/superpowers/specs/2026-09-14-tri-web-design.md`.
 ## Run
 
 ```
-uv run tri-web serve [--no-live] [--port 8321]   # API, plus web/dist when built
+uv run tri-web serve [--no-live] [--port 8321]   # the API only for now; plan 2 adds web/dist
 uv run tri-web openapi > web/openapi.json        # the document web/src/api/types.ts is generated from
 ```
 
