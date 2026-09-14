@@ -92,11 +92,14 @@ so tests assert on the rendered system prompt. `testing.athlete_context()` is th
 ## Commands
 
 ```
-uv run tri-analyze chat [--no-live]     # /tools /prompt /sync /quit
+uv run tri-analyze chat [--no-live]                    # /tools /prompt /sync /quit
+uv run tri-analyze eval [--prefix P] [--recreate-dataset]   # the LangSmith feedback eval
 ```
 
 `--no-live` binds only the database tool. Exit 2 when `ANTHROPIC_API_KEY` is unset or the
-database is unreachable. A failed MCP server is logged and skipped.
+database is unreachable. A failed MCP server is logged and skipped. `eval` exits 2 when
+`LANGSMITH_API_KEY` or `ANTHROPIC_API_KEY` is unset, 1 when any evaluator is below 100% or
+any example errored, else 0.
 
 ## Layout
 
@@ -110,8 +113,9 @@ src/tri_analyze/
   allowlist.py        the Garmin and TrainingPeaks tools the agent may call live
   tools/live.py       open_live_tools over tri_core.mcp with the allow-lists
   repl.py             text_of, TurnPrinter, run_turn, chat_loop
-  cli.py              chat
+  cli.py              chat, eval
   testing.py          athlete_context, RecordingScriptedModel, seed_workouts, seed_daily_metrics
+  evals/              cases, target (stub tools), evaluators (code checks and the judge), run
 ```
 
 ## One question, end to end
@@ -130,6 +134,35 @@ src/tri_analyze/
 
 With `LANGSMITH_TRACING=true`, every hop is recorded in project `tri_analyze` with the exact
 prompt, tool schema JSON and token counts (look for `cache_read_input_tokens` on the second turn).
+Tags: `analyst` on every run, `chat` on REPL turns, `eval` on eval targets; under `tri-coach`
+the analyst's runs appear in `tri_coach` with the `analyst` tag.
+
+## Evaluation
+
+`tri-analyze eval` runs the real agent (`build_agent`) over stub tools with canned results,
+so no database or MCP server is involved, on the LangSmith dataset `tri_analyze_feedback`
+(twelve cases in `evals/cases.py`: five session reviews, three trends, one readiness
+question and three edge cases: empty SQL, an interval question without live tools, a
+body-composition question with the coach's `read_body_composition` bound). The stubs carry
+the real tool names and argument names, and `query_training_db` carries the real
+description, so the model sees what it sees in production. Today is fixed at 2026-09-16.
+
+Evaluators (a check that does not apply scores nothing):
+
+| Key | Applies when | Passes when |
+|---|---|---|
+| `uses_sql` | the case needs data | at least one `query_training_db` call |
+| `pulls_splits` | an interval question with live tools | at least one `get_activity_splits` call |
+| `states_window` | a trend question | the answer names an ISO date, a month-and-day date, or a relative window such as "last 8 weeks" |
+| `grounded` | always (LLM judge) | every number in the answer is in the context or the tool results, and missing data is stated |
+| `feedback_quality` | session reviews (LLM judge) | the five feedback rules are covered, athlete comments and RPE are used, one or two concrete takeaways, no generic encouragement |
+
+The judge is one `with_structured_output(FeedbackJudgement)` call per example over the
+case's rendered system prompt, the question, the tool results and the answer. The
+experiment is `analyst-v<PROMPT_VERSION>` with `prompt_version` and `model` as metadata,
+so bump `PROMPT_VERSION` whenever the prompt text changes and compare runs. Latest run:
+`analyst-v1-77fb7f3b` on 2026-09-13, 12 examples, 0 errored: `uses_sql` 100%, `pulls_splits`
+100%, `states_window` 80%, `feedback_quality` 100%, `grounded` 17%.
 
 ## Design decisions
 
@@ -153,3 +186,5 @@ prompt, tool schema JSON and token counts (look for `cache_read_input_tokens` on
 - **Model or cost:** `TRI_MODEL` in `.env`; `MAX_TOKENS` in `llm.py`.
 - **How much context the prompt carries:** the date windows in `repo.load_athlete_context`.
 - **Where traces go:** `TRI_ANALYZE_LANGSMITH_PROJECT` (default `tri_analyze`).
+- **The eval disagrees with you:** the cases are in `evals/cases.py`; `--recreate-dataset`
+  pushes edits to LangSmith.
