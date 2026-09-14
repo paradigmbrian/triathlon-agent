@@ -7,7 +7,9 @@ import { useThread, useToday } from "../api/queries";
 export default function Today() {
   const today = useToday();
   const stream = useTurnStream();
-  const thread = useThread(stream.state.status === "busy" ? 2000 : false);
+  // The turn-stream hook is the single poller while busy (it invalidates ["thread"] every
+  // 2 s); this query just reads whatever that invalidation last put in the cache.
+  const thread = useThread();
   return (
     <>
       <Header today={today.data} />

@@ -88,6 +88,46 @@ test("a 409 marks the page busy with the running kind", async () => {
   expect(result.current.state.busyWith).toBe("checkin");
 });
 
+test("a 409 without a running kind is not busy: idle, a specific message, both invalidations", async () => {
+  const client = new QueryClient();
+  const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue();
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ reason: "no_review" }), { status: 409 }));
+  const { result } = renderHook(() => useTurnStream(), { wrapper: wrapper(client) });
+  await act(() => result.current.resume({ action: "approve" }));
+  expect(result.current.state.status).toBe("idle");
+  expect(result.current.state.busyWith).toBeNull();
+  expect(result.current.state.error).toBe("nothing is waiting for review");
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ["thread"] });
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ["today"] });
+});
+
+test("a second send while the first stream is open does not call fetch again", () => {
+  const client = new QueryClient();
+  const openStream = () => new Response(new ReadableStream<Uint8Array>({ start() {} }), { status: 200, headers: { "content-type": "text/event-stream" } });
+  const f = vi.spyOn(globalThis, "fetch").mockResolvedValue(openStream());
+  const { result } = renderHook(() => useTurnStream(), { wrapper: wrapper(client) });
+  act(() => {
+    void result.current.send("first");
+    void result.current.send("second");
+  });
+  expect(f).toHaveBeenCalledTimes(1);
+  expect(result.current.state.lastText).toBe("first");
+});
+
+test("send resolves after a non-409 failure (error is recorded, not thrown); resume rethrows a 422", async () => {
+  const client = new QueryClient();
+  vi.spyOn(client, "invalidateQueries").mockResolvedValue();
+  const f = vi.spyOn(globalThis, "fetch");
+  f.mockResolvedValueOnce(new Response(JSON.stringify({ detail: "boom" }), { status: 500 }));
+  const { result } = renderHook(() => useTurnStream(), { wrapper: wrapper(client) });
+  await act(() => result.current.send("x")); // must not reject
+  await waitFor(() => expect(result.current.state.status).toBe("idle"));
+  expect(result.current.state.error).toBe("boom");
+
+  f.mockResolvedValueOnce(new Response(JSON.stringify({ errors: ["bad edit"] }), { status: 422 }));
+  await expect(act(() => result.current.resume({ action: "edit", proposals: [] }))).rejects.toMatchObject({ status: 422 });
+});
+
 test("an error event keeps the text for retry; a lost stream is flagged", async () => {
   const client = new QueryClient();
   vi.spyOn(client, "invalidateQueries").mockResolvedValue();

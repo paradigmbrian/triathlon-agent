@@ -2,15 +2,21 @@ import { useState, type FormEvent, type KeyboardEvent } from "react";
 
 export default function Composer({ disabled, hint, onSend }: { disabled: boolean; hint?: string; onSend: (text: string) => void }) {
   const [text, setText] = useState("");
-  const submit = (e?: FormEvent) => {
-    e?.preventDefault();
+  const doSend = () => {
     const t = text.trim();
     if (!t || disabled) return;
     onSend(t);
     setText("");
   };
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    doSend();
+  };
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) submit();
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      doSend();
+    }
   };
   return (
     <form onSubmit={submit} className="border-t border-line bg-surface-2 p-3">

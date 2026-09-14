@@ -59,42 +59,61 @@ export function useTurnStream() {
     };
   }, []);
 
+  // Reentrancy guard: a call while a run is already in flight is ignored (no fetch, no state change).
+  const inFlight = useRef(false);
+
   const run = useCallback(
-    async (path: string, body: unknown, lastText: string | null) => {
-      setState((s) => ({ ...s, status: "streaming", busyWith: null, bubbles: [], interrupt: null, error: null, lost: false, lastText }));
-      let res: Response;
+    async (path: string, body: unknown, lastText: string | null, opts: { rethrow?: boolean } = {}) => {
+      if (inFlight.current) return;
+      inFlight.current = true;
       try {
-        res = await postStream(path, body);
-      } catch (e) {
-        if (e instanceof ApiError && e.status === 409) {
-          const running = (e.body as { running?: string } | null)?.running ?? "run";
-          setState((s) => ({ ...s, status: "busy", busyWith: running }));
+        setState((s) => ({ ...s, status: "streaming", busyWith: null, bubbles: [], interrupt: null, error: null, lost: false, lastText }));
+        let res: Response;
+        try {
+          res = await postStream(path, body);
+        } catch (e) {
+          if (e instanceof ApiError && e.status === 409) {
+            const running = (e.body as { running?: string | null } | null)?.running ?? null;
+            if (running != null) {
+              setState((s) => ({ ...s, status: "busy", busyWith: running }));
+              return;
+            }
+            // A 409 without `running` (e.g. { reason: "no_review" }) means nothing is waiting
+            // for review, not that something else is running: stay idle, surface the message.
+            setState((s) => ({ ...s, status: "idle", error: "nothing is waiting for review" }));
+            await Promise.all([qc.invalidateQueries({ queryKey: keys.thread }), qc.invalidateQueries({ queryKey: keys.today })]);
+            return;
+          }
+          setState((s) => ({ ...s, status: "idle", error: e instanceof Error ? e.message : String(e) }));
+          if (opts.rethrow) throw e;
           return;
         }
-        setState((s) => ({ ...s, status: "idle", error: e instanceof Error ? e.message : String(e) }));
-        throw e;
+        let done = false;
+        try {
+          await readSse(res, (ev) => {
+            const data = (ev.data ?? {}) as Record<string, unknown>;
+            if (ev.name === "interrupt") setState((s) => ({ ...s, interrupt: data as unknown as ReviewPayload }));
+            else if (ev.name === "error") setState((s) => ({ ...s, error: String(data.message) }));
+            else if (ev.name === "done") done = true;
+            else setState((s) => ({ ...s, bubbles: applyEvent(s.bubbles, ev.name, data) }));
+          });
+        } catch {
+          done = false;
+        }
+        await Promise.all([qc.invalidateQueries({ queryKey: keys.thread }), qc.invalidateQueries({ queryKey: keys.today })]);
+        if (!alive.current) return;
+        setState((s) => ({ ...s, status: "idle", bubbles: [], interrupt: null, lost: !done }));
+      } finally {
+        inFlight.current = false;
       }
-      let done = false;
-      try {
-        await readSse(res, (ev) => {
-          const data = (ev.data ?? {}) as Record<string, unknown>;
-          if (ev.name === "interrupt") setState((s) => ({ ...s, interrupt: data as unknown as ReviewPayload }));
-          else if (ev.name === "error") setState((s) => ({ ...s, error: String(data.message) }));
-          else if (ev.name === "done") done = true;
-          else setState((s) => ({ ...s, bubbles: applyEvent(s.bubbles, ev.name, data) }));
-        });
-      } catch {
-        done = false;
-      }
-      await Promise.all([qc.invalidateQueries({ queryKey: keys.thread }), qc.invalidateQueries({ queryKey: keys.today })]);
-      if (!alive.current) return;
-      setState((s) => ({ ...s, status: "idle", bubbles: [], interrupt: null, lost: !done }));
     },
     [qc],
   );
 
+  // Only `resume` rethrows: the review gate (Task 6) catches a rejected edit (422) to show its
+  // errors inline. `send`/`retry` resolve after recording the failure in `state.error` instead.
   const send = useCallback((text: string) => run("/api/coach/turns", { text }, text), [run]);
-  const resume = useCallback((decision: ReviewDecision) => run("/api/coach/review", decision, null), [run]);
+  const resume = useCallback((decision: ReviewDecision) => run("/api/coach/review", decision, null, { rethrow: true }), [run]);
   const retry = useCallback(async () => {
     if (state.lastText) await send(state.lastText);
   }, [send, state.lastText]);
@@ -105,6 +124,7 @@ export function useTurnStream() {
     const t = setInterval(() => {
       void (async () => {
         await qc.invalidateQueries({ queryKey: keys.thread });
+        if (!alive.current) return;
         const view = qc.getQueryData<{ running: string | null }>(keys.thread);
         if (view && view.running == null) {
           setState((s) => ({ ...s, status: "idle", busyWith: null }));
