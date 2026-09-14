@@ -1,7 +1,7 @@
 # tri-web — The Athlete's Web UI, sub-project 1: foundation, Today, coach chat (package `tri_web`, app `web/`)
 
 **Date:** 2026-09-14
-**Status:** Approved design, not yet implemented
+**Status:** Implemented (plans 01 to 03, 2026-09-14)
 **Purpose:** A local web UI over the existing agents. This sub-project builds the server that hosts the coach graph behind HTTP, the React shell, the Today page with its strip of today's numbers, the coach chat with streaming and the review gate (approve, reject, edit), and the operational buttons (sync now, weekly check-in, coach memory, reset). Progress charts, nutrition management and lab management are sub-projects 2 to 4 (§14) and get their own specs.
 
 Companion specs: `tri-coach` (2026-09-11) owns the graph, the review gate and the memory this UI drives; `tri-planning` (2026-09-07) and `tri-nutrition` (2026-09-10) own the change models the gate editor renders; `tri-wellness` (2026-09-10) owns the labs summary the Today strip shows.
@@ -90,6 +90,8 @@ web/
                  settings/  MemoryTable.tsx  ResetButton.tsx  Readiness.tsx
   tests/  sse.test.ts  schemaForm.test.ts  e2e/smoke.spec.ts (Playwright, stub API)
 ```
+
+As built: `tailwind.config.ts` does not exist (Tailwind 4 reads its tokens from `web/src/index.css`), and `routes/review.py` is folded into `routes/coach.py` (the routes are `today.py`, `coach.py`, `jobs.py`, `memory.py`, `system.py`).
 
 `tri-web` joins the workspace members in the root `pyproject.toml`. `web/` is an npm project with its own lockfile; it is not a uv member. The root README gets a `tri-web` row and a Run line.
 

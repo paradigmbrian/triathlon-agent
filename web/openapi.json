@@ -1,0 +1,1914 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "tri-web",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/coach/thread": {
+      "get": {
+        "tags": [
+          "coach"
+        ],
+        "summary": "Get Thread",
+        "operationId": "get_thread_api_coach_thread_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/coach/turns": {
+      "post": {
+        "tags": [
+          "coach"
+        ],
+        "summary": "Post Turn",
+        "operationId": "post_turn_api_coach_turns_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TurnIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/coach/review": {
+      "post": {
+        "tags": [
+          "coach"
+        ],
+        "summary": "Post Review",
+        "operationId": "post_review_api_coach_review_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/coach/review/schema": {
+      "get": {
+        "tags": [
+          "coach"
+        ],
+        "summary": "Get Schema",
+        "operationId": "get_schema_api_coach_review_schema_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchemaOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/coach/review/validate": {
+      "post": {
+        "tags": [
+          "coach"
+        ],
+        "summary": "Post Validate",
+        "operationId": "post_validate_api_coach_review_validate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Validated"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/coach/review/yaml": {
+      "get": {
+        "tags": [
+          "coach"
+        ],
+        "summary": "Get Yaml",
+        "operationId": "get_yaml_api_coach_review_yaml_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YamlOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jobs/sync": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Post Sync",
+        "operationId": "post_sync_api_jobs_sync_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobStarted"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jobs/checkin": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Post Checkin",
+        "operationId": "post_checkin_api_jobs_checkin_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckinIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobStarted"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Get Job",
+        "operationId": "get_job_api_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jobs/{job_id}/events": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Get Events",
+        "operationId": "get_events_api_jobs__job_id__events_get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/coach/memory": {
+      "get": {
+        "tags": [
+          "memory"
+        ],
+        "summary": "Get Memory",
+        "operationId": "get_memory_api_coach_memory_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/coach/memory/{entry_id}": {
+      "delete": {
+        "tags": [
+          "memory"
+        ],
+        "summary": "Forget",
+        "operationId": "forget_api_coach_memory__entry_id__delete",
+        "parameters": [
+          {
+            "name": "entry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Entry Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/coach/reset": {
+      "post": {
+        "tags": [
+          "memory"
+        ],
+        "summary": "Reset",
+        "operationId": "reset_api_coach_reset_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/system/status": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Get Status",
+        "operationId": "get_status_api_system_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/today": {
+      "get": {
+        "tags": [
+          "today"
+        ],
+        "summary": "Get Today",
+        "operationId": "get_today_api_today_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TodayView"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CheckinIn": {
+        "properties": {
+          "sync": {
+            "type": "boolean",
+            "title": "Sync",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "CheckinIn"
+      },
+      "FuelOut": {
+        "properties": {
+          "target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TargetOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "targets_through": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Targets Through"
+          }
+        },
+        "type": "object",
+        "required": [
+          "target",
+          "targets_through"
+        ],
+        "title": "FuelOut",
+        "description": "target null: \"No targets yet, ask the coach\"."
+      },
+      "FuelPlanOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "tp_workout_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tp Workout Id"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          },
+          "violations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Violations"
+          },
+          "written": {
+            "type": "boolean",
+            "title": "Written"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "tp_workout_id",
+          "payload",
+          "violations",
+          "written"
+        ],
+        "title": "FuelPlanOut"
+      },
+      "GoalOut": {
+        "properties": {
+          "goal_type": {
+            "type": "string",
+            "title": "Goal Type"
+          },
+          "event_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Name"
+          },
+          "event_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Date"
+          },
+          "days_to_go": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days To Go"
+          }
+        },
+        "type": "object",
+        "required": [
+          "goal_type",
+          "event_name",
+          "event_date",
+          "days_to_go"
+        ],
+        "title": "GoalOut"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HeaderOut": {
+        "properties": {
+          "today": {
+            "type": "string",
+            "format": "date",
+            "title": "Today"
+          },
+          "phase": {
+            "type": "string",
+            "title": "Phase"
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GoalOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "week": {
+            "$ref": "#/components/schemas/WeekHeader"
+          },
+          "last_sync": {
+            "items": {
+              "$ref": "#/components/schemas/SyncOut"
+            },
+            "type": "array",
+            "title": "Last Sync"
+          }
+        },
+        "type": "object",
+        "required": [
+          "today",
+          "phase",
+          "goal",
+          "week",
+          "last_sync"
+        ],
+        "title": "HeaderOut"
+      },
+      "JobOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "done",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "status"
+        ],
+        "title": "JobOut"
+      },
+      "JobStarted": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "JobStarted"
+      },
+      "LabsOut": {
+        "properties": {
+          "panel_id": {
+            "type": "integer",
+            "title": "Panel Id"
+          },
+          "drawn_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Drawn On"
+          },
+          "lab_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lab Name"
+          },
+          "report_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report On"
+          },
+          "outside_optimal": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outside Optimal"
+          },
+          "markers": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Markers"
+          },
+          "priorities": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priorities"
+          }
+        },
+        "type": "object",
+        "required": [
+          "panel_id",
+          "drawn_on",
+          "lab_name",
+          "report_on",
+          "outside_optimal",
+          "markers",
+          "priorities"
+        ],
+        "title": "LabsOut",
+        "description": "null with labs_enabled: \"No panels stored\"; labs_missing: \"apply\nmigrations/005_wellness.sql\"."
+      },
+      "MemoryEntry": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "injury",
+              "constraint",
+              "preference",
+              "event",
+              "coaching_style",
+              "note",
+              "checkin"
+            ],
+            "title": "Kind"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "created": {
+            "type": "string",
+            "format": "date",
+            "title": "Created"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Until"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "text",
+          "created"
+        ],
+        "title": "MemoryEntry"
+      },
+      "MemoryOut": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/MemoryEntry"
+            },
+            "type": "array",
+            "title": "Entries"
+          },
+          "active_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Active Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entries",
+          "active_ids"
+        ],
+        "title": "MemoryOut"
+      },
+      "Readiness": {
+        "properties": {
+          "api_key": {
+            "type": "boolean",
+            "title": "Api Key"
+          },
+          "checkpointer": {
+            "type": "boolean",
+            "title": "Checkpointer"
+          },
+          "store": {
+            "type": "boolean",
+            "title": "Store"
+          }
+        },
+        "type": "object",
+        "required": [
+          "api_key",
+          "checkpointer",
+          "store"
+        ],
+        "title": "Readiness"
+      },
+      "ReadinessOut": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "is_today": {
+            "type": "boolean",
+            "title": "Is Today"
+          },
+          "sleep_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleep Score"
+          },
+          "sleep_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleep Hours"
+          },
+          "hrv": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hrv"
+          },
+          "resting_hr": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resting Hr"
+          },
+          "body_battery": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body Battery"
+          },
+          "training_readiness": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Training Readiness"
+          },
+          "ctl": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ctl"
+          },
+          "atl": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Atl"
+          },
+          "tsb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tsb"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "is_today",
+          "sleep_score",
+          "sleep_hours",
+          "hrv",
+          "resting_hr",
+          "body_battery",
+          "training_readiness",
+          "ctl",
+          "atl",
+          "tsb"
+        ],
+        "title": "ReadinessOut",
+        "description": "null: \"No Garmin data yet, sync first\"."
+      },
+      "ResetIn": {
+        "properties": {
+          "confirm": {
+            "type": "boolean",
+            "const": true,
+            "title": "Confirm"
+          },
+          "forget_memory": {
+            "type": "boolean",
+            "title": "Forget Memory",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "confirm"
+        ],
+        "title": "ResetIn"
+      },
+      "ReviewIn": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "approve",
+              "reject",
+              "edit"
+            ],
+            "title": "Action"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "proposals": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "title": "ReviewIn"
+      },
+      "ReviewPayload": {
+        "properties": {
+          "narration": {
+            "type": "string",
+            "title": "Narration"
+          },
+          "proposals": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Proposals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "narration",
+          "proposals"
+        ],
+        "title": "ReviewPayload"
+      },
+      "SchemaOut": {
+        "properties": {
+          "proposal": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Proposal"
+          },
+          "planning_change": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Planning Change"
+          },
+          "nutrition_change": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Nutrition Change"
+          }
+        },
+        "type": "object",
+        "required": [
+          "proposal",
+          "planning_change",
+          "nutrition_change"
+        ],
+        "title": "SchemaOut"
+      },
+      "SessionOut": {
+        "properties": {
+          "workouts": {
+            "items": {
+              "$ref": "#/components/schemas/WorkoutOut"
+            },
+            "type": "array",
+            "title": "Workouts"
+          },
+          "fuel": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FuelPlanOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "workouts",
+          "fuel"
+        ],
+        "title": "SessionOut",
+        "description": "null: \"No session planned\"."
+      },
+      "SportCount": {
+        "properties": {
+          "sport": {
+            "type": "string",
+            "title": "Sport"
+          },
+          "planned": {
+            "type": "integer",
+            "title": "Planned"
+          },
+          "completed": {
+            "type": "integer",
+            "title": "Completed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sport",
+          "planned",
+          "completed"
+        ],
+        "title": "SportCount"
+      },
+      "StatusOut": {
+        "properties": {
+          "live": {
+            "type": "boolean",
+            "title": "Live"
+          },
+          "tools": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tools"
+          },
+          "ready": {
+            "$ref": "#/components/schemas/Readiness"
+          },
+          "thread": {
+            "type": "string",
+            "title": "Thread"
+          },
+          "running": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Running"
+          }
+        },
+        "type": "object",
+        "required": [
+          "live",
+          "tools",
+          "ready",
+          "thread",
+          "running"
+        ],
+        "title": "StatusOut"
+      },
+      "SyncIn": {
+        "properties": {
+          "since": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          },
+          "full": {
+            "type": "boolean",
+            "title": "Full",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "SyncIn"
+      },
+      "SyncOut": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "last_synced_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Last Synced Date"
+          },
+          "last_run_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Run At"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "last_synced_date",
+          "last_run_at",
+          "status",
+          "error"
+        ],
+        "title": "SyncOut"
+      },
+      "TargetOut": {
+        "properties": {
+          "day_type": {
+            "type": "string",
+            "title": "Day Type"
+          },
+          "total_kcal": {
+            "type": "integer",
+            "title": "Total Kcal"
+          },
+          "carbs_g": {
+            "type": "integer",
+            "title": "Carbs G"
+          },
+          "protein_g": {
+            "type": "integer",
+            "title": "Protein G"
+          },
+          "fat_g": {
+            "type": "integer",
+            "title": "Fat G"
+          },
+          "fluid_baseline_ml": {
+            "type": "integer",
+            "title": "Fluid Baseline Ml"
+          },
+          "written_to_garmin": {
+            "type": "boolean",
+            "title": "Written To Garmin"
+          }
+        },
+        "type": "object",
+        "required": [
+          "day_type",
+          "total_kcal",
+          "carbs_g",
+          "protein_g",
+          "fat_g",
+          "fluid_baseline_ml",
+          "written_to_garmin"
+        ],
+        "title": "TargetOut"
+      },
+      "ThreadView": {
+        "properties": {
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/UiMessage"
+            },
+            "type": "array",
+            "title": "Messages"
+          },
+          "paused": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "held": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stuck": {
+            "type": "boolean",
+            "title": "Stuck"
+          },
+          "running": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Running"
+          }
+        },
+        "type": "object",
+        "required": [
+          "messages",
+          "paused",
+          "held",
+          "stuck",
+          "running"
+        ],
+        "title": "ThreadView"
+      },
+      "TodayView": {
+        "properties": {
+          "header": {
+            "$ref": "#/components/schemas/HeaderOut"
+          },
+          "session": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SessionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "readiness": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadinessOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fuel": {
+            "$ref": "#/components/schemas/FuelOut"
+          },
+          "week": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WeekOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "labs": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LabsOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "labs_enabled": {
+            "type": "boolean",
+            "title": "Labs Enabled"
+          },
+          "labs_missing": {
+            "type": "boolean",
+            "title": "Labs Missing"
+          },
+          "pending": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "header",
+          "session",
+          "readiness",
+          "fuel",
+          "week",
+          "labs",
+          "labs_enabled",
+          "labs_missing"
+        ],
+        "title": "TodayView"
+      },
+      "TurnIn": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "TurnIn"
+      },
+      "UiMessage": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant",
+              "activity",
+              "consult",
+              "report"
+            ],
+            "title": "Role"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "where": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Where"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "args": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Args"
+          },
+          "chars": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chars"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "role",
+          "text"
+        ],
+        "title": "UiMessage"
+      },
+      "ValidateIn": {
+        "properties": {
+          "proposals": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposals"
+          },
+          "yaml": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Yaml"
+          }
+        },
+        "type": "object",
+        "title": "ValidateIn"
+      },
+      "Validated": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "proposals": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Proposals"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationItem"
+            },
+            "type": "array",
+            "title": "Errors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "title": "Validated"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "ValidationItem": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Loc"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Msg"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg"
+        ],
+        "title": "ValidationItem"
+      },
+      "WeekHeader": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date",
+            "title": "Start"
+          },
+          "number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Number"
+          },
+          "of": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Of"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "number",
+          "of"
+        ],
+        "title": "WeekHeader"
+      },
+      "WeekOut": {
+        "properties": {
+          "phase": {
+            "type": "string",
+            "title": "Phase"
+          },
+          "target_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Hours"
+          },
+          "target_tss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Tss"
+          },
+          "actual_hours": {
+            "type": "number",
+            "title": "Actual Hours"
+          },
+          "actual_tss": {
+            "type": "number",
+            "title": "Actual Tss"
+          },
+          "sessions": {
+            "items": {
+              "$ref": "#/components/schemas/SportCount"
+            },
+            "type": "array",
+            "title": "Sessions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "phase",
+          "target_hours",
+          "target_tss",
+          "actual_hours",
+          "actual_tss",
+          "sessions"
+        ],
+        "title": "WeekOut",
+        "description": "null: \"No plan; ask the coach to build one\"."
+      },
+      "WorkoutOut": {
+        "properties": {
+          "tp_workout_id": {
+            "type": "string",
+            "title": "Tp Workout Id"
+          },
+          "sport": {
+            "type": "string",
+            "title": "Sport"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "completed": {
+            "type": "boolean",
+            "title": "Completed"
+          },
+          "planned_duration_sec": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Duration Sec"
+          },
+          "planned_tss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Tss"
+          },
+          "actual_duration_sec": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Duration Sec"
+          },
+          "actual_tss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Tss"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tp_workout_id",
+          "sport",
+          "title",
+          "completed",
+          "planned_duration_sec",
+          "planned_tss",
+          "actual_duration_sec",
+          "actual_tss"
+        ],
+        "title": "WorkoutOut"
+      },
+      "YamlOut": {
+        "properties": {
+          "yaml": {
+            "type": "string",
+            "title": "Yaml"
+          }
+        },
+        "type": "object",
+        "required": [
+          "yaml"
+        ],
+        "title": "YamlOut"
+      }
+    }
+  }
+}

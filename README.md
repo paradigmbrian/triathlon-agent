@@ -87,6 +87,9 @@ uv run tri-coach eval [--recreate-dataset]                   # LangSmith routing
 uv run tri-coach memory [--forget ID]   # the coach's athlete memory
 uv run tri-coach reset [--yes] [--forget-memory]
 uv run tri-web serve [--no-live] [--port 8321]   # the coach in the browser, same thread and memory as tri-coach chat
+npm --prefix web install && npm --prefix web run build   # once: build the app that tri-web serve hosts
+npm --prefix web run dev                                  # frontend work: Vite on :5173 proxying /api to :8321
+npm --prefix web run lint && npm --prefix web run test && npm --prefix web run test:e2e
 ```
 
 In chat: `/tools` lists bound tools, `/prompt` prints the system prompt, `/sync` refreshes
@@ -147,6 +150,7 @@ packages/tri-planning/  src/tri_planning/{config,cli,repo,repl,testing,planning,
 packages/tri-nutrition/ src/tri_nutrition/{config,cli,repo,repl,store,plan_loader,testing,nutrition,graph,tools,prompts,evals}
 packages/tri-wellness/  src/tri_wellness/{config,cli,repo,repl,report,agent,testing,ranges,labs,graph,prompts,tools,evals}
 packages/tri-web/       src/tri_web/{config,cli,app,runtime,events,thread,review,schemas,routes}
+web/                    Vite + React app: src/{api,components,pages,lib}, tests/ (Vitest, Playwright e2e)
 docs/superpowers/       specs and implementation plans
 ```
 
@@ -181,4 +185,4 @@ package documents itself in its own `README.md`.
   `docs/superpowers/plans/2026-09-13-tri-analyze-01-alignment.md`. Eval (2026-09): `tri-analyze eval`,
   twelve cases, three code checks and a judge; tracked in
   `docs/superpowers/plans/2026-09-13-tri-analyze-02-eval.md`.
-- tri-web server (2026-09): `tri-web serve` streams the coach over SSE, recovers a paused review after a reload, runs sync and check-in as jobs, memory and reset; tracked in `docs/superpowers/plans/2026-09-14-tri-web-0*.md`. React app pending (plan 3).
+- tri-web sub-project 1 (2026-09): server (`tri-web serve`), React shell, Today strip, coach chat with the review gate (schema form and YAML), sync and check-in jobs, memory and reset; tracked in `docs/superpowers/plans/2026-09-14-tri-web-0*.md`. Sub-projects 2 to 4 (progress, nutrition, labs) unspecced.

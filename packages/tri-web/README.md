@@ -1,6 +1,6 @@
 # tri-web
 
-A local web UI over the head coach. The server (`tri_web`, FastAPI on 127.0.0.1:8321) opens the coach graph the way `tri-coach chat` does: the same thread `coach`, the same Postgres checkpointer and store, so the terminal and the browser see one conversation and one memory. The React app lives in `web/` (plan 3).
+A local web UI over the head coach. The server (`tri_web`, FastAPI on 127.0.0.1:8321) opens the coach graph the way `tri-coach chat` does: the same thread `coach`, the same Postgres checkpointer and store, so the terminal and the browser see one conversation and one memory. The React app lives in `web/`.
 
 Spec: `docs/superpowers/specs/2026-09-14-tri-web-design.md`.
 
@@ -55,7 +55,20 @@ src/tri_web/cli.py       serve, openapi
 
 ## Serving the frontend
 
-When `web/dist/index.html` exists (plan 3's `npm --prefix web run build`) it is served from the same port with `index.html` for client routes; otherwise the server logs `frontend not built, API only`.
+When `web/dist/index.html` exists (`npm --prefix web run build`) it is served from the same port with `index.html` for client routes; otherwise the server logs `frontend not built, API only`.
+
+## Frontend
+
+The app is in `web/` at the repository root: Vite, React 19, TypeScript, Tailwind 4 (the colour tokens, light and dark, live in `web/src/index.css`), TanStack Query. From the repository root:
+
+```
+npm --prefix web install && npm --prefix web run build   # once: build the app that tri-web serve hosts
+npm --prefix web run dev                                  # frontend work: Vite on :5173 proxying /api to :8321
+npm --prefix web run lint && npm --prefix web run test && npm --prefix web run test:e2e
+npm --prefix web run types                                # regenerate web/openapi.json and web/src/api/types.ts
+```
+
+`web/src/api/types.ts` and `web/openapi.json` are generated, not edited: run `npm --prefix web run types` whenever a route model changes. `test` runs Vitest (jsdom); `test:e2e` builds the app, starts `vite preview` on 127.0.0.1:4173 and runs the Playwright smoke test against a stubbed API (run `npx --prefix web playwright install chromium` once).
 
 ## Tests
 
