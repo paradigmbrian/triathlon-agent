@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+:root {
+  --surface: #f7f6f2;
+  --surface-2: #ffffff;
+  --ink: #1b1b1f;
+  --ink-2: #5d5f66;
+  --line: #e2e0d8;
+  --accent: #1f6f5f;
+  --planning: #3552a8;
+  --nutrition: #b3551d;
+  --warn: #9a6b00;
+  --danger: #b3261e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #131417;
+    --surface-2: #1d1f24;
+    --ink: #ececec;
+    --ink-2: #a3a6ad;
+    --line: #2c2f36;
+    --accent: #4fb39c;
+    --planning: #8ea3ea;
+    --nutrition: #e9915a;
+    --warn: #e0b449;
+    --danger: #ef6a63;
+  }
+}
+
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-planning: var(--planning);
+  --color-nutrition: var(--nutrition);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+}
+
+html, body, #root { height: 100%; }
+body { @apply bg-surface text-ink antialiased; }
