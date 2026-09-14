@@ -1,4 +1,4 @@
-"""`tri-web serve`: open the coach runtime, serve the API on localhost (plan 2 adds web/dist).
+"""`tri-web serve`: open the coach runtime and serve the API on localhost, plus web/dist when built.
 `tri-web openapi`: print the OpenAPI document the frontend's types are generated from."""
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ def serve(
     host: str | None = typer.Option(None, "--host", help="Bind address (default TRI_WEB_HOST)"),
     port: int | None = typer.Option(None, "--port", help="Port (default TRI_WEB_PORT, 8321)"),
 ) -> None:
-    """Serve the coach API on localhost (the API only for now; plan 2 adds serving web/dist)."""
+    """Serve the coach API on localhost, plus web/dist when built."""
     settings = get_web_settings()
     raise typer.Exit(
         code=asyncio.run(
@@ -92,7 +92,7 @@ async def _serve(settings: WebSettings, *, no_live: bool, host: str, port: int) 
         async with open_runtime(settings, no_live=no_live, log=_log) as rt:
             server = _Server(
                 uvicorn.Config(
-                    create_app(rt, allowed_hosts=_allowed_hosts(host)),
+                    create_app(rt, allowed_hosts=_allowed_hosts(host), log=_log),
                     host=host,
                     port=port,
                     log_level="info",

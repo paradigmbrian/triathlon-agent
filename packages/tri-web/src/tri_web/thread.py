@@ -85,7 +85,7 @@ def ui_messages(messages: Sequence[BaseMessage]) -> list[UiMessage]:
     return out
 
 
-def _review_payload(raw: Any) -> ReviewPayload | None:
+def review_payload(raw: Any) -> ReviewPayload | None:
     if raw is None:
         return None
     if isinstance(raw, dict):
@@ -98,8 +98,8 @@ def _review_payload(raw: Any) -> ReviewPayload | None:
 async def thread_snapshot(graph: Any, thread_id: str, *, running: str | None) -> ThreadView:
     snap = await graph.aget_state({"configurable": {"thread_id": thread_id}})
     values = snap.values or {}
-    paused = _review_payload(paused_review(snap))
-    held = _review_payload(values.get("pending")) if paused is None else None
+    paused = review_payload(paused_review(snap))
+    held = review_payload(values.get("pending")) if paused is None else None
     stuck = paused is None and held is None and bool(snap.next)
     return ThreadView(
         messages=ui_messages(values.get("messages", [])),

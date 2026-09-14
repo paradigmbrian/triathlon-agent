@@ -16,6 +16,7 @@ from langgraph.store.base import BaseStore
 from tri_coach.servers import Servers
 from tri_core.db.repo import Conn
 from tri_web.config import WebSettings
+from tri_web.jobs import Jobs
 
 Log = Callable[[str], None]
 
@@ -37,6 +38,7 @@ class Runtime:
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     running: str | None = None
     turn_task: asyncio.Task[None] | None = None
+    jobs: Jobs = field(default_factory=Jobs)
 
 
 def cfg(rt: Runtime) -> dict[str, Any]:

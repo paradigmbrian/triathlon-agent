@@ -3,10 +3,12 @@ OpenAPI document these produce."""
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from tri_coach.memory import MemoryEntry
 from tri_web.review import ValidationItem
 
 
@@ -53,6 +55,37 @@ class StatusOut(BaseModel):
     ready: Readiness
     thread: str
     running: str | None
+
+
+class SyncIn(BaseModel):
+    since: date | None = None
+    full: bool = False
+
+
+class CheckinIn(BaseModel):
+    sync: bool = True
+
+
+class JobStarted(BaseModel):
+    id: str
+
+
+class JobOut(BaseModel):
+    id: str
+    kind: str
+    status: Literal["queued", "running", "done", "failed"]
+    result: dict[str, Any] | None = None
+    error: str | None = None
+
+
+class MemoryOut(BaseModel):
+    entries: list[MemoryEntry]
+    active_ids: list[str]
+
+
+class ResetIn(BaseModel):
+    confirm: Literal[True]
+    forget_memory: bool = False
 
 
 class NoReview(Exception):
