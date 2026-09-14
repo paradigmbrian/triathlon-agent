@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from typing import TYPE_CHECKING
 
 import typer
 import uvicorn
@@ -12,6 +13,9 @@ from dotenv import load_dotenv
 from rich.console import Console
 
 from tri_web.config import WebSettings, get_web_settings
+
+if TYPE_CHECKING:
+    from tri_web.runtime import Log, Runtime
 
 load_dotenv()
 
@@ -48,9 +52,18 @@ def serve(
     )
 
 
+async def _finish_running_turn(rt: Runtime, log: Log) -> None:
+    """Wait out a turn still running when `serve()` returns, so the exit stack never closes the
+    checkpointer, store or MCP sessions mid-write. No cancellation, no timeout."""
+    task = rt.turn_task
+    if task is not None and not task.done():
+        log("tri-web: waiting for the running turn to finish")
+        await task
+
+
 async def _serve(settings: WebSettings, *, no_live: bool, host: str, port: int) -> int:
     from tri_web.app import create_app
-    from tri_web.runtime import open_runtime
+    from tri_web.runtime import NotReady, open_runtime
 
     try:
         async with open_runtime(settings, no_live=no_live, log=_log) as rt:
@@ -61,7 +74,8 @@ async def _serve(settings: WebSettings, *, no_live: bool, host: str, port: int) 
                 f"tri-web: http://{host}:{port}  (thread coach, live={'no' if no_live else 'yes'})"
             )
             await server.serve()
-    except RuntimeError as exc:
+            await _finish_running_turn(rt, _log)
+    except NotReady as exc:
         console.print(str(exc), style="red")
         return 2
     return 0

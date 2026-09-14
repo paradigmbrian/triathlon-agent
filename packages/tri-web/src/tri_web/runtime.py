@@ -20,6 +20,10 @@ from tri_web.config import WebSettings
 Log = Callable[[str], None]
 
 
+class NotReady(RuntimeError):
+    """The API key, checkpointer or store is missing; the message is the CLI's hint."""
+
+
 @dataclass
 class Runtime:
     settings: WebSettings
@@ -55,7 +59,7 @@ async def open_runtime(
 
     problem = ready(settings)
     if problem is not None:
-        raise RuntimeError(problem)
+        raise NotReady(problem)
     async with AsyncExitStack() as stack:
         servers = await open_servers(stack, settings, no_live=no_live, log=log)
         saver = await stack.enter_async_context(open_checkpointer(settings.database_url))
