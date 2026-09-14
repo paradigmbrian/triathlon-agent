@@ -8,7 +8,15 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from tri_analyze.allowlist import GARMIN_LIVE_TOOLS, TP_LIVE_TOOLS
-from tri_analyze.evals.cases import CASES, EXTRA_TOOLS, KINDS, TODAY, EvalCase, jsonable
+from tri_analyze.evals.cases import (
+    CASES,
+    EXTRA_TOOLS,
+    KINDS,
+    SQL_ENVELOPE_EMPTY,
+    TODAY,
+    EvalCase,
+    jsonable,
+)
 from tri_analyze.evals.evaluators import (
     FeedbackJudgement,
     make_judge,
@@ -46,6 +54,12 @@ def test_cases_are_valid_and_cover_every_kind():
         assert set(c.extra_tools) <= set(EXTRA_TOOLS), c.name
         for name, responses in c.tool_results.items():
             assert responses and all(isinstance(r, str) for r in responses), (c.name, name)
+            if name == "query_training_db":
+                for r in responses:
+                    assert set(json.loads(r)) == {"columns", "rows", "row_count", "truncated"}, (
+                        c.name,
+                        r,
+                    )
         i, o = c.inputs(), c.outputs()
         assert set(i) == {"question", "athlete", "live", "extra_tools", "tool_results"}, c.name
         assert o == {
@@ -123,6 +137,9 @@ def test_canned_serves_in_order_repeats_the_last_and_defaults_to_empty():
     canned = Canned({"query_training_db": ["[1]", "[2]"]})
     assert [canned("query_training_db") for _ in range(3)] == ["[1]", "[2]", "[2]"]
     assert canned("get_activity") == "[]"
+    empty = Canned({})
+    assert empty("get_activity") == "[]"  # the generic default
+    assert empty("query_training_db", default=SQL_ENVELOPE_EMPTY) == SQL_ENVELOPE_EMPTY
 
 
 async def test_stubs_answer_from_the_case():
@@ -137,6 +154,12 @@ async def test_stubs_answer_from_the_case():
         == c.tool_results["get_activity_splits"][0]
     )
     assert await stubs["tp_get_workout"].ainvoke({"workout_id": "w"}) == "[]"
+
+
+async def test_query_training_db_stub_defaults_to_the_empty_envelope():
+    c = case("trend_no_data")  # no canned query_training_db result
+    stubs = {t.name: t for t in stub_tools(c.inputs())}
+    assert await stubs["query_training_db"].ainvoke({"sql": "select 1"}) == SQL_ENVELOPE_EMPTY
 
 
 async def test_target_returns_the_calls_and_the_final_answer():
@@ -157,6 +180,8 @@ async def test_target_returns_the_calls_and_the_final_answer():
     assert [x["name"] for x in out["calls"]] == ["query_training_db", "get_activity_splits"]
     assert out["calls"][1]["args"] == {"activity_id": "g-1502"}
     assert out["answer"].startswith("Reps 1-4 held")
+    assert [r["name"] for r in out["tool_results"]] == ["query_training_db", "get_activity_splits"]
+    assert out["tool_results"][1]["content"] == c.tool_results["get_activity_splits"][0]
 
 
 async def test_target_propagates_an_exception_so_langsmith_records_an_error():
@@ -213,10 +238,25 @@ def test_states_window_accepts_iso_month_day_and_relative_windows():
         "Over the last 8 weeks TSS averaged 412.",
         "Looking at the past two months, volume grew.",
         "Since 20 July the trend is up.",
+        "Your weight is down 1.4 kg over the last month.",  # bare singular relative window
+        "In the last week you averaged 400 TSS.",
+        "Weight fell 2 kg over the past year.",
+        "Monthly totals: 2026-06 118.4 km, 2026-07 141.9 km, 2026-08 156.2 km.",  # ISO year-month
+        "Run volume grew from June to August: up 20%.",  # month framed by from/to
+        "No bike sessions are recorded for June 2026, so I cannot compute an average.",  # +year
+        "September 13th was the best day.",  # month + ordinal day
+        "Across 9/2 to 9/15 sleep tracked HRV.",  # slash dates
+        "Weight fell from 75.4 kg on 9/13/2026 to 74.0 kg.",
     ):
         assert states_window(answer(text), ref)["score"] == 1, text
-    r = states_window(answer("TSS averaged 412 with one recovery week."), ref)
-    assert r["score"] == 0 and r["key"] == "states_window"
+    for text in (
+        "TSS averaged 412 with one recovery week.",
+        "Here is a weekly summary of your training.",
+        "I don't have data for this session.",
+        "May I suggest an easier week?",  # bare month name, no day/year/framing word
+    ):
+        r = states_window(answer(text), ref)
+        assert r["score"] == 0 and r["key"] == "states_window", text
     assert states_window(answer("anything"), case("last_z2_ride").outputs())["score"] is None
 
 
@@ -235,12 +275,23 @@ def verdict(**over) -> dict:
 
 def test_judge_prompt_carries_the_rendered_system_prompt_question_results_and_answer():
     c = case("threshold_rpe9")
-    text = render_judge_prompt(c.inputs(), {"calls": [], "answer": "Third rep fell apart."})
+    served = c.tool_results["query_training_db"][0]
+    text = render_judge_prompt(
+        c.inputs(),
+        {
+            "calls": [],
+            "answer": "Third rep fell apart.",
+            "tool_results": [{"name": "query_training_db", "content": served}],
+        },
+    )
     assert "Today is 2026-09-16." in text and FEEDBACK_RULES in text
     assert "Tools bound this session: query_training_db, get_activity, get_activity_splits" in text
     assert c.question in text
-    assert "Legs were dead from the start" in text  # the canned SQL row
+    assert "Legs were dead from the start" in text  # served, not merely canned
     assert text.rstrip().endswith("Third rep fell apart.")
+    unserved = render_judge_prompt(c.inputs(), {"calls": [], "answer": "Third rep fell apart."})
+    assert "Legs were dead from the start" not in unserved  # canned but never served
+    assert "Tool results:\n(none)" in unserved
     bare = render_judge_prompt(case("trend_no_data").inputs(), {"calls": [], "answer": ""})
     assert "Tool results:\n(none)" in bare
 

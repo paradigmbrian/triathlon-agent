@@ -37,8 +37,27 @@ def jsonable(value: Any) -> Any:
 
 
 def rows(*items: dict[str, Any]) -> str:
-    """A tool result: JSON text, as query_training_db and the MCP tools return."""
+    """A tool result: JSON text, as the MCP and extra tools return (a list of objects)."""
     return json.dumps(list(items), default=str)
+
+
+def sql_rows(*items: dict[str, Any]) -> str:
+    """A query_training_db result: the real envelope run_readonly_query returns —
+    {"columns", "rows", "row_count", "truncated"} — columns in first-row key order (the union
+    in first-seen order and None for gaps when rows disagree), rows as positional lists."""
+    columns: list[str] = []
+    for item in items:
+        for key in item:
+            if key not in columns:
+                columns.append(key)
+    body = [[item.get(c) for c in columns] for item in items]
+    return json.dumps(
+        {"columns": columns, "rows": body, "row_count": len(body), "truncated": False},
+        default=str,
+    )
+
+
+SQL_ENVELOPE_EMPTY = json.dumps({"columns": [], "rows": [], "row_count": 0, "truncated": False})
 
 
 def _day(
@@ -367,7 +386,7 @@ CASES: list[EvalCase] = [
         athlete=athlete(),
         kind="session",
         tool_results={
-            "query_training_db": [rows(Z2_RIDE)],
+            "query_training_db": [sql_rows(Z2_RIDE)],
             "get_activity": [
                 rows(
                     {
@@ -388,7 +407,7 @@ CASES: list[EvalCase] = [
         athlete=athlete(),
         kind="session",
         tool_results={
-            "query_training_db": [rows(INTERVAL_RUN)],
+            "query_training_db": [sql_rows(INTERVAL_RUN)],
             "get_activity_splits": [rows(*INTERVAL_SPLITS)],
         },
         requires_splits=True,
@@ -398,14 +417,14 @@ CASES: list[EvalCase] = [
         question="What happened with Saturday's swim?",
         athlete=athlete(),
         kind="session",
-        tool_results={"query_training_db": [rows(MISSED_SWIM)]},
+        tool_results={"query_training_db": [sql_rows(MISSED_SWIM)]},
     ),
     EvalCase(
         name="threshold_rpe9",
         question="Feedback on last Wednesday's threshold ride please. I felt awful.",
         athlete=athlete(),
         kind="session",
-        tool_results={"query_training_db": [rows(THRESHOLD_RIDE)]},
+        tool_results={"query_training_db": [sql_rows(THRESHOLD_RIDE)]},
     ),
     EvalCase(
         name="brick_sunday",
@@ -413,7 +432,7 @@ CASES: list[EvalCase] = [
         athlete=athlete(),
         kind="session",
         tool_results={
-            "query_training_db": [rows(BRICK)],
+            "query_training_db": [sql_rows(BRICK)],
             "get_activity_splits": [rows(*BRICK_SPLITS)],
         },
     ),
@@ -422,7 +441,7 @@ CASES: list[EvalCase] = [
         question="Show my weekly TSS for the last 8 weeks.",
         athlete=athlete(),
         kind="trend",
-        tool_results={"query_training_db": [rows(*WEEKLY_TSS)]},
+        tool_results={"query_training_db": [sql_rows(*WEEKLY_TSS)]},
         expects_window=True,
     ),
     EvalCase(
@@ -430,7 +449,7 @@ CASES: list[EvalCase] = [
         question="How has my run volume changed month over month?",
         athlete=athlete(),
         kind="trend",
-        tool_results={"query_training_db": [rows(*RUN_VOLUME)]},
+        tool_results={"query_training_db": [sql_rows(*RUN_VOLUME)]},
         expects_window=True,
     ),
     EvalCase(
@@ -438,7 +457,7 @@ CASES: list[EvalCase] = [
         question="Is my sleep affecting my HRV?",
         athlete=athlete(),
         kind="trend",
-        tool_results={"query_training_db": [rows(*SLEEP_HRV)]},
+        tool_results={"query_training_db": [sql_rows(*SLEEP_HRV)]},
         expects_window=True,
     ),
     EvalCase(
@@ -465,7 +484,7 @@ CASES: list[EvalCase] = [
         athlete=athlete(),
         kind="session",
         live=False,
-        tool_results={"query_training_db": [rows(INTERVAL_RUN)]},
+        tool_results={"query_training_db": [sql_rows(INTERVAL_RUN)]},
         requires_splits=True,
     ),
     EvalCase(

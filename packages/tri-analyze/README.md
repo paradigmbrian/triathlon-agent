@@ -144,8 +144,9 @@ so no database or MCP server is involved, on the LangSmith dataset `tri_analyze_
 (twelve cases in `evals/cases.py`: five session reviews, three trends, one readiness
 question and three edge cases: empty SQL, an interval question without live tools, a
 body-composition question with the coach's `read_body_composition` bound). The stubs carry
-the real tool names and argument names, and `query_training_db` carries the real
-description, so the model sees what it sees in production. Today is fixed at 2026-09-16.
+the real tool names and argument names, `query_training_db` carries the real description,
+and its canned results use the real `{columns, rows, row_count, truncated}` envelope, so the
+model sees what it sees in production. Today is fixed at 2026-09-16.
 
 Evaluators (a check that does not apply scores nothing):
 
@@ -158,11 +159,13 @@ Evaluators (a check that does not apply scores nothing):
 | `feedback_quality` | session reviews (LLM judge) | the five feedback rules are covered, athlete comments and RPE are used, one or two concrete takeaways, no generic encouragement |
 
 The judge is one `with_structured_output(FeedbackJudgement)` call per example over the
-case's rendered system prompt, the question, the tool results and the answer. The
-experiment is `analyst-v<PROMPT_VERSION>` with `prompt_version` and `model` as metadata,
-so bump `PROMPT_VERSION` whenever the prompt text changes and compare runs. Latest run:
-`analyst-v1-77fb7f3b` on 2026-09-13, 12 examples, 0 errored: `uses_sql` 100%, `pulls_splits`
-100%, `states_window` 80%, `feedback_quality` 100%, `grounded` 17%.
+case's rendered system prompt, the question, the tool results the analyst received and the
+answer. The experiment is `analyst-v<PROMPT_VERSION>` with `prompt_version` and `model` as
+metadata, so bump `PROMPT_VERSION` whenever the prompt text changes and compare runs. Latest
+run: `analyst-v1-77fb7f3b` on 2026-09-13, before the result-envelope, window-pattern and
+judge-grounding fixes, 12 examples, 0 errored: `uses_sql` 100%, `pulls_splits` 100%,
+`states_window` 80%, `feedback_quality` 100%, `grounded` 17%. The dataset inputs changed
+with those fixes, so the next run is `uv run tri-analyze eval --recreate-dataset`.
 
 ## Design decisions
 

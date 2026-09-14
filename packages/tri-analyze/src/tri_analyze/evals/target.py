@@ -11,11 +11,12 @@ from typing import Any
 from uuid import uuid4
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.tools import BaseTool, StructuredTool
 
 from tri_analyze.agent import build_agent
 from tri_analyze.allowlist import GARMIN_LIVE_TOOLS, TP_LIVE_TOOLS
+from tri_analyze.evals.cases import SQL_ENVELOPE_EMPTY
 from tri_analyze.repl import text_of
 from tri_analyze.repo import AthleteContext
 from tri_core.db.sql_tool import make_query_tool
@@ -58,14 +59,15 @@ def athlete_from_inputs(inputs: dict[str, Any]) -> AthleteContext:
 
 
 class Canned:
-    """Serves each tool's responses in call order, repeating the last; "[]" when none."""
+    """Serves each tool's responses in call order, repeating the last; `default` ("[]" unless
+    the caller passes another) when none are canned."""
 
     def __init__(self, results: dict[str, list[str]]) -> None:
         self.results = {k: list(v) for k, v in results.items() if v}
         self.served: dict[str, int] = defaultdict(int)
 
-    def __call__(self, name: str) -> str:
-        queue = self.results.get(name) or ["[]"]
+    def __call__(self, name: str, default: str = "[]") -> str:
+        queue = self.results.get(name) or [default]
         i = min(self.served[name], len(queue) - 1)
         self.served[name] += 1
         return queue[i]
@@ -77,7 +79,7 @@ def stub_tools(inputs: dict[str, Any]) -> list[BaseTool]:
     canned = Canned(inputs.get("tool_results") or {})
 
     async def query_training_db(sql: str) -> str:
-        return canned("query_training_db")
+        return canned("query_training_db", default=SQL_ENVELOPE_EMPTY)
 
     async def get_activity(activity_id: str) -> str:
         return canned("get_activity")
@@ -150,7 +152,20 @@ async def run_case(model: BaseChatModel, inputs: dict[str, Any]) -> dict[str, An
         (text_of(m) for m in reversed(messages) if isinstance(m, AIMessage) and not m.tool_calls),
         "",
     )
-    return {"calls": calls, "answer": answer}
+    # ToolMessage.name carries the tool name; fall back to the AI messages' tool calls by
+    # tool_call_id for the rare case it doesn't.
+    call_names = {
+        tc["id"]: tc["name"] for m in messages if isinstance(m, AIMessage) for tc in m.tool_calls
+    }
+    tool_results = [
+        {
+            "name": m.name or call_names.get(m.tool_call_id, ""),
+            "content": text_of(m) if isinstance(m.content, str | list) else str(m.content),
+        }
+        for m in messages
+        if isinstance(m, ToolMessage)
+    ]
+    return {"calls": calls, "answer": answer, "tool_results": tool_results}
 
 
 def make_target(model: BaseChatModel) -> Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]:

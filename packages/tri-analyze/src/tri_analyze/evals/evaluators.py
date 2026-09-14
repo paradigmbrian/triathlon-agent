@@ -1,7 +1,9 @@
 """Evaluators over one analyst answer: three code checks over the tool calls and the answer
 (SQL for data questions, splits for interval questions, a stated window for trends) and, in
 make_judge, an LLM judge for grounding and feedback quality. A check that does not apply to a
-case scores None, which the pass rate leaves out."""
+case scores None, which the pass rate leaves out. A bare month name only counts as a stated
+window when it carries a day, a year, or an adjacent from/to/since/between/until word, so "in
+May" does not count but "June 2026" and "from June to August" do."""
 
 from __future__ import annotations
 
@@ -19,16 +21,27 @@ from tri_analyze.prompts.analyst import render_system_prompt
 
 _MONTH = r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*"
 _DAY = r"\d{1,2}(?:st|nd|rd|th)?"
+_FRAME = r"(?:from|to|since|between|until)"
+_WORD_NUM = r"(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)"
+_UNIT = r"(?:days?|weeks?|months?|quarters?|years?)"
 WINDOW_PATTERNS = (
-    re.compile(r"\b\d{4}-\d{2}-\d{2}\b"),  # ISO date
-    re.compile(  # month and day, either order: "Sep 13", "September 13th", "13 September"
-        rf"\b{_MONTH}\.? {_DAY}\b|\b{_DAY} {_MONTH}\b", re.IGNORECASE
-    ),
-    re.compile(  # relative window: "last 8 weeks", "past two months", "previous 30 days"
-        r"\b(?:last|past|previous) (?:\d+|two|three|four|five|six|seven|eight|nine|ten|twelve)"
-        r" (?:days?|weeks?|months?)\b",
+    re.compile(r"\b\d{4}-\d{2}-\d{2}\b"),  # ISO date: "2026-09-13"
+    re.compile(r"\b\d{4}-\d{2}\b(?!-\d)"),  # bare ISO year-month: "2026-06"
+    re.compile(  # month and day, either order, optional ordinal: "Sep 13", "September 13th",
+        # "13 September"
+        rf"\b{_MONTH}\.? {_DAY}\b|\b{_DAY} {_MONTH}\b",
         re.IGNORECASE,
     ),
+    re.compile(rf"\b{_MONTH}\.? \d{{4}}\b", re.IGNORECASE),  # month and year: "June 2026"
+    re.compile(  # a bare month framed by from/to/since/between/until: "from June", "June to"
+        rf"\b{_FRAME} {_MONTH}\b|\b{_MONTH} {_FRAME}\b", re.IGNORECASE
+    ),
+    re.compile(  # relative window, count optional: "last 8 weeks", "the last month",
+        # "past two months", "previous 30 days"
+        rf"\b(?:last|past|previous) (?:(?:\d+|{_WORD_NUM}) )?{_UNIT}\b",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\b\d{1,2}/\d{1,2}(?:/\d{2,4})?\b"),  # slash date: "9/2", "9/13/2026"
 )
 
 
@@ -126,11 +139,15 @@ encouragement. Judge the answer's text literally; return a FeedbackJudgement."""
 
 
 def render_judge_prompt(inputs: dict[str, Any], outputs: dict[str, Any]) -> str:
+    """Grounds the judge on what the analyst actually received: `outputs["tool_results"]`
+    (the served `ToolMessage`s from `run_case`), not the case's full canned corpus — a canned
+    fixture the analyst never called never appears here."""
     system = render_system_prompt(athlete_from_inputs(inputs), [t.name for t in stub_tools(inputs)])
-    results = inputs.get("tool_results") or {}
-    rendered = "\n".join(
-        f"{name}:\n" + "\n".join(str(r) for r in responses) for name, responses in results.items()
-    )
+    served = outputs.get("tool_results") or []
+    grouped: dict[str, list[str]] = {}
+    for result in served:
+        grouped.setdefault(str(result["name"]), []).append(str(result["content"]))
+    rendered = "\n".join(f"{name}:\n" + "\n".join(responses) for name, responses in grouped.items())
     return (
         f"Analyst system prompt:\n{system}\n\n"
         f"Question:\n{inputs.get('question', '')}\n\n"
