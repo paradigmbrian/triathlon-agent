@@ -66,9 +66,11 @@ async def post_checkin(body: CheckinIn, request: Request) -> JobStarted:
                 has_plan=phase == "active",
                 has_profile=profile is not None,
                 yes=False,
-                out=job.line,
+                out=job.write,  # streamed token fragments, not whole lines; job.write buffers them
                 thread_id=rt.thread_id,
             )
+            # paused (code 3) covers a new pause, a refusal because a review is already pending,
+            # and a stuck thread; the frontend refetches GET /api/coach/thread to tell them apart
             return {"code": code, "paused": code == 3, "no_plan": code == 2}
         finally:
             rt.running = None

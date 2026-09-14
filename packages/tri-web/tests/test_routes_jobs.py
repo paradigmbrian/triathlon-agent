@@ -120,6 +120,22 @@ async def test_checkin_is_409_while_a_turn_runs_and_holds_the_lock_while_it_runs
     assert events[-1][0] == "done" and not rt.lock.locked()
 
 
+async def test_checkin_streams_line_buffered_output(runtime, client, monkeypatch, parse_sse):
+    async def fake_run_checkin(graph, *, has_plan, has_profile, yes, out, thread_id="coach"):
+        out("Clean")
+        out(" week.")
+        out("\n")
+        return 0
+
+    monkeypatch.setattr("tri_web.routes.jobs.run_checkin", fake_run_checkin)
+    rt = runtime()
+    async with client(rt) as c:
+        job_id = (await c.post("/api/jobs/checkin", json={"sync": False})).json()["id"]
+        events = parse_sse((await c.get(f"/api/jobs/{job_id}/events")).text)
+    assert [d for n, d in events if n == "line"] == [{"text": "Clean week."}]
+    assert events[-1][0] == "done"
+
+
 async def test_checkin_syncs_first_when_asked(runtime, client, monkeypatch, parse_sse):
     calls = []
 

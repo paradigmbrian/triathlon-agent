@@ -29,6 +29,7 @@ class Job:
     events: list[JobEvent] = field(default_factory=list)
     task: asyncio.Task[None] | None = None
     _followers: list[asyncio.Queue[JobEvent | None]] = field(default_factory=list)
+    _buf: str = field(default="", repr=False)
 
     @property
     def finished(self) -> bool:
@@ -42,6 +43,21 @@ class Job:
 
     def line(self, text: str) -> None:
         self.emit("line", {"text": text.rstrip("\n")})
+
+    def write(self, text: str) -> None:
+        """Line-buffered writer for streamed output (per-token chunks): buffer until a `\\n`
+        completes a segment, then emit it as a `line` event (blank segments too, so paragraph
+        breaks survive); keep any trailing partial segment buffered for `flush`."""
+        self._buf += text
+        while "\n" in self._buf:
+            segment, self._buf = self._buf.split("\n", 1)
+            self.emit("line", {"text": segment})
+
+    def flush(self) -> None:
+        """Emit any buffered partial segment as a final `line` before `done`/`error`."""
+        if self._buf:
+            self.emit("line", {"text": self._buf})
+            self._buf = ""
 
     def _close(self) -> None:
         for q in self._followers:
@@ -69,10 +85,12 @@ class Jobs:
         try:
             job.result = await run(job)
             job.status = "done"
+            job.flush()
             job.emit("done", {"result": job.result})
         except Exception as exc:  # noqa: BLE001 - the job's failure is its result
             job.error = f"{type(exc).__name__}: {exc}"
             job.status = "failed"
+            job.flush()
             job.emit("error", {"message": job.error})
         finally:
             job._close()
@@ -83,11 +101,13 @@ class Jobs:
             return
         queue: asyncio.Queue[JobEvent | None] = asyncio.Queue()
         job._followers.append(queue)  # registered before the snapshot: nothing can slip between
-        recorded = list(job.events)
+        # captured together, with no await between them: `finished` must describe this snapshot,
+        # not whatever the job's status has become once the replay below is done yielding
+        recorded, finished = list(job.events), job.finished
         try:
             for ev in recorded:
                 yield ev
-            if job.finished:
+            if finished:
                 return
             while True:
                 ev_or_none = await queue.get()

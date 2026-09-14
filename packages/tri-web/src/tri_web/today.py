@@ -231,7 +231,8 @@ async def build_today(rt: Runtime) -> TodayView:
             days_to_go=(g.event_date - today).days if g.event_date else None,
         )
     number = of = None
-    if ctx.plan is not None and weeks:
+    if ctx.this_week is not None:
+        assert ctx.plan is not None  # this_week is only set alongside a plan
         number = (monday - ctx.plan.start_date).days // 7 + 1
         of = len(weeks)
     header = HeaderOut(

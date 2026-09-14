@@ -166,6 +166,13 @@ async def test_pending_shows_a_held_change_set(nocommit, runtime):
     assert view.pending is not None and view.pending.narration == "Held."
 
 
+async def test_week_number_is_none_before_the_plan_starts(nocommit, runtime):
+    seed_active_plan(nocommit)
+    before = MONDAY - timedelta(days=7)  # a week before the plan's first week
+    view = await build_today(runtime(today=before))
+    assert view.header.week.number is None and view.header.week.of is None
+
+
 def test_decimals_become_floats():
     from tri_web.today import _f
 
