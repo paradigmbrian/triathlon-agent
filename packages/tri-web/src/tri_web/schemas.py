@@ -8,6 +8,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from tri_coach.memory import MemoryEntry
 from tri_web.review import ValidationItem
 
 
@@ -75,6 +76,16 @@ class JobOut(BaseModel):
     status: Literal["queued", "running", "done", "failed"]
     result: dict[str, Any] | None = None
     error: str | None = None
+
+
+class MemoryOut(BaseModel):
+    entries: list[MemoryEntry]
+    active_ids: list[str]
+
+
+class ResetIn(BaseModel):
+    confirm: Literal[True]
+    forget_memory: bool = False
 
 
 class NoReview(Exception):
