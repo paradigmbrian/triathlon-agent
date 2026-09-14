@@ -18,3 +18,13 @@ async def test_live_tools_bind_expected_names():
         readiness = next(t for t in tools if t.name == "get_training_readiness")
         text = await readiness.ainvoke({"date": "2026-09-06"})
         assert "score" in str(text)
+
+
+@pytest.mark.live
+async def test_live_stub_argument_names_equal_the_real_tools():
+    from tri_analyze.evals.target import stub_tools
+
+    stubs = {t.name: t for t in stub_tools({"live": True})}
+    async with open_live_tools(Settings(), print) as tools:
+        for real in tools:
+            assert set(stubs[real.name].args) == set(real.args), real.name

@@ -6,7 +6,7 @@ TrainingPeaks data, synced into a local Postgres store.
 | Package | Module | Command | What it does |
 |---|---|---|---|
 | `packages/tri-core` | `tri_core` | `tri sync` | Settings, MCP client, Postgres store, the ETL, test helpers. No LLM code. |
-| `packages/tri-analyze` | `tri_analyze` | `tri-analyze chat` | Analyst agent: feedback on completed sessions, trends. |
+| `packages/tri-analyze` | `tri_analyze` | `tri-analyze chat \| eval` | Analyst agent: feedback on completed sessions, trends. |
 | `packages/tri-planning` | `tri_planning` | `tri-planning chat` | Planning agent: goal intake, periodized plan, approved writes to the TrainingPeaks calendar. |
 | `packages/tri-nutrition` | `tri_nutrition` | `tri-nutrition chat \| today \| check-in \| eval` | Nutrition agent: profile intake, periodized daily targets and fueling plans, approved writes to Garmin Connect and TrainingPeaks. |
 | `packages/tri-wellness` | `tri_wellness` | `tri-wellness ingest \| report \| chat \| panels \| eval` | Lab interpreter: PDF and export ingest with review, functional-range evaluation, written interpretation grounded in training data. |
@@ -71,6 +71,7 @@ Deeper context lives next to the code:
 ```bash
 uv run tri sync [--since YYYY-MM-DD] [--source trainingpeaks|garmin|all] [--full]
 uv run tri-analyze chat [--no-live]     # --no-live binds only the database tool
+uv run tri-analyze eval [--recreate-dataset]   # LangSmith feedback eval
 uv run tri-planning chat [--no-live]    # plan; every TrainingPeaks write is approved first
 uv run tri-planning check-in [--yes] [--no-sync] [--no-live]   # sync, review last 7 days, propose; exit 3 when paused, 1 on a model error
 uv run tri-planning reset [--yes]       # abandon goal and plan, clear the thread
@@ -139,7 +140,7 @@ pyproject.toml          workspace root: members, shared ruff/mypy/pytest config
 conftest.py             pytest options and the shared `db` fixture plugin
 migrations/             001_initial.sql (sync tables), 002_planning.sql and 003_rename_skeleton_to_targets.sql (planning tables), 004_nutrition.sql (nutrition tables), 005_wellness.sql (lab tables)
 packages/tri-core/      src/tri_core/{config,cli,mcp,db,sync,testing}
-packages/tri-analyze/   src/tri_analyze/{config,cli,llm,agent,repo,repl,testing,allowlist,prompts,tools}
+packages/tri-analyze/   src/tri_analyze/{config,cli,llm,agent,repo,repl,testing,allowlist,prompts,tools,evals}
 packages/tri-planning/  src/tri_planning/{config,cli,repo,repl,testing,planning,graph,tools,prompts}
 packages/tri-nutrition/ src/tri_nutrition/{config,cli,repo,repl,store,plan_loader,testing,nutrition,graph,tools,prompts,evals}
 packages/tri-wellness/  src/tri_wellness/{config,cli,repo,repl,report,agent,testing,ranges,labs,graph,prompts,tools,evals}
@@ -174,4 +175,6 @@ package documents itself in its own `README.md`.
   tracked in `docs/superpowers/plans/2026-09-13-tri-coach-04-checkin-and-follow-on.md`.
 - tri-analyze alignment (2026-09): flat layout, settings and LangSmith project, prompt rendered per call
   from runtime context with a tool guide, chat hardening, coach passes the context; tracked in
-  `docs/superpowers/plans/2026-09-13-tri-analyze-01-alignment.md`. Eval pending (plan 2).
+  `docs/superpowers/plans/2026-09-13-tri-analyze-01-alignment.md`. Eval (2026-09): `tri-analyze eval`,
+  twelve cases, three code checks and a judge; tracked in
+  `docs/superpowers/plans/2026-09-13-tri-analyze-02-eval.md`.
