@@ -8,6 +8,7 @@ from langgraph.types import Command, Interrupt
 
 from tri_coach.models import ChangeSet, Proposal
 from tri_coach.repl import (
+    TurnClassifier,
     TurnPrinter,
     chat_loop,
     label,
@@ -16,6 +17,8 @@ from tri_coach.repl import (
     proposals_to_yaml,
     render_review,
     run_turn,
+    text_of,
+    where_of,
 )
 
 
@@ -427,3 +430,115 @@ async def test_run_turn_passes_tags_to_the_run():
     graph.astream = astream  # type: ignore[method-assign]
     await run_turn(graph, {"messages": []}, "coach", lambda s: None, tags=["checkin"])
     assert seen[0]["tags"] == ["checkin"] and seen[0]["recursion_limit"] == 60
+
+
+def test_where_of_maps_namespaces_and_root_nodes():
+    assert where_of("coach", "model") == "coach"
+    assert where_of("coach", "tools") == "coach"
+    assert where_of("planning", "model") == "planning"
+    assert where_of("nutrition", "tools") == "nutrition"
+    assert where_of("", "model") == "analyst"
+    assert where_of("", "tools") == "analyst"
+    assert where_of("", "apply") == "coach"
+
+
+def test_classifier_emits_one_event_per_visible_thing():
+    c = TurnClassifier()
+    assert c.classify(
+        ("coach:1",), "messages", (AIMessageChunk(content="Hel"), {"langgraph_node": "model"})
+    ) == [("token", {"where": "coach", "text": "Hel"})]
+    assert (
+        c.classify(
+            ("coach:1",), "messages", (AIMessageChunk(content=""), {"langgraph_node": "model"})
+        )
+        == []
+    )
+    assert c.classify(
+        (), "messages", (AIMessageChunk(content="CTL 45"), {"langgraph_node": "model"})
+    ) == [("token", {"where": "analyst", "text": "CTL 45"})]
+    assert c.final_text == "Hel"  # only the coach's own tokens count
+    call = AIMessage(
+        content="",
+        tool_calls=[
+            {"name": "ask_analyst", "args": {"question": "CTL?"}, "id": "a1", "type": "tool_call"}
+        ],
+    )
+    assert c.classify(("coach:1",), "updates", {"model": {"messages": [call]}}) == [
+        ("tool_call", {"where": "coach", "name": "ask_analyst", "args": {"question": "CTL?"}})
+    ]
+    assert c.classify(
+        ("coach:1",),
+        "updates",
+        {
+            "tools": {
+                "messages": [
+                    ToolMessage(content="CTL is 45.", name="ask_analyst", tool_call_id="a1")
+                ]
+            }
+        },
+    ) == [("tool_result", {"where": "coach", "name": "ask_analyst", "chars": 10})]
+    assert c.classify(
+        ("coach:1",), "updates", {"model": {"messages": [AIMessage(content="Your CTL is 45.")]}}
+    ) == [("assistant", {"where": "coach", "text": "Your CTL is 45."})]
+    assert c.final_text == "Your CTL is 45."
+    assert c.classify(
+        (),
+        "updates",
+        {
+            "planning": {
+                "messages": [
+                    ToolMessage(
+                        content="p1 (planning): move it", name="consult_planning", tool_call_id="c1"
+                    )
+                ]
+            }
+        },
+    ) == [
+        (
+            "consult",
+            {"domain": "planning", "name": "consult_planning", "text": "p1 (planning): move it"},
+        )
+    ]
+    assert c.classify(
+        (), "updates", {"apply": {"messages": [AIMessage(content="planning: applied 1")]}}
+    ) == [("report", {"text": "planning: applied 1", "node": "apply", "role": "ai"})]
+    assert c.final_text == "planning: applied 1"
+    msg = HumanMessage("[follow-on] moved.")
+    assert c.classify((), "updates", {"nutrition": {"messages": [msg]}}) == [
+        ("report", {"text": "[follow-on] moved.", "node": "nutrition", "role": "human"})
+    ]
+    ev = c.classify(
+        (), "updates", {"__interrupt__": (Interrupt(value={"narration": "n", "proposals": []}),)}
+    )
+    assert ev == [("interrupt", {"narration": "n", "proposals": []})]
+    assert c.interrupt == {"narration": "n", "proposals": []}
+    # the coach node's own replay of the sub-agent's messages is silent
+    assert (
+        c.classify((), "updates", {"coach": {"messages": [AIMessage(content="Your CTL is 45.")]}})
+        == []
+    )
+
+
+def test_text_of_joins_text_blocks():
+    assert (
+        text_of(
+            AIMessage(content=[{"type": "text", "text": "a"}, {"type": "tool_use", "id": "x"}, "b"])
+        )
+        == "ab"
+    )
+
+
+async def test_run_turn_uses_the_given_printer():
+    class Collect(TurnPrinter):
+        def __init__(self) -> None:
+            super().__init__(lambda s: None)
+            self.kinds: list[str] = []
+
+        def print_event(self, kind: str, payload: dict[str, Any]) -> None:
+            self.kinds.append(kind)
+
+    graph = StubGraph([[interrupt_event()]])
+    collect = Collect()
+    printer = await run_turn(graph, {"messages": []}, "coach", lambda s: None, printer=collect)
+    assert printer is collect and collect.kinds == ["interrupt"]
+    assert collect.interrupt == interrupt_payload()
