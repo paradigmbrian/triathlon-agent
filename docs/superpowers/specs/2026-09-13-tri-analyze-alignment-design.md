@@ -1,7 +1,7 @@
 # tri-analyze alignment — the analyst in line with the other agents (package `tri_analyze`)
 
 **Date:** 2026-09-13
-**Status:** Approved design; plans `2026-09-13-tri-analyze-01-alignment.md` (alignment) and `2026-09-13-tri-analyze-02-eval.md` (evaluation), pending implementation
+**Status:** Implemented (plans 01 and 02 merged 2026-09-13; plan 02 at b8c1b04). First eval run predates the post-review fixes; rerun with `tri-analyze eval --recreate-dataset`.
 **Purpose:** Bring `tri-analyze`, the first agent built and the only one without a current spec, in line with `tri-planning`, `tri-nutrition`, `tri-wellness` and `tri-coach` in layout, settings, LangChain, LangGraph and LangSmith use, testing and documentation. Fix the defects found in review. Add a LangSmith evaluation of the analyst's prompt. Behavior for the athlete does not change except where a defect is fixed.
 
 Supersedes, for the agent, `2026-09-06-tri-analyze-design.md`. That spec describes the pre-workspace single package (`tri-analyze sync`, the ETL, the data layer), which now lives in `tri-core`; it stays as history with its Status line updated.
