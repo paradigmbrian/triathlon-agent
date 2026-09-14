@@ -83,4 +83,18 @@ test("the page works at phone width", async ({ page }) => {
   }
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
+  // past the strip the chat keeps a usable height: send, see the gate, approve it
+  await page.getByLabel("Message").fill("move my Wednesday run");
+  await page.getByRole("button", { name: "Send" }).click();
+  const gate = page.getByRole("region", { name: "Review" });
+  await expect(gate).toBeAttached();
+  const messages = page.getByTestId("chat-messages");
+  await messages.scrollIntoViewIfNeeded();
+  expect((await messages.boundingBox())!.height).toBeGreaterThanOrEqual(300);
+  const approve = gate.getByRole("button", { name: "Approve" });
+  await approve.scrollIntoViewIfNeeded();
+  await expect(approve).toBeInViewport();
+  await approve.click();
+  await expect(page.getByText("planning: applied 1")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Review" })).toHaveCount(0);
 });

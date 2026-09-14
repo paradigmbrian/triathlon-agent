@@ -28,8 +28,10 @@ export default function Chat({ thread, stream, gate }: Props) {
         ? "the last run stopped early, send any message to continue"
         : undefined;
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div ref={scroller} onScroll={onScroll} className="flex-1 overflow-y-auto px-4 py-4">
+    // Below md the Today column scrolls as a whole and the chat keeps a viewport-tall pane
+    // (minus the bottom rail); from md it fills whatever the header and strip leave.
+    <div className="flex min-h-[calc(100dvh-3.5rem)] flex-1 flex-col md:min-h-0">
+      <div ref={scroller} onScroll={onScroll} data-testid="chat-messages" className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
           {thread?.messages.map((m) =>
             m.role === "activity" ? (
