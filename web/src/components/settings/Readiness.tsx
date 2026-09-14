@@ -8,6 +8,8 @@ function Check({ ok, label }: { ok: boolean; label: string }) {
 
 export default function Readiness() {
   const status = useStatus();
+  if (status.isPending) return <p className="text-ink-2">checking…</p>;
+  if (status.isError) return <p className="text-danger">could not load status: {status.error instanceof Error ? status.error.message : String(status.error)}</p>;
   const s = status.data;
   if (!s) return <p className="text-ink-2">checking…</p>;
   return (
