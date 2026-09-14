@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import type { TodayView } from "../../api/queries";
 import { Skeleton } from "./Card";
 import SessionCard from "./SessionCard";
@@ -6,27 +5,19 @@ import ReadinessCard from "./ReadinessCard";
 import FuelCard from "./FuelCard";
 import WeekCard from "./WeekCard";
 
-// Below lg the cards scroll sideways inside the strip, so the chat keeps the height.
-function Slot({ children }: { children: ReactNode }) {
-  return <div className="w-[82%] shrink-0 snap-start sm:w-[45%] lg:w-auto">{children}</div>;
-}
-
 export default function Strip({ today }: { today: TodayView | undefined }) {
   return (
-    <div className="flex shrink-0 snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto border-b border-line px-4 py-4 lg:grid lg:grid-cols-4 lg:overflow-visible">
+    <div className="grid shrink-0 grid-cols-1 gap-3 border-b border-line p-4 sm:grid-cols-2 lg:grid-cols-4">
       {!today ? (
         <>
-          <Slot><Skeleton /></Slot>
-          <Slot><Skeleton /></Slot>
-          <Slot><Skeleton /></Slot>
-          <Slot><Skeleton /></Slot>
+          <Skeleton /> <Skeleton /> <Skeleton /> <Skeleton />
         </>
       ) : (
         <>
-          <Slot><SessionCard session={today.session} /></Slot>
-          <Slot><ReadinessCard readiness={today.readiness} /></Slot>
-          <Slot><FuelCard fuel={today.fuel} /></Slot>
-          <Slot><WeekCard week={today.week} /></Slot>
+          <SessionCard session={today.session} />
+          <ReadinessCard readiness={today.readiness} />
+          <FuelCard fuel={today.fuel} />
+          <WeekCard week={today.week} />
         </>
       )}
     </div>

@@ -72,4 +72,15 @@ test("the page works at phone width", async ({ page }) => {
   const box = await page.getByRole("navigation", { name: "Sections" }).boundingBox();
   expect(box && box.y > 600).toBeTruthy(); // the rail is a bottom bar
   await expect(page.getByLabel("Message")).toBeVisible();
+  // the strip stacks: four cards in one column, no sideways scroll
+  const cards = page.getByTestId("strip-card");
+  await expect(cards).toHaveCount(4);
+  const boxes = [];
+  for (const card of await cards.all()) boxes.push(await card.boundingBox());
+  for (let i = 1; i < boxes.length; i++) {
+    expect(Math.abs(boxes[i]!.x - boxes[0]!.x)).toBeLessThan(2);
+    expect(boxes[i]!.y).toBeGreaterThan(boxes[i - 1]!.y);
+  }
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
 });

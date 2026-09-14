@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 export function Card({ title, children, tone }: { title: string; children: ReactNode; tone?: "planning" | "nutrition" }) {
   const bar = tone === "planning" ? "border-l-planning" : tone === "nutrition" ? "border-l-nutrition" : "border-l-accent";
   return (
-    <section className={`h-full rounded-lg border border-line border-l-4 ${bar} bg-surface-2 px-4 py-3`}>
+    <section data-testid="strip-card" className={`h-full rounded-lg border border-line border-l-4 ${bar} bg-surface-2 px-4 py-3`}>
       <h2 className="text-[11px] font-medium uppercase tracking-wider text-ink-2">{title}</h2>
       <div className="mt-2 space-y-1 text-sm">{children}</div>
     </section>
