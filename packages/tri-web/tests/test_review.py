@@ -67,7 +67,7 @@ def test_validate_json_reports_loc_and_msg_per_error():
     assert not v.ok and v.proposals == []
     locs = [e.loc for e in v.errors]
     assert [0, "domain"] in locs
-    assert any(1 in loc and "day" in loc for loc in locs)
+    assert any(loc[:3] == [1, "changes", 0] and "day" in loc for loc in locs)
     assert all(e.msg for e in v.errors)
 
 
@@ -90,3 +90,54 @@ def test_yaml_path_reports_parse_and_validation_errors():
     assert not v.ok and v.errors[0].loc == ["yaml"]
     v = validate_yaml(to_yaml(proposals()).replace("op: move", "op: teleport"), proposals())
     assert not v.ok and any("op" in e.loc for e in v.errors)
+
+
+def test_json_missing_domain():
+    """JSON with missing domain reports domain error, no fallback to changes."""
+    bad = [p.model_dump(mode="json") for p in proposals()]
+    del bad[0]["domain"]
+    v = validate_json(bad)
+    assert not v.ok
+    locs = [e.loc for e in v.errors]
+    assert [0, "domain"] in locs
+    # Should not have changes errors for proposal 0 due to nutrition fallback
+    assert not any(loc[:2] == [0, "changes"] for loc in locs)
+
+
+def test_yaml_wrong_domain():
+    """YAML with wrong domain reports domain error at yaml/pid/domain."""
+    yaml_text = """
+p1:
+  domain: cooking
+  summary: test
+  changes: []
+"""
+    v = validate_yaml(yaml_text, proposals())
+    assert not v.ok
+    locs = [e.loc for e in v.errors]
+    assert ["yaml", "p1", "domain"] in locs
+    # Should not have nutrition-field errors for p1
+    assert not any(loc[:3] == ["yaml", "p1", "changes"] for loc in locs), (
+        "Should not validate changes when domain is invalid"
+    )
+
+
+def test_yaml_bad_date():
+    """YAML with bad date reports error at yaml/pid/changes/0/day."""
+    yaml_text = to_yaml(proposals()).replace("new_date: '2026-09-18'", "new_date: '2026-13-40'")
+    v = validate_yaml(yaml_text, proposals())
+    assert not v.ok
+    locs = [e.loc for e in v.errors]
+    # Check that there's an error with the right path structure
+    assert any(loc[:4] == ["yaml", "p1", "changes", 0] and "new_date" in loc for loc in locs), (
+        f"Expected error at yaml/p1/changes/0/new_date, got {locs}"
+    )
+
+
+def test_yaml_scalar_body():
+    """YAML with scalar body (not a dict) reports error at yaml/pid."""
+    yaml_text = "p1: hello"
+    v = validate_yaml(yaml_text, proposals())
+    assert not v.ok
+    locs = [e.loc for e in v.errors]
+    assert ["yaml", "p1"] in locs
