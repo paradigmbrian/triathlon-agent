@@ -3,6 +3,7 @@ OpenAPI document these produce."""
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -53,6 +54,27 @@ class StatusOut(BaseModel):
     ready: Readiness
     thread: str
     running: str | None
+
+
+class SyncIn(BaseModel):
+    since: date | None = None
+    full: bool = False
+
+
+class CheckinIn(BaseModel):
+    sync: bool = True
+
+
+class JobStarted(BaseModel):
+    id: str
+
+
+class JobOut(BaseModel):
+    id: str
+    kind: str
+    status: Literal["queued", "running", "done", "failed"]
+    result: dict[str, Any] | None = None
+    error: str | None = None
 
 
 class NoReview(Exception):
