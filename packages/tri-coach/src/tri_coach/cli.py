@@ -43,21 +43,27 @@ def _today() -> date:
     return date.today()
 
 
-def _ready(settings: CoachSettings) -> int | None:
-    """Exit code when chat cannot start, else None."""
+def ready(settings: CoachSettings) -> str | None:
+    """Why chat cannot start, or None when the key, checkpointer and store are all there."""
     from tri_coach.graph.checkpointer import SETUP_HINT, checkpointer_ready
     from tri_nutrition import store as S
 
     if not settings.anthropic_api_key:
-        console.print("ANTHROPIC_API_KEY is not set in .env", style="red")
-        return 2
+        return "ANTHROPIC_API_KEY is not set in .env"
     if not checkpointer_ready(settings.database_url):
-        console.print(SETUP_HINT, style="red")
-        return 2
+        return SETUP_HINT
     if not S.store_ready(settings.database_url):
-        console.print(S.STORE_SETUP_HINT, style="red")
-        return 2
+        return S.STORE_SETUP_HINT
     return None
+
+
+def _ready(settings: CoachSettings) -> int | None:
+    """Exit code when chat cannot start, else None."""
+    problem = ready(settings)
+    if problem is None:
+        return None
+    console.print(problem, style="red")
+    return 2
 
 
 @asynccontextmanager
