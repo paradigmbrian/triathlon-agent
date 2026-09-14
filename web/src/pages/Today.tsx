@@ -1,4 +1,5 @@
 import Header from "../components/Header";
+import Strip from "../components/today/Strip";
 import { useToday } from "../api/queries";
 
 export default function Today() {
@@ -6,7 +7,7 @@ export default function Today() {
   return (
     <>
       <Header today={today.data} />
-      <section className="p-4">Today (Task 4)</section>
+      <Strip today={today.data} />
     </>
   );
 }
