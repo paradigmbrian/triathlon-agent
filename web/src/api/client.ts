@@ -8,7 +8,7 @@ export class ApiError extends Error {
   }
 }
 
-async function bodyOf(res: Response): Promise<unknown> {
+export async function bodyOf(res: Response): Promise<unknown> {
   const text = await res.text();
   try {
     return text ? JSON.parse(text) : null;

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { api, ApiError, readSse } from "../../api/client";
+import { api, ApiError, bodyOf, readSse } from "../../api/client";
 import { keys } from "../../api/queries";
 
 export type JobState = {
@@ -32,10 +32,10 @@ export function useJobStream(kind: "sync" | "checkin", body: unknown) {
 
   const follow = useCallback(
     async (id: string) => {
-      setState((s) => ({ ...s, id, status: "running", lines: [], lastLine: null, error: null, result: null }));
+      if (alive.current) setState((s) => ({ ...s, id, status: "running", lines: [], lastLine: null, error: null, result: null }));
       try {
         const res = await fetch(`/api/jobs/${id}/events`, { headers: { accept: "text/event-stream" } });
-        if (!res.ok) throw new ApiError(res.status, await res.text());
+        if (!res.ok) throw new ApiError(res.status, await bodyOf(res));
         await readSse(res, (ev) => {
           if (!alive.current) return;
           const data = (ev.data ?? {}) as Record<string, unknown>;

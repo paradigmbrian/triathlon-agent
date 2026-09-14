@@ -71,3 +71,44 @@ test("a stored job id under StrictMode is followed exactly once", async () => {
   expect(f).toHaveBeenCalledTimes(1);
   expect(f).toHaveBeenCalledWith("/api/jobs/dup1/events", expect.anything());
 });
+
+// R25 finding 1: a non-2xx from the events endpoint must be parsed the same way api() parses a
+// body (JSON in, `detail` surfaced), not stringified as "HTTP 404".
+test("a 404 from the events endpoint surfaces the server's detail and clears sessionStorage", async () => {
+  sessionStorage.setItem("job:checkin", "zz99");
+  const client = new QueryClient();
+  vi.spyOn(client, "invalidateQueries").mockResolvedValue();
+  vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+    new Response(JSON.stringify({ detail: "no job zz99" }), { status: 404 }),
+  );
+  const { result } = renderHook(() => useJobStream("checkin", { sync: true }), { wrapper: wrapper(client) });
+  await waitFor(() => expect(result.current.state.status).toBe("failed"));
+  expect(result.current.state.error).toBe("no job zz99");
+  expect(sessionStorage.getItem("job:checkin")).toBeNull();
+});
+
+// R25 finding 3: nothing must update state, and nothing must be logged, once the hook has
+// unmounted while its events stream is still open.
+test("unmounting while the events stream stays open produces no console errors and no invalidation", async () => {
+  const client = new QueryClient();
+  const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue();
+  const openStream = () =>
+    new Response(new ReadableStream<Uint8Array>({ start() {} }), { status: 200, headers: { "content-type": "text/event-stream" } });
+  const f = vi.spyOn(globalThis, "fetch");
+  f.mockResolvedValueOnce(new Response(JSON.stringify({ id: "hang1" }), { status: 200 }));
+  f.mockResolvedValueOnce(openStream());
+  const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  const { result, unmount } = renderHook(() => useJobStream("sync", {}), { wrapper: wrapper(client) });
+  act(() => {
+    void result.current.start();
+  });
+  await waitFor(() => expect(result.current.state.status).toBe("running"));
+  unmount();
+  // let any pending microtasks settle before asserting nothing fired after unmount
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  expect(errorSpy).not.toHaveBeenCalled();
+  // the stream never closed, so the job never reached done/failed: no invalidation yet
+  expect(invalidate).not.toHaveBeenCalled();
+});

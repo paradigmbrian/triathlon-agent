@@ -35,7 +35,7 @@ export default function JobButton({ kind, label, body, onDone }: Props) {
         {text}
       </button>
       {state.lines.length > 0 && (
-        <details className="absolute right-0 top-full z-10 mt-1 w-80 rounded-md border border-line bg-surface-2 p-2 text-xs shadow">
+        <details className="fixed inset-x-4 top-14 z-10 rounded-md border border-line bg-surface-2 p-2 text-xs shadow md:absolute md:inset-x-auto md:right-0 md:top-full md:mt-1 md:w-80">
           <summary className="cursor-pointer text-ink-2">transcript</summary>
           <pre className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap">{state.lines.join("\n")}</pre>
         </details>
