@@ -112,7 +112,7 @@ def test_ingest_checkpointer_missing_exits_2(monkeypatch, tiny_pdf):
     get_wellness_settings.cache_clear()
     monkeypatch.setenv("TRI_ATHLETE_SEX", "male")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
-    monkeypatch.setattr("tri_wellness.graph.checkpointer.checkpointer_ready", lambda url: False)
+    monkeypatch.setattr("tri_core.harness.persistence.checkpointer_ready", lambda url: False)
     result = runner.invoke(app, ["ingest", str(tiny_pdf)])
     get_wellness_settings.cache_clear()
     assert result.exit_code == 2

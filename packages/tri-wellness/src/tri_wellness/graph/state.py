@@ -7,6 +7,11 @@ from typing import Literal, TypedDict
 
 from tri_wellness.labs.models import IngestKind, LabResult, PanelContext, RawResult, Unmapped
 
+# Pydantic models that live in IngestState. Registering them with the checkpointer's serializer
+# keeps it from warning (and, in strict mode, refusing) when it loads them. Ingest threads are
+# keyed `ingest:<sha256>`.
+STATE_TYPES: tuple[type, ...] = (RawResult, LabResult, Unmapped, PanelContext)
+
 
 class IngestState(TypedDict, total=False):
     source_path: str
