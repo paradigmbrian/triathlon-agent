@@ -51,6 +51,14 @@ test("load Today, send a message, see tokens, see a gate, approve, see a report"
   await page.goto("/");
   await expect(page.getByText("Tempo")).toBeVisible();
   await expect(page.getByText(/46 days to City Tri/)).toBeVisible();
+  // from md the cards stack in one column left of the chat
+  const cards = page.getByTestId("strip-card");
+  await expect(cards).toHaveCount(4);
+  const first = (await cards.first().boundingBox())!;
+  const last = (await cards.last().boundingBox())!;
+  expect(Math.abs(last.x - first.x)).toBeLessThan(2);
+  expect(last.y).toBeGreaterThan(first.y);
+  expect((await page.getByTestId("chat-messages").boundingBox())!.x).toBeGreaterThanOrEqual(first.x + first.width);
   await page.getByLabel("Message").fill("move my Wednesday run");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page.getByText("Planning suggests Friday.")).toBeVisible();
@@ -68,9 +76,15 @@ test("the page works at phone width", async ({ page }) => {
   await stub(page);
   await page.setViewportSize({ width: 400, height: 800 });
   await page.goto("/");
+  const avatar = page.getByRole("button", { name: "Account menu" });
+  const box = await avatar.boundingBox();
+  expect(box && box.y < 80 && box.x > 300).toBeTruthy(); // the avatar sits top right
+  await expect(page.getByRole("link", { name: "Settings" })).toBeHidden();
+  await avatar.click();
   await expect(page.getByRole("link", { name: "Settings" })).toBeVisible();
-  const box = await page.getByRole("navigation", { name: "Sections" }).boundingBox();
-  expect(box && box.y > 600).toBeTruthy(); // the rail is a bottom bar
+  await expect(page.getByRole("button", { name: "Sync now" })).toBeInViewport();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("link", { name: "Settings" })).toBeHidden();
   await expect(page.getByLabel("Message")).toBeVisible();
   // the strip stacks: four cards in one column, no sideways scroll
   const cards = page.getByTestId("strip-card");
