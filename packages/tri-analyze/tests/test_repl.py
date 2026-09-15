@@ -6,7 +6,7 @@ from langchain_core.messages import AIMessage
 from langchain_core.tools import tool
 
 from tri_analyze.agent import build_agent
-from tri_analyze.repl import TurnPrinter, chat_loop, run_turn, text_of
+from tri_analyze.repl import chat_loop, run_turn
 from tri_analyze.testing import athlete_context
 from tri_core.testing import ScriptedChatModel, tool_call
 
@@ -139,17 +139,6 @@ async def test_chat_loop_handles_eof_and_unknown_command():
     buf, out = _capture()
     await chat_loop(agent, read=read, out=out, context=lambda: CTX)
     assert any("unknown command: /nope" in s for s in buf)
-
-
-def test_turn_printer_ignores_non_text_chunks_and_text_of_reads_blocks():
-    p = TurnPrinter(lambda s: None)
-    p.on_event(
-        "messages",
-        (AIMessage(content=[{"type": "text", "text": "x"}]), {"langgraph_node": "model"}),
-    )
-    assert p.final_text == "x"
-    assert text_of(AIMessage(content=[{"type": "text", "text": "a"}, "b"])) == "ab"
-    assert text_of(AIMessage(content="plain")) == "plain"
 
 
 async def test_run_turn_prints_the_exact_rate_limit_line():

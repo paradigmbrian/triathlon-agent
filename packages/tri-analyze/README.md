@@ -112,7 +112,7 @@ src/tri_analyze/
   agent.py            analyst_prompt (@dynamic_prompt), build_agent
   allowlist.py        the Garmin and TrainingPeaks tools the agent may call live
   tools/live.py       open_live_tools over tri_core.mcp with the allow-lists
-  repl.py             text_of, TurnPrinter, run_turn, chat_loop
+  repl.py             run_turn (over tri_core.harness.turns.run_agent_turn), chat_loop
   cli.py              chat, eval
   testing.py          athlete_context, RecordingScriptedModel, seed_workouts, seed_daily_metrics
   evals/              cases, target (stub tools), evaluators (code checks and the judge), run

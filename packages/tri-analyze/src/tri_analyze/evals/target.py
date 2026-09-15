@@ -17,9 +17,9 @@ from langchain_core.tools import BaseTool, StructuredTool
 from tri_analyze.agent import build_agent
 from tri_analyze.allowlist import GARMIN_LIVE_TOOLS, TP_LIVE_TOOLS
 from tri_analyze.evals.cases import SQL_ENVELOPE_EMPTY
-from tri_analyze.repl import text_of
 from tri_analyze.repo import AthleteContext
 from tri_core.db.sql_tool import make_query_tool
+from tri_core.harness.messages import text_of
 
 TARGET_RECURSION_LIMIT = 30
 SQL_DESCRIPTION = make_query_tool("postgresql://unused/db").description
