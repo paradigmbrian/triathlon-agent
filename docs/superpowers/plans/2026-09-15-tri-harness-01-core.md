@@ -8,12 +8,12 @@
 
 **Tech Stack:** Python 3.12, langchain 1.4.0 (`create_agent`, `wrap_model_call`), langchain-core 1.6.2, langchain-anthropic 1.7.1 (`AnthropicPromptCachingMiddleware`), langgraph 1.2.11, langgraph-checkpoint-postgres 3.1.2 (`AsyncPostgresSaver`, `AsyncPostgresStore`), anthropic 1.4.0, psycopg 3.3.5, pytest with `pytest-asyncio` 1.4.0 in auto mode, `tri_core.testing.ScriptedChatModel`.
 
-**Spec:** `docs/superpowers/specs/2026-09-15-tri-harness-design.md`. This plan implements §4 (tri-core layout), §5.1–§5.6 (interfaces) and the plan 01 tests in §7. The spec and this plan live on branch `docs/tri-harness-spec`; the feature branch is created from it, so both travel with the code. Plans 2 (tri-analyze and tri-wellness), 3 (tri-planning and tri-nutrition) and 4 (tri-coach and tri-web) follow.
+**Spec:** `docs/superpowers/specs/2026-09-15-tri-harness-design.md`. This plan implements §4 (tri-core layout), §5.1–§5.6 (interfaces) and the plan 01 tests in §7. The spec and all four plans are merged to `main` before any plan runs, so the feature branch starts from `main` with them in place. Plans 2 (tri-analyze and tri-wellness), 3 (tri-planning and tri-nutrition) and 4 (tri-coach and tri-web) follow.
 
 ## Global Constraints
 
 - Python `>=3.12,<3.13`, uv-managed. Every command runs from the worktree root as `uv run ...`.
-- **Execute in a sibling worktree:** run `git worktree add ../triathlon_agent-harness-01 -b feat/tri-harness-01 docs/tri-harness-spec`, copy `.env`, then `uv sync`. Other Claude sessions share the main checkout. Baseline on `main` 3a5a82c (the docs branch adds only markdown): `903 passed, 6 skipped, 1 warning` (the six skips are `--live`).
+- **Execute in a sibling worktree:** run `git worktree add ../triathlon_agent-harness-01 -b feat/tri-harness-01 main`, copy `.env`, then `uv sync`. Other Claude sessions share the main checkout. First confirm the plans are on `main`: `ls docs/superpowers/plans/2026-09-15-tri-harness-0*.md` lists four files. Baseline recorded on `main` 3a5a82c; the docs merge adds only markdown: `903 passed, 6 skipped, 1 warning` (the six skips are `--live`). Record `uv run pytest -q` before Task 1 and stop if it differs.
 - **Files this plan may touch:**
   - `packages/tri-core/pyproject.toml`
   - `uv.lock`
@@ -1767,7 +1767,7 @@ Copy the file to `/Users/brian/Documents/dev-vault/projects/paradigm/fitness_age
 
 - [ ] **Step 2: Check that nothing outside this plan's files changed**
 
-Run: `git diff --name-only docs/tri-harness-spec...HEAD`
+Run: `git diff --name-only main...HEAD`
 Expected: exactly these paths:
 
 ```
@@ -1790,7 +1790,7 @@ packages/tri-core/tests/test_harness_turns.py
 uv.lock
 ```
 
-Run: `git diff docs/tri-harness-spec...HEAD -- uv.lock | grep '^[-+]version'`
+Run: `git diff main...HEAD -- uv.lock | grep '^[-+]version'`
 Expected: no output.
 
 - [ ] **Step 3: Definition of done**
