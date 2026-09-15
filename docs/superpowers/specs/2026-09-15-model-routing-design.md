@@ -1,7 +1,8 @@
 # Model routing — per-role model, effort and Claude fallback (module `tri_core.llm`)
 
 **Date:** 2026-09-15
-**Status:** Draft
+**Status:** Draft (amended 2026-09-15 to follow the agent harness spec)
+**Prerequisite:** the agent harness spec (`2026-09-15-tri-harness-design.md`, branch `docs/tri-harness-spec`) lands first. Its plans move `make_subagent`, the chat-agent builders, checkpointer setup and the turn drivers into `tri_core.harness`, and leave only `make_model` in each package's `llm.py`. The file and line references in §2 and §5.3 describe `main` @ 3a5a82c, before that move, and are re-checked when plan 01 is written.
 **Purpose:** Replace the single `TRI_MODEL` pin with a per-role model registry. Each role (coach, analyst, lab extraction, eval judge, ...) gets its own model, effort, output ceiling and fallback chain, so light work stops paying for heavy settings and an overloaded model no longer fails the turn. Every role launches on today's model; a role moves to a lighter model or effort only when its eval shows it holds quality.
 
 Companion specs: `tri-coach` (2026-09-11) owns `CoachDeps` and the sub-agent wiring this changes; `tri-planning` (2026-09-07), `tri-nutrition` (2026-09-10), `tri-wellness` (2026-09-10) and `tri-analyze` (2026-09-06, alignment 2026-09-13) own the nodes and evals whose models are split out here; `tri-web` (2026-09-14) opens the coach runtime through `make_deps`.
@@ -12,6 +13,7 @@ Companion specs: `tri-coach` (2026-09-11) owns `CoachDeps` and the sub-agent wir
 |---|---|---|
 | Driver | Right-size per task (chosen 2026-09-15). Resilience is handled simply; quality escalation and per-turn routing are out of scope. | One athlete, one machine: most of the saving is in matching each role to a model and effort once, not deciding per call. |
 | Fallback reach | Claude models on the Anthropic API only (chosen 2026-09-15). | Covers overload (529) and model-specific capacity. Other vendors would need provider-neutral history, error handling and per-vendor evals; Bedrock would need AWS credentials. Neither is worth it yet. |
+| Sequencing | After the agent harness spec (chosen 2026-09-15). | `claude_fallback` is added once, in the harness's `make_subagent` and `build_chat_agent`, instead of in five package builders. |
 | Approach | A static role registry in `tri_core` (approach A, chosen 2026-09-15). No per-turn router. | A thread stays on one model, so the prompt cache (model-scoped) keeps hitting. A router can wrap the registry later. |
 | Overrides | Env vars per role through the existing pydantic `Settings` (chosen 2026-09-15). | Same mechanism as every other setting; an eval run can try a candidate with one env var. |
 | Launch defaults | Every role starts on `claude-opus-5` at the model's default effort, i.e. today's behaviour. Targets in §6.2 are adopted per role only after an eval passes the gate in §7.2. | Changing a model without a measurement is a guess. |
@@ -47,7 +49,7 @@ Companion specs: `tri-coach` (2026-09-11) owns `CoachDeps` and the sub-agent wir
         ▼                                  make_model ─► ChatAnthropic(metadata={tri_role,
  CoachDeps / GraphDeps (per-role models)                                tri_fallbacks})
         │
-        ├─ agents ─ make_subagent / build_agent ─ middleware: [..., caching, claude_fallback]
+        ├─ agents ─ tri_core.harness make_subagent / build_chat_agent ─ middleware: [..., caching, claude_fallback]
         ├─ structured ─ structured(model, Schema) ─ with_structured_output + with_fallbacks
         └─ report stream ─ streaming(model) ─ model.with_fallbacks
                                           all three fall back on RETRYABLE only, via fallbacks_of(model)
@@ -64,12 +66,14 @@ packages/tri-core/src/tri_core/
 packages/tri-core/tests/test_llm.py   NEW
 packages/tri-analyze/src/tri_analyze/llm.py       deleted; callers import tri_core.llm
 packages/tri-{coach,planning,nutrition,wellness}/src/.../graph/llm.py
-                   make_model removed; make_subagent (and tri_coach's middleware) stay
+                   deleted (after the harness spec they hold only make_model); callers import tri_core.llm
+packages/tri-core/src/tri_core/harness/agents.py
+                   make_subagent and build_chat_agent append claude_fallback after caching
 packages/tri-planning/src/tri_planning/evals/run.py   NEW: run_eval for design_eval
 packages/tri-planning/src/tri_planning/cli.py          adds `eval`
 ```
 
-`langchain-anthropic` and `anthropic` become dependencies of `tri-core` (today it has `langchain-core` only); versions pinned as in the other packages (`langchain-anthropic==1.7.1`, `langchain==1.4.0` for the middleware decorator).
+The harness spec already makes `langchain==1.4.0`, `langchain-anthropic==1.7.1` and `anthropic` dependencies of `tri-core`, so this spec adds none.
 
 ## 5. Interfaces
 
@@ -172,7 +176,7 @@ Roles with no gate stay on the launch default unless the athlete sets an env ove
 
 `fallbacks_of(model)` returns `[]` unless `model` is a `ChatAnthropic` whose `metadata` carries `tri_fallbacks`. Otherwise each id becomes a fresh `ChatAnthropic(model=id, max_tokens=model.max_tokens, api_key=model.anthropic_api_key, effort=e, metadata={"tri_role": role, "tri_fallback_from": model.model})`, built with the constructor so the fallback's profile is its own. `e` is the primary's effort when the fallback's profile lists it; else `"high"` when the fallback lists any levels (so Opus 4.8 runs with adaptive thinking, which it would not by default); else `None`.
 
-- **Agents.** `claude_fallback` (async and sync hooks) calls `handler(request)`; on an error in `RETRYABLE` it tries `handler(request.override(model=fb))` for each `fb` in `fallbacks_of(request.model)`, in order. `GraphBubbleUp` and any other exception propagate immediately. When every model fails, the last error is raised. Middleware order puts it last, after `AnthropicPromptCachingMiddleware`: the cache markers are valid on every Claude fallback, and `one_tool_call_at_a_time`'s `model_settings` travel with the overridden request. Added in `make_subagent` (coach, planning, nutrition), `tri_analyze.agent.build_agent` and `tri_wellness.agent.build_agent`.
+- **Agents.** `claude_fallback` (async and sync hooks) calls `handler(request)`; on an error in `RETRYABLE` it tries `handler(request.override(model=fb))` for each `fb` in `fallbacks_of(request.model)`, in order. `GraphBubbleUp` and any other exception propagate immediately. When every model fails, the last error is raised. Middleware order puts it last, after `AnthropicPromptCachingMiddleware`: the cache markers are valid on every Claude fallback, and `one_tool_call_at_a_time`'s `model_settings` travel with the overridden request. Added once, in `tri_core.harness.agents` (`make_subagent` and `build_chat_agent`), which imports it from `tri_core.llm`. After the harness spec every agent goes through one of those two builders: the coach, planning and nutrition nodes, `tri_analyze.agent.build_agent`, wellness chat, `ask_analyst` and `ask_wellness`.
 - **Structured output.** `structured(model, schema)` is `model.with_structured_output(schema)` plus `.with_fallbacks([fb.with_structured_output(schema) for fb in fallbacks_of(model)], exceptions_to_handle=RETRYABLE)` when there are fallbacks. Replaces the direct calls in planning `design.py:43`, nutrition `fuel.py:63-64`, wellness `structured.py:28` and the four judges.
 - **Streaming.** `streaming(model)` is `model.with_fallbacks([...], exceptions_to_handle=RETRYABLE)`; `ReportWriter` streams through it. A failure after the first chunk surfaces as today (the athlete reruns `tri-wellness report`).
 - **Visibility.** Each fallback attempt logs `WARNING tri_core.llm: <role> fell back from <primary> to <fallback> after <ErrorClass>`. The fallback model's `metadata` marks its LangSmith run with `tri_fallback_from`. REPL and web error messages are unchanged and now appear only when the whole chain has failed.
@@ -225,7 +229,7 @@ Existing suites (`uv run pytest`), `uv run ruff check`, `uv run mypy` pass witho
 
 ## 10. Rollout
 
-1. **Plan 01, registry and fallback.** `tri_core.llm`, settings, deps wiring, the five `make_model` copies removed, fallback middleware and helpers, tests. Behaviour change: fallback only; every role still resolves to opus-5.
+1. **Plan 01, registry and fallback.** Starts after harness plan 04 is merged. `tri_core.llm`, settings, deps wiring, the five `make_model` copies removed, fallback middleware and helpers, tests. Behaviour change: fallback only; every role still resolves to opus-5.
 2. **Plan 02, eval wiring and tuning.** `run_eval` per role, `tri-planning eval`, metadata; then the §7.2 runs (athlete-run), and one commit per adopted default.
 
 Docs in plan 01: `.env.example` replaces `TRI_MODEL=claude-opus-5` with a commented block listing `TRI_MODEL`, `TRI_MODEL_<ROLE>`, `TRI_EFFORT_<ROLE>`, `TRI_MODEL_FALLBACKS`; `packages/tri-analyze/README.md:189` points at those vars and `tri_core/llm.py`. The athlete removes `TRI_MODEL` from their own `.env`, or every role stays pinned to it. Earlier specs are left as written.
