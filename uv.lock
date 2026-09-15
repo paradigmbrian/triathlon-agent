@@ -1236,8 +1236,12 @@ name = "tri-core"
 version = "0.1.0"
 source = { editable = "packages/tri-core" }
 dependencies = [
+    { name = "anthropic" },
+    { name = "langchain" },
+    { name = "langchain-anthropic" },
     { name = "langchain-core" },
     { name = "langchain-mcp-adapters" },
+    { name = "langgraph-checkpoint-postgres" },
     { name = "mcp" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic-settings" },
@@ -1249,8 +1253,12 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anthropic", specifier = ">=1.4,<2" },
+    { name = "langchain", specifier = "==1.4.0" },
+    { name = "langchain-anthropic", specifier = "==1.7.1" },
     { name = "langchain-core", specifier = ">=1.0,<2" },
     { name = "langchain-mcp-adapters", specifier = "==0.3.2" },
+    { name = "langgraph-checkpoint-postgres", specifier = ">=3.1,<4" },
     { name = "mcp", specifier = ">=1.29,<2" },
     { name = "psycopg", extras = ["binary"], specifier = "==3.3.5" },
     { name = "pydantic-settings", specifier = ">=2.6" },

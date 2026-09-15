@@ -1,7 +1,7 @@
 [project]
 name = "tri-core"
 version = "0.1.0"
-description = "Shared settings, MCP client, Postgres store and sync for the triathlon agents"
+description = "Shared settings, MCP client, Postgres store, sync and agent harness for the triathlon agents"
 authors = [{ name = "Brian Flannery", email = "brian@paradigmshiftdev.io" }]
 requires-python = ">=3.12,<3.13"
 dependencies = [
@@ -12,7 +12,11 @@ dependencies = [
     "python-dotenv>=1.0",
     "typer>=0.15",
     "rich>=13",
-    "langchain-core>=1.0,<2",  # only for tri_core.testing.fakes.ScriptedChatModel
+    "langchain-core>=1.0,<2",
+    "langchain==1.4.0",                       # tri_core.harness.agents
+    "langchain-anthropic==1.7.1",             # tri_core.harness.agents
+    "langgraph-checkpoint-postgres>=3.1,<4",  # tri_core.harness.persistence
+    "anthropic>=1.4,<2",                      # tri_core.harness.turns
     "pytest>=8.3",             # only for tri_core.testing.fixtures
 ]
 

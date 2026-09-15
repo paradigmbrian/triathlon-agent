@@ -9,6 +9,7 @@ from typing import Any
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResult
+from pydantic import BaseModel
 
 
 class ScriptedChatModel(BaseChatModel):
@@ -65,3 +66,10 @@ def tool_call(name: str, args: dict[str, Any], call_id: str = "c1") -> AIMessage
     return AIMessage(
         content="", tool_calls=[{"name": name, "args": args, "id": call_id, "type": "tool_call"}]
     )
+
+
+class StateSample(BaseModel):
+    """A pydantic model importable by module path, for serializer round-trip tests."""
+
+    name: str
+    minutes: int
