@@ -51,4 +51,6 @@ def agent_tool(
             return failure.format(error=f"{type(exc).__name__}: {exc}")
         return last_ai_text(out["messages"]) or empty
 
+    # gives args_schema the same top-level description as tool_call_schema
+    run.__doc__ = description
     return StructuredTool.from_function(coroutine=run, name=name, description=description)

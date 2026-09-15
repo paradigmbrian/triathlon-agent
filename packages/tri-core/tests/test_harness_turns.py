@@ -291,9 +291,12 @@ async def test_run_graph_turn_streams_subgraphs_on_the_thread():
 
     graph = StubGraph()
     buf: list[str] = []
-    printer = await run_graph_turn(graph, {"messages": []}, "planning", buf.append)
+    printer = await run_graph_turn(
+        graph, {"messages": []}, "planning", buf.append, streamed_nodes=frozenset({"adjust"})
+    )
     assert isinstance(printer, GraphTurnPrinter)
     assert printer.final_text == "Hi" and printer.error is None
+    assert printer.streamed_nodes == frozenset({"adjust"})
     assert graph.calls == [
         (
             {"messages": []},

@@ -89,6 +89,14 @@ async def test_agent_tool_returns_the_empty_text_when_there_is_no_final_answer()
 
 
 def test_agent_tool_schema_is_one_question_string_titled_by_name():
-    schema = make(lambda: Invocation(FakeAgent())).tool_call_schema.model_json_schema()
+    tool = make(lambda: Invocation(FakeAgent()))
+    schema = tool.tool_call_schema.model_json_schema()
     assert schema["title"] == "ask_fake" and schema["required"] == ["question"]
     assert schema["properties"] == {"question": {"title": "Question", "type": "string"}}
+    assert tool.args_schema.model_json_schema() == {
+        "description": "Ask the fake.",
+        "title": "ask_fake",
+        "type": "object",
+        "properties": {"question": {"title": "Question", "type": "string"}},
+        "required": ["question"],
+    }
