@@ -1,7 +1,13 @@
 import { useEffect } from "react";
 import { useJobStream } from "./useJobStream";
 
-type Props = { kind: "sync" | "checkin"; label: string; body: unknown; onDone?: (result: unknown) => void };
+type Props = {
+  kind: "sync" | "checkin";
+  label: string;
+  body: unknown;
+  onDone?: (result: unknown) => void;
+  onRunning?: (running: boolean) => void;
+};
 
 function summary(kind: Props["kind"], result: unknown): string {
   const r = (result ?? {}) as Record<string, unknown>;
@@ -11,11 +17,15 @@ function summary(kind: Props["kind"], result: unknown): string {
   return r.code === 0 ? "clean week" : "check-in did not complete";
 }
 
-export default function JobButton({ kind, label, body, onDone }: Props) {
+export default function JobButton({ kind, label, body, onDone, onRunning }: Props) {
   const { state, start } = useJobStream(kind, body);
   useEffect(() => {
     if (state.status === "done") onDone?.(state.result);
   }, [state.status, state.result, onDone]);
+  const running = state.status === "running";
+  useEffect(() => {
+    onRunning?.(running);
+  }, [running, onRunning]);
   const text =
     state.status === "running" ? (state.lastLine ?? "starting…")
     : state.status === "done" ? summary(kind, state.result)
@@ -24,24 +34,20 @@ export default function JobButton({ kind, label, body, onDone }: Props) {
     : label;
   const tone = state.status === "failed" ? "text-danger" : state.status === "busy" ? "text-warn" : "";
   return (
-    // Below md the transcript opens under the whole header (the header is the positioned
-    // ancestor), so it never covers the job buttons; from md it hangs under this button.
-    <div className="flex items-center gap-1 md:relative">
+    <div className="flex flex-col gap-1">
       <button
         type="button"
         onClick={() => void start()}
-        disabled={state.status === "running"}
-        className={`max-w-56 truncate rounded-md border border-line bg-surface px-3 py-1 text-xs hover:border-ink-2 ${tone} disabled:opacity-70`}
+        disabled={running}
+        className={`w-full truncate rounded-md border border-line bg-surface px-3 py-1.5 text-left text-sm hover:border-ink-2 ${tone} disabled:opacity-70`}
         title={text}
       >
         {text}
       </button>
       {state.lines.length > 0 && (
         <details name="job-transcript" className="text-xs">
-          <summary className="cursor-pointer rounded px-1 py-1 text-ink-2 hover:text-ink">transcript</summary>
-          <pre className="absolute inset-x-4 top-full z-20 mt-1 max-h-64 overflow-auto rounded-md border border-line bg-surface-2 p-2 whitespace-pre-wrap shadow-lg md:inset-x-auto md:right-0 md:w-80">
-            {state.lines.join("\n")}
-          </pre>
+          <summary className="cursor-pointer rounded px-1 py-0.5 text-ink-2 hover:text-ink">transcript</summary>
+          <pre className="mt-1 max-h-64 overflow-auto rounded-md border border-line bg-surface p-2 whitespace-pre-wrap">{state.lines.join("\n")}</pre>
         </details>
       )}
     </div>

@@ -1,8 +1,6 @@
-import Header from "../components/Header";
 import Strip from "../components/today/Strip";
 import Chat from "../components/chat/Chat";
 import Gate from "../components/gate/Gate";
-import JobButton from "../components/jobs/JobButton";
 import { useTurnStream } from "../components/chat/useTurnStream";
 import { useThread, useToday } from "../api/queries";
 
@@ -19,17 +17,12 @@ export default function Today() {
   ) : held ? (
     <Gate payload={held} mode="held" onDecide={stream.resume} />
   ) : null;
-  const slots = (
-    <>
-      <JobButton kind="sync" label="Sync now" body={{}} />
-      <JobButton kind="checkin" label="Weekly check-in" body={{ sync: true }} />
-    </>
-  );
   return (
-    <>
-      <Header today={today.data} slots={slots} />
+    // Below md the page scrolls as one column, cards then chat; from md the cards stack in a
+    // column left of the chat and each side scrolls on its own.
+    <div className="flex flex-col md:min-h-0 md:flex-1 md:flex-row">
       <Strip today={today.data} />
       <Chat thread={thread.data} stream={stream} gate={gate} />
-    </>
+    </div>
   );
 }
