@@ -6,16 +6,14 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-from langchain.agents import create_agent
-from langchain.agents.middleware import AgentMiddleware, ModelRequest, dynamic_prompt
-from langchain_anthropic.middleware import AnthropicPromptCachingMiddleware
+from langchain.agents.middleware import ModelRequest, dynamic_prompt
 from langchain_core.language_models import BaseChatModel
 from langchain_core.tools import BaseTool
 from langgraph.checkpoint.base import BaseCheckpointSaver
-from langgraph.checkpoint.memory import InMemorySaver
 
 from tri_analyze.prompts.analyst import PROMPT_VERSION, render_system_prompt
 from tri_analyze.repo import AthleteContext
+from tri_core.harness.agents import build_chat_agent
 
 
 @dynamic_prompt
@@ -34,16 +32,12 @@ def build_agent(
     `context=<AthleteContext>`. The prompt middleware runs first so the caching middleware marks
     the rendered system prompt; tool order is the order given, which keeps the cached prefix
     stable. Runs carry the `analyst` tag and the prompt version as metadata."""
-    middleware: list[AgentMiddleware[Any, Any, Any]] = [
-        analyst_prompt,
-        AnthropicPromptCachingMiddleware(unsupported_model_behavior="ignore"),
-    ]
-    agent = create_agent(
+    agent = build_chat_agent(
         model,
-        list(tools),
-        middleware=middleware,
+        tools,
+        middleware=[analyst_prompt],
         context_schema=AthleteContext,
-        checkpointer=checkpointer or InMemorySaver(),
+        checkpointer=checkpointer,
     )
     return agent.with_config(
         {"tags": ["analyst"], "metadata": {"analyst_prompt_version": PROMPT_VERSION}}
