@@ -1,5 +1,8 @@
 from datetime import date, datetime
 
+import anthropic
+import httpx
+import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from tri_core.testing import ScriptedChatModel, tool_call
@@ -140,3 +143,20 @@ async def test_chat_loop_dispatches_commands_with_arguments():
     assert model.calls == 1
     msgs = agent.get_state({"configurable": {"thread_id": "t2"}}).values["messages"]
     assert isinstance(msgs[0], HumanMessage) and msgs[0].content == "hello"
+
+
+async def test_run_chat_turn_prints_api_errors_and_lets_other_errors_propagate():
+    class RaisingAgent:
+        def __init__(self, exc):
+            self.exc = exc
+
+        async def astream(self, payload, config=None, stream_mode=None):
+            raise self.exc
+            yield  # pragma: no cover - makes this an async generator
+
+    out = []
+    conn = anthropic.APIConnectionError(request=httpx.Request("POST", "https://api.anthropic.com"))
+    assert await run_chat_turn(RaisingAgent(conn), "hi", "t", out.append) == ""
+    assert out == ["\n[connection error talking to Anthropic: Connection error.]\n"]
+    with pytest.raises(RuntimeError, match="kaboom"):
+        await run_chat_turn(RaisingAgent(RuntimeError("kaboom")), "hi", "t", out.append)

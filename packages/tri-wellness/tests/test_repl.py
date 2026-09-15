@@ -395,3 +395,20 @@ async def test_run_ingest_reports_extraction_failure(nocommit, make_deps, tiny_p
         edit=None,
     )
     assert code == 1 and any("no rows" in s for s in out)
+
+
+async def test_run_turn_rate_limit_line_keeps_the_resume_hint():
+    class RaisingGraph:
+        async def astream(self, payload, config=None, stream_mode=None):
+            raise anthropic.RateLimitError(
+                message="slow down",
+                response=httpx.Response(429, request=httpx.Request("POST", "https://x")),
+                body=None,
+            )
+            yield  # pragma: no cover - makes this an async generator
+
+    out = []
+    result = await run_turn(RaisingGraph(), {"source_path": "x"}, "t1", out.append)
+    assert result.error == "rate limited: slow down. Wait a moment and rerun; the thread resumes."
+    assert out == ["[rate limited: slow down. Wait a moment and rerun; the thread resumes.]\n"]
+    assert result.interrupt is None

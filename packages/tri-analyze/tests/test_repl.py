@@ -150,3 +150,20 @@ def test_turn_printer_ignores_non_text_chunks_and_text_of_reads_blocks():
     assert p.final_text == "x"
     assert text_of(AIMessage(content=[{"type": "text", "text": "a"}, "b"])) == "ab"
     assert text_of(AIMessage(content="plain")) == "plain"
+
+
+async def test_run_turn_prints_the_exact_rate_limit_line():
+    class RaisingAgent:
+        async def astream(self, payload, config=None, stream_mode=None, context=None):
+            raise anthropic.RateLimitError(
+                message="slow down",
+                response=httpx.Response(
+                    429, request=httpx.Request("POST", "https://api.anthropic.com")
+                ),
+                body=None,
+            )
+            yield  # pragma: no cover - makes this an async generator
+
+    buf, out = _capture()
+    assert await run_turn(RaisingAgent(), "hi", "t", out, context=CTX) == ""
+    assert buf == ["\n[rate limited: slow down. Wait a moment and try again.]\n"]
