@@ -27,7 +27,7 @@ Companion specs: `model-routing` (2026-09-15, amended to follow this one); `tri-
 - **Handoff.** `tri_coach/tools/handoff.py` holds `turn_messages`, `undelivered` and `NOT_DELIVERED`. Both `_consult` and `propose_changes` return `Command(goto=..., graph=Command.PARENT, update={..., "messages": [*turn, *undelivered(turn, tool_call_id), ack]})`.
 - **Persistence.**
   - `graph/checkpointer.py` exists in coach, planning, nutrition and wellness. The four copies are identical apart from `STATE_TYPES` (coach 9 types, planning 3, nutrition 2, wellness 4) and docstrings: `make_serde()`, `open_checkpointer(url)`, `checkpointer_ready(url)` and the same `SETUP_HINT` text.
-  - `tri_nutrition/store.py` holds `open_store(url)`, `store_ready(url)` and `STORE_SETUP_HINT`, whose text matches `SETUP_HINT`. `scripts/setup_checkpointer.py` already creates both tables and is untouched.
+  - `tri_nutrition/store.py` holds `open_store(url)`, `store_ready(url)` and `STORE_SETUP_HINT`. Its text differs from `SETUP_HINT` in the first line ("LangGraph store tables are missing; ..." against "checkpoint tables are missing; ..."), so both hints are kept. `scripts/setup_checkpointer.py` already creates both tables and is untouched.
 - **Text.** `text_of` exists in five `repl.py` files (as `_text_of` in planning and nutrition); the coach's generator form returns the same strings. `last_ai_text` lives in `tri_coach/text.py`.
 - **Turn drivers.**
   - Agent printer: `TurnPrinter.on_event(mode, data)` is identical in `tri_analyze/repl.py` and `tri_wellness/repl.py`.
@@ -62,7 +62,7 @@ Companion specs: `model-routing` (2026-09-15, amended to follow this one); `tri-
  tri_core.harness.agents    create_agent + [*middleware, AnthropicPromptCachingMiddleware]
                             (routing later appends claude_fallback here, once)
 
- CLIs and tri-web           open_checkpointer(url, STATE_TYPES) · open_store(url) · *_ready(url) · SETUP_HINT
+ CLIs and tri-web           open_checkpointer(url, STATE_TYPES) · open_store(url) · *_ready(url) · SETUP_HINT · STORE_SETUP_HINT
                             ─► tri_core.harness.persistence
 ```
 
@@ -78,7 +78,8 @@ packages/tri-core/
     agents.py        one_tool_call_at_a_time, make_subagent, build_chat_agent
     agent_tool.py    Invocation, agent_tool
     handoff.py       NOT_DELIVERED, turn_messages, undelivered, handoff
-    persistence.py   SETUP_HINT, make_serde, open_checkpointer, checkpointer_ready, open_store, store_ready
+    persistence.py   SETUP_HINT, STORE_SETUP_HINT, make_serde, open_checkpointer, checkpointer_ready,
+                     open_store, store_ready
     turns.py         Out, TurnSink, TurnFailure, api_error_message, turn_config, stream_turn,
                      AgentTurnPrinter, GraphTurnPrinter, format_failure, run_agent_turn, run_graph_turn
   tests/test_harness_{messages,agents,agent_tool,handoff,persistence,turns}.py
@@ -223,7 +224,8 @@ def handoff(
 ### 5.5 `persistence.py`
 
 ```python
-SETUP_HINT: str   # today's text
+SETUP_HINT: str         # today's text, from the graph/checkpointer.py copies
+STORE_SETUP_HINT: str   # today's text, from tri_nutrition.store
 
 def make_serde(state_types: Sequence[type]) -> JsonPlusSerializer: ...  # allowed_msgpack_modules=tuple(state_types)
 
@@ -238,7 +240,7 @@ async def open_store(url: str) -> AsyncIterator[AsyncPostgresStore]: ...
 def store_ready(url: str) -> bool: ...          # to_regclass('public.store'); False on OperationalError
 ```
 
-Each package's `STATE_TYPES` tuple moves unchanged into its `graph/state.py`. Callers pass it to `open_checkpointer` and `make_serde`. For example, the coach graph builds `InMemorySaver(serde=make_serde(tri_planning.graph.state.STATE_TYPES))`. `STORE_SETUP_HINT` users switch to `SETUP_HINT`, which has the same text.
+Each package's `STATE_TYPES` tuple moves unchanged into its `graph/state.py`. Callers pass it to `open_checkpointer` and `make_serde`. For example, the coach graph builds `InMemorySaver(serde=make_serde(tri_planning.graph.state.STATE_TYPES))`. Callers of `S.STORE_SETUP_HINT` import `STORE_SETUP_HINT` from the harness; the text is unchanged.
 
 ### 5.6 `turns.py`
 
@@ -336,7 +338,7 @@ The refactor keeps all of the following:
 3. Tool names, argument schemas and descriptions bound to every model. This includes `ask_analyst` and `ask_wellness`, whose descriptions must match exactly, because the prompt cache prefix depends on them.
 4. Middleware order: the coach `[one_tool_call_at_a_time, caching]`, the analyst `[analyst_prompt, caching]`, everyone else `[caching]`.
 5. Checkpoint format: serde allow-lists are the same tuples, so checkpoints from threads paused before the refactor resume after it.
-6. The Postgres objects each readiness check looks for, and the `SETUP_HINT` text.
+6. The Postgres objects each readiness check looks for, and the `SETUP_HINT` and `STORE_SETUP_HINT` texts.
 7. Exception propagation: non-Anthropic errors still propagate from planning, nutrition and wellness chat turns; `GraphBubbleUp` still leaves `ask_analyst` and `ask_wellness`.
 8. Thread ids, recursion limits, tags and run metadata.
 
