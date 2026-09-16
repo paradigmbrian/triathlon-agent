@@ -8,17 +8,11 @@ from dataclasses import dataclass
 from datetime import date, time
 from typing import Any
 
-import anthropic
 import yaml
-from langchain_core.messages import (
-    AIMessage,
-    AIMessageChunk,
-    BaseMessage,
-    HumanMessage,
-    ToolMessage,
-)
 from langgraph.types import Command
 
+from tri_core.harness.turns import Out as Out
+from tri_core.harness.turns import run_agent_turn, stream_turn, turn_config
 from tri_wellness.labs.models import (
     BLOCKING_REASONS,
     IngestDecision,
@@ -30,7 +24,6 @@ from tri_wellness.labs.models import (
 )
 from tri_wellness.ranges.registry import MarkerRegistry
 
-Out = Callable[[str], None]
 Read = Callable[[], Awaitable[str | None]]
 EditFn = Callable[[dict[str, Any]], Awaitable[dict[str, Any] | None]]
 
@@ -317,33 +310,45 @@ class TurnResult:
     error: str | None = None
 
 
+class _IngestSink:
+    """Prints extract and store progress as the ingest graph's nodes finish, and keeps the review
+    interrupt."""
+
+    def __init__(self, out: Out, result: TurnResult) -> None:
+        self.out = out
+        self.result = result
+
+    def on_event(self, namespace: tuple[str, ...], mode: str, data: Any) -> None:
+        if not isinstance(data, dict):
+            return
+        if "__interrupt__" in data:
+            self.result.interrupt = dict(data["__interrupt__"][0].value)
+        elif "extract" in data:
+            u = data["extract"] or {}
+            pages = f", {u['page_count']} pages" if u.get("page_count") else ""
+            self.out(f"extracted {len(u.get('raw_results') or [])} rows{pages}\n")
+            if u.get("last_error"):
+                self.out(f"ingest failed: {u['last_error']}\n")
+        elif "store" in data:
+            self.out(f"stored panel {(data['store'] or {}).get('panel_id')}\n")
+
+
 async def run_turn(
     graph: Any, payload: dict[str, Any] | Command[Any], thread_id: str, out: Out
 ) -> TurnResult:
     result = TurnResult()
-    cfg = {"configurable": {"thread_id": thread_id}}
-    try:
-        async for data in graph.astream(payload, config=cfg, stream_mode="updates"):
-            if not isinstance(data, dict):
-                continue
-            if "__interrupt__" in data:
-                result.interrupt = dict(data["__interrupt__"][0].value)
-            elif "extract" in data:
-                u = data["extract"] or {}
-                pages = f", {u['page_count']} pages" if u.get("page_count") else ""
-                out(f"extracted {len(u.get('raw_results') or [])} rows{pages}\n")
-                if u.get("last_error"):
-                    out(f"ingest failed: {u['last_error']}\n")
-            elif "store" in data:
-                out(f"stored panel {(data['store'] or {}).get('panel_id')}\n")
-    except anthropic.RateLimitError as exc:
-        result.error = f"rate limited: {exc}. Wait a moment and rerun; the thread resumes."
-    except anthropic.APIStatusError as exc:
-        result.error = f"Anthropic API error {exc.status_code}: {exc.message}"
-    except anthropic.APIConnectionError as exc:
-        result.error = f"connection error talking to Anthropic: {exc}"
-    except Exception as exc:
-        result.error = f"ingest failed: {type(exc).__name__}: {exc}"
+    failure = await stream_turn(
+        graph,
+        payload,
+        turn_config(thread_id),
+        _IngestSink(out, result),
+        subgraphs=False,
+        stream_mode="updates",
+        catch_all="ingest failed",
+        rate_limit_hint="Wait a moment and rerun; the thread resumes.",
+    )
+    if failure is not None:
+        result.error = failure.message
     if result.error:
         out(f"[{result.error}]\n")
     return result
@@ -426,69 +431,11 @@ def render_panels(summaries: list[PanelSummary]) -> str:
     return "\n".join(lines)
 
 
-def text_of(msg: BaseMessage) -> str:
-    content = msg.content
-    if isinstance(content, str):
-        return content
-    parts: list[str] = []
-    for block in content:
-        if isinstance(block, dict) and block.get("type") == "text":
-            parts.append(str(block.get("text", "")))
-        elif isinstance(block, str):
-            parts.append(block)
-    return "".join(parts)
-
-
 ChatCommand = Callable[[str], Awaitable[str]]
 
 
-class TurnPrinter:
-    """Renders agent stream events: text streams inline, tool activity gets its own lines."""
-
-    def __init__(self, out: Out) -> None:
-        self.out = out
-        self.final_text = ""
-
-    def on_event(self, mode: str, data: Any) -> None:
-        if mode == "messages":
-            chunk, meta = data
-            if (
-                isinstance(chunk, AIMessageChunk | AIMessage)
-                and meta.get("langgraph_node") == "model"
-            ):
-                text = text_of(chunk)
-                if text:
-                    self.out(text)
-                    self.final_text += text
-            return
-        if mode == "updates" and isinstance(data, dict):
-            for node, payload in data.items():
-                for msg in (payload or {}).get("messages", []):
-                    if node == "model" and isinstance(msg, AIMessage):
-                        for tc in msg.tool_calls:
-                            self.out(f"\n→ {tc['name']}({tc['args']})\n")
-                        if not msg.tool_calls:
-                            self.final_text = text_of(msg) or self.final_text
-                            self.out("\n")
-                    elif node == "tools" and isinstance(msg, ToolMessage):
-                        self.out(f"← {msg.name}: {len(text_of(msg))} chars\n")
-
-
 async def run_chat_turn(agent: Any, text: str, thread_id: str, out: Out) -> str:
-    printer = TurnPrinter(out)
-    cfg = {"configurable": {"thread_id": thread_id}}
-    try:
-        async for mode, data in agent.astream(
-            {"messages": [HumanMessage(text)]}, config=cfg, stream_mode=["messages", "updates"]
-        ):
-            printer.on_event(mode, data)
-    except anthropic.RateLimitError as exc:
-        out(f"\n[rate limited: {exc}. Wait a moment and try again.]\n")
-    except anthropic.APIStatusError as exc:
-        out(f"\n[Anthropic API error {exc.status_code}: {exc.message}]\n")
-    except anthropic.APIConnectionError as exc:
-        out(f"\n[connection error talking to Anthropic: {exc}]\n")
-    return printer.final_text
+    return await run_agent_turn(agent, text, thread_id, out)
 
 
 async def chat_loop(
