@@ -186,10 +186,10 @@ def _recording(monkeypatch):
     prompts: list[str] = []
     real = nodes.coach.make_subagent
 
-    def record(model, tools, system_prompt):
+    def record(model, tools, system_prompt, **kwargs):
         bound.append([t.name for t in tools])
         prompts.append(system_prompt)
-        return real(model, tools, system_prompt)
+        return real(model, tools, system_prompt, **kwargs)
 
     monkeypatch.setattr(nodes.coach, "make_subagent", record)
     return bound, prompts

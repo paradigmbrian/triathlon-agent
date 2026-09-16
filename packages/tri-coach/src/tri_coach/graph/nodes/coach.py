@@ -12,13 +12,13 @@ from langgraph.store.base import BaseStore
 from tri_coach import memory as M
 from tri_coach.context import load_context
 from tri_coach.graph.deps import CoachDeps
-from tri_coach.graph.llm import make_subagent
 from tri_coach.graph.state import CoachState
 from tri_coach.prompts.coach import render_system_prompt
 from tri_coach.tools.analyst import make_analyst_tool
 from tri_coach.tools.handoff import make_handoff_tools
 from tri_coach.tools.memory import make_memory_tools
 from tri_coach.tools.wellness import make_wellness_tool
+from tri_core.harness.agents import make_subagent, one_tool_call_at_a_time
 
 
 def make_coach_node(deps: CoachDeps) -> Any:
@@ -44,7 +44,7 @@ def make_coach_node(deps: CoachDeps) -> Any:
             )
         entries = await M.get_entries(store)
         prompt = render_system_prompt(ctx, entries, max_consults=deps.max_consults)
-        agent = make_subagent(deps.model, tools, prompt)
+        agent = make_subagent(deps.model, tools, prompt, middleware=[one_tool_call_at_a_time])
         before = state.get("messages", [])
         result = await agent.ainvoke({"messages": before}, config)
         return {"messages": result["messages"][len(before) :]}

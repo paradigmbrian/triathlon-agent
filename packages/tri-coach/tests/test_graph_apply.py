@@ -173,9 +173,9 @@ async def test_partial_apply_keeps_the_remainder_pending_and_shows_it_next_turn(
     prompts: list[str] = []
     real = nodes.coach.make_subagent
 
-    def record(model, tools, system_prompt):
+    def record(model, tools, system_prompt, **kwargs):
         prompts.append(system_prompt)
-        return real(model, tools, system_prompt)
+        return real(model, tools, system_prompt, **kwargs)
 
     monkeypatch.setattr(nodes.coach, "make_subagent", record)
     seed_active_plan(nocommit)

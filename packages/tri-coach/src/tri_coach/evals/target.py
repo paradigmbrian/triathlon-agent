@@ -17,11 +17,11 @@ from langchain_core.tools import BaseTool, StructuredTool
 
 from tri_coach import memory as M
 from tri_coach.evals.cases import Route
-from tri_coach.graph.llm import make_subagent
 from tri_coach.prompts.coach import COACH_RULES
-from tri_coach.text import last_ai_text
 from tri_coach.tools.handoff import make_handoff_tools
 from tri_coach.tools.memory import make_memory_tools
+from tri_core.harness.agents import make_subagent, one_tool_call_at_a_time
+from tri_core.harness.messages import last_ai_text
 
 MAX_CONSULTS = 2
 TARGET_RECURSION_LIMIT = 30
@@ -109,7 +109,7 @@ async def run_case(model: BaseChatModel, inputs: dict[str, Any]) -> dict[str, An
         [COACH_RULES.format(max_consults=MAX_CONSULTS), inputs["context"], inputs["memory"]]
     )
     history = convert_to_messages(inputs["messages"])
-    agent = make_subagent(model, stub_tools(inputs), prompt)
+    agent = make_subagent(model, stub_tools(inputs), prompt, middleware=[one_tool_call_at_a_time])
     out = await agent.ainvoke({"messages": history}, {"recursion_limit": TARGET_RECURSION_LIMIT})
     new = out["messages"][len(history) :]
     calls: list[dict[str, Any]] = [

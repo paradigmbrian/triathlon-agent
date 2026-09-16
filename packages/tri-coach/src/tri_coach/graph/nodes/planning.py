@@ -12,7 +12,7 @@ from langchain_core.runnables.config import merge_configs
 
 from tri_coach.graph.state import CoachState
 from tri_coach.models import Brief, Proposal
-from tri_coach.text import last_ai_text
+from tri_core.harness.messages import last_ai_text
 from tri_planning.prompts.adjust import BRIEF_PREFIX
 
 

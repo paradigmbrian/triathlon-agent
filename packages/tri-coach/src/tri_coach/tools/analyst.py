@@ -18,8 +18,8 @@ from langgraph.errors import GraphBubbleUp
 
 from tri_analyze.agent import build_agent
 from tri_analyze.repo import load_athlete_context
-from tri_coach.text import last_ai_text
 from tri_core.db.repo import Conn
+from tri_core.harness.messages import last_ai_text
 
 ANALYST_RECURSION_LIMIT = 40
 

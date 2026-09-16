@@ -8,13 +8,13 @@ from langchain_core.tools import tool
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
-from tri_coach.graph.llm import make_subagent
 from tri_coach.models import Brief, ProposalRequest
-from tri_coach.text import last_ai_text
 from tri_coach.tools.analyst import make_analyst_tool
 from tri_coach.tools.handoff import make_handoff_tools, turn_messages
 from tri_coach.tools.wellness import make_wellness_tool, wellness_tools
 from tri_core.config import Settings
+from tri_core.harness.agents import make_subagent, one_tool_call_at_a_time
+from tri_core.harness.messages import last_ai_text
 from tri_core.testing import ScriptedChatModel, tool_call
 from tri_wellness.testing import seed_panel
 
@@ -40,7 +40,7 @@ class Outer(TypedDict, total=False):
 def outer_graph(model, tools):
     """The shape the coach graph uses: a node function wraps the agent; planning, nutrition and
     review are reachable only through the tools' Commands."""
-    agent = make_subagent(model, tools, "sys")
+    agent = make_subagent(model, tools, "sys", middleware=[one_tool_call_at_a_time])
 
     async def coach(state: Outer) -> dict[str, Any]:
         before = state.get("messages", [])

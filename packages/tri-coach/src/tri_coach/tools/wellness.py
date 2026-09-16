@@ -16,10 +16,10 @@ from langchain_core.tools import BaseTool, StructuredTool
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.errors import GraphBubbleUp
 
-from tri_coach.text import last_ai_text
 from tri_core.db.repo import Conn
 from tri_core.db.sql_tool import make_query_tool
 from tri_core.harness.agents import build_chat_agent
+from tri_core.harness.messages import last_ai_text
 from tri_wellness import repo
 from tri_wellness.prompts.chat import render_chat_prompt
 from tri_wellness.ranges.registry import MarkerRegistry
