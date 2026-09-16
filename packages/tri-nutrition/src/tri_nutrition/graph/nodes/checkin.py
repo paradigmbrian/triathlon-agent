@@ -12,9 +12,9 @@ from langchain_core.messages import AnyMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 
 from tri_core.db.sql_tool import make_query_tool
+from tri_core.harness.agents import make_subagent
 from tri_nutrition.allowlist import CHECKIN_READ_TOOLS
 from tri_nutrition.graph.deps import GraphDeps
-from tri_nutrition.graph.llm import make_subagent
 from tri_nutrition.graph.nodes.intake import profile_saved_from_messages
 from tri_nutrition.graph.state import NutritionState
 from tri_nutrition.prompts.checkin import render_checkin_prompt
