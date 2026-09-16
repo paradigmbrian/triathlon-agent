@@ -13,12 +13,13 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from tri_core.db.repo import Conn
+from tri_core.harness.messages import text_of
 from tri_wellness import repo
 from tri_wellness.labs.evaluate import evaluate
 from tri_wellness.labs.training_context import load_training_context
 from tri_wellness.prompts.report import REPORT_SYSTEM, render_report_prompt
 from tri_wellness.ranges.registry import MarkerRegistry
-from tri_wellness.repl import Out, text_of
+from tri_wellness.repl import Out
 
 ConnectFactory = Callable[[], AbstractContextManager[Conn]]
 

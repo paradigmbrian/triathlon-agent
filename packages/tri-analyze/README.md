@@ -21,7 +21,7 @@ A LangChain agent is three things: a chat model, a list of tools, and a loop.
 ### The model, the tools and the loop
 
 `llm.make_model` wraps Claude in `ChatAnthropic` (no `thinking` parameter; adaptive thinking is
-the model default). `agent.build_agent(model, tools, checkpointer)` calls `create_agent` with
+the model default). `agent.build_agent(model, tools, checkpointer)` builds through `tri_core.harness.agents.build_chat_agent`, which calls `create_agent` with
 two middlewares and an `InMemorySaver`, and returns the graph with a run config: tag `analyst`
 and metadata `analyst_prompt_version`. The graph is a state machine with a `model` node and a
 `tools` node and an edge that loops while tool calls exist. The checkpointer stores state per
@@ -112,7 +112,7 @@ src/tri_analyze/
   agent.py            analyst_prompt (@dynamic_prompt), build_agent
   allowlist.py        the Garmin and TrainingPeaks tools the agent may call live
   tools/live.py       open_live_tools over tri_core.mcp with the allow-lists
-  repl.py             text_of, TurnPrinter, run_turn, chat_loop
+  repl.py             run_turn (over tri_core.harness.turns.run_agent_turn), chat_loop
   cli.py              chat, eval
   testing.py          athlete_context, RecordingScriptedModel, seed_workouts, seed_daily_metrics
   evals/              cases, target (stub tools), evaluators (code checks and the judge), run

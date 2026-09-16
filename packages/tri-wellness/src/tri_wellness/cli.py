@@ -91,10 +91,11 @@ def _settings_or_exit() -> Any:
 
 
 async def _ingest(file: Path, kind: str | None, drawn_on: str | None) -> int:
-    from tri_wellness.graph.checkpointer import SETUP_HINT, checkpointer_ready, open_checkpointer
+    from tri_core.harness.persistence import SETUP_HINT, checkpointer_ready, open_checkpointer
     from tri_wellness.graph.deps import make_deps
     from tri_wellness.graph.graph import build_ingest_graph
     from tri_wellness.graph.llm import make_model
+    from tri_wellness.graph.state import STATE_TYPES
     from tri_wellness.labs.extract import file_sha256, sniff
     from tri_wellness.repl import run_ingest
 
@@ -121,7 +122,7 @@ async def _ingest(file: Path, kind: str | None, drawn_on: str | None) -> int:
         console.print(SETUP_HINT, style="red")
         return 2
     thread_id = f"ingest:{file_sha256(file)}"
-    async with open_checkpointer(settings.database_url) as saver:
+    async with open_checkpointer(settings.database_url, STATE_TYPES) as saver:
         deps = make_deps(settings, make_model(settings))
         graph = build_ingest_graph(deps, saver)
         return await run_ingest(
@@ -189,8 +190,8 @@ async def _chat() -> None:
 
     from tri_core.db.connection import connect
     from tri_core.db.sql_tool import make_query_tool
+    from tri_core.harness.agents import build_chat_agent
     from tri_wellness import repo
-    from tri_wellness.agent import build_agent
     from tri_wellness.graph.llm import make_model
     from tri_wellness.prompts.chat import render_chat_prompt
     from tri_wellness.ranges.registry import load_registry
@@ -216,7 +217,7 @@ async def _chat() -> None:
     prompt = render_chat_prompt(
         profile, registry.sex, panels, latest_report, date.today(), [t.name for t in tools]
     )
-    agent = build_agent(make_model(settings), tools, prompt)
+    agent = build_chat_agent(make_model(settings), tools, system_prompt=prompt)
 
     async def read() -> str | None:
         try:

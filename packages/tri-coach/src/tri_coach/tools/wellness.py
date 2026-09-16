@@ -19,8 +19,8 @@ from langgraph.errors import GraphBubbleUp
 from tri_coach.text import last_ai_text
 from tri_core.db.repo import Conn
 from tri_core.db.sql_tool import make_query_tool
+from tri_core.harness.agents import build_chat_agent
 from tri_wellness import repo
-from tri_wellness.agent import build_agent
 from tri_wellness.prompts.chat import render_chat_prompt
 from tri_wellness.ranges.registry import MarkerRegistry
 from tri_wellness.report import athlete_profile
@@ -63,7 +63,9 @@ def make_wellness_tool(
             prompt = render_chat_prompt(
                 profile, registry.sex, panels, latest_report, today(), names
             )
-            agent = build_agent(model, tools, prompt, InMemorySaver())
+            agent = build_chat_agent(
+                model, tools, system_prompt=prompt, checkpointer=InMemorySaver()
+            )
             out = await agent.ainvoke(
                 {"messages": [HumanMessage(question)]},
                 {
