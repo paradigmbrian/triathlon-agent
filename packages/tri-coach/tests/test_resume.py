@@ -42,9 +42,8 @@ async def test_second_process_resumes_the_paused_review(nocommit, make_deps, mem
             graph = build_graph(deps(), saver, mem_store)
             out = await graph.ainvoke({"messages": [HumanMessage("do it")]}, cfg)
             assert "__interrupt__" in out
-        async with open_checkpointer(
-            url, STATE_TYPES
-        ) as saver2:  # a new process: nothing in memory
+        # a new process: nothing in memory
+        async with open_checkpointer(url, STATE_TYPES) as saver2:
             graph2 = build_graph(deps(), saver2, mem_store)
             snap = await graph2.aget_state(cfg)
             assert snap.next == ("review",)

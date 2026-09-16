@@ -1,5 +1,6 @@
 import logging
 from datetime import date
+from typing import Any
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
@@ -12,6 +13,7 @@ from tri_coach.graph.graph import after_review, build_graph
 from tri_coach.graph.state import STATE_TYPES
 from tri_coach.models import ReviewDecision
 from tri_coach.testing import CFG, consult, move_call, propose, seed_active_plan
+from tri_core.harness.agents import one_tool_call_at_a_time
 from tri_core.harness.persistence import make_serde
 from tri_core.testing import ScriptedChatModel, tool_call
 from tri_planning.testing import FakeTp
@@ -330,3 +332,21 @@ async def test_wellness_tool_is_absent_when_labs_are_not_configured(
     await graph.ainvoke({"messages": [HumanMessage("hi")]}, CFG)
     assert "ask_wellness" not in bound[0] and "ask_analyst" in bound[0]
     assert "Labs: not configured" in prompts[0]
+
+
+async def test_the_coach_node_disables_parallel_tool_calls(
+    nocommit, make_deps, mem_store, monkeypatch
+):
+    """Spec S6.4: the real coach node builds its sub-agent with
+    middleware=[one_tool_call_at_a_time]."""
+    captured: list[Any] = []
+    real = nodes.coach.make_subagent
+
+    def record(model, tools, system_prompt, **kwargs):
+        captured.append(kwargs.get("middleware"))
+        return real(model, tools, system_prompt, **kwargs)
+
+    monkeypatch.setattr(nodes.coach, "make_subagent", record)
+    graph, _ = graph_for(make_deps, mem_store, coach=[AIMessage(content="Hello.")])
+    await graph.ainvoke({"messages": [HumanMessage("hi")]}, CFG)
+    assert captured == [[one_tool_call_at_a_time]]
