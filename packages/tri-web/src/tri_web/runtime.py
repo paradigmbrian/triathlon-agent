@@ -57,7 +57,7 @@ async def open_runtime(
     from tri_coach.graph.graph import build_graph
     from tri_coach.graph.llm import make_model
     from tri_coach.servers import open_servers
-    from tri_nutrition import store as S
+    from tri_core.harness.persistence import open_store
 
     problem = ready(settings)
     if problem is not None:
@@ -65,7 +65,7 @@ async def open_runtime(
     async with AsyncExitStack() as stack:
         servers = await open_servers(stack, settings, no_live=no_live, log=log)
         saver = await stack.enter_async_context(open_checkpointer(settings.database_url))
-        store = await stack.enter_async_context(S.open_store(settings.database_url))
+        store = await stack.enter_async_context(open_store(settings.database_url))
         deps = make_deps(settings, model or make_model(settings), servers)
         yield Runtime(
             settings=settings,

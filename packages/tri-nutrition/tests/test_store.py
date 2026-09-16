@@ -5,6 +5,7 @@ import pytest
 from langgraph.store.memory import InMemoryStore
 
 from tri_core.config import Settings
+from tri_core.harness.persistence import open_store, store_ready
 from tri_nutrition import store as S
 from tri_nutrition.nutrition.models import NutritionProfile, Product
 from tri_nutrition.testing import PROFILE_ARGS
@@ -46,10 +47,10 @@ async def test_fuel_log_empty_and_forget_all():
 
 async def test_postgres_store_round_trip():
     url = Settings().test_database_url
-    if not S.store_ready(url):
+    if not store_ready(url):
         pytest.skip("run scripts/setup_checkpointer.py against the test database")
     ns = ("test", f"nutrition-{uuid.uuid4()}")
-    async with S.open_store(url) as pg:
+    async with open_store(url) as pg:
         try:
             await S.put_profile(pg, profile(), ns=ns)
             assert await S.get_profile(pg, ns=ns) == profile()

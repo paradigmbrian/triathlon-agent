@@ -37,8 +37,12 @@ def _out(s: str) -> None:
 
 def _ready(settings: Any) -> int | None:
     """Exit code when chat or check-in cannot start, else None."""
-    from tri_core.harness.persistence import SETUP_HINT, checkpointer_ready
-    from tri_nutrition import store as S
+    from tri_core.harness.persistence import (
+        SETUP_HINT,
+        STORE_SETUP_HINT,
+        checkpointer_ready,
+        store_ready,
+    )
 
     if not settings.anthropic_api_key:
         console.print("ANTHROPIC_API_KEY is not set in .env", style="red")
@@ -46,8 +50,8 @@ def _ready(settings: Any) -> int | None:
     if not checkpointer_ready(settings.database_url):
         console.print(SETUP_HINT, style="red")
         return 2
-    if not S.store_ready(settings.database_url):
-        console.print(S.STORE_SETUP_HINT, style="red")
+    if not store_ready(settings.database_url):
+        console.print(STORE_SETUP_HINT, style="red")
         return 2
     return None
 
@@ -105,7 +109,7 @@ async def _chat(*, no_live: bool) -> None:
     from contextlib import AsyncExitStack
 
     from tri_core.db.connection import connect
-    from tri_core.harness.persistence import open_checkpointer
+    from tri_core.harness.persistence import open_checkpointer, open_store
     from tri_core.sync.runner import run_sync
     from tri_nutrition import repo
     from tri_nutrition import store as S
@@ -126,7 +130,7 @@ async def _chat(*, no_live: bool) -> None:
         saver = await stack.enter_async_context(
             open_checkpointer(settings.database_url, STATE_TYPES)
         )
-        store = await stack.enter_async_context(S.open_store(settings.database_url))
+        store = await stack.enter_async_context(open_store(settings.database_url))
         graph = build_graph(make_deps(settings, make_model(settings), garmin, tp), saver, store)
         cfg = {"configurable": {"thread_id": THREAD_ID}}
 
@@ -215,17 +219,17 @@ def today(
 async def _today(*, yes: bool, no_live: bool) -> int:
     from contextlib import AsyncExitStack
 
+    from tri_core.harness.persistence import STORE_SETUP_HINT, open_store, store_ready
     from tri_core.mcp.client import McpToolClient
     from tri_core.mcp.servers import garmin_spec
-    from tri_nutrition import store as S
     from tri_nutrition.allowlist import GARMIN_SERVER_TOOLS
     from tri_nutrition.daily import describe_change, propose_today, write_today
     from tri_nutrition.graph.deps import make_deps
     from tri_nutrition.graph.llm import make_model
 
     settings = get_nutrition_settings()
-    if not S.store_ready(settings.database_url):
-        console.print(S.STORE_SETUP_HINT, style="red")
+    if not store_ready(settings.database_url):
+        console.print(STORE_SETUP_HINT, style="red")
         return 2
     async with AsyncExitStack() as stack:
         garmin = None
@@ -240,7 +244,7 @@ async def _today(*, yes: bool, no_live: bool) -> int:
             except Exception as exc:
                 _out(f"garmin MCP server unavailable ({type(exc).__name__}: {exc})\n")
                 return 1
-        store = await stack.enter_async_context(S.open_store(settings.database_url))
+        store = await stack.enter_async_context(open_store(settings.database_url))
         deps = make_deps(settings, make_model(settings), garmin)
         h = await propose_today(deps, store)
         _out(h.summary() + "\n")
@@ -271,9 +275,8 @@ def check_in(
 async def _check_in(*, yes: bool, no_sync: bool, no_live: bool) -> int:
     from contextlib import AsyncExitStack
 
-    from tri_core.harness.persistence import open_checkpointer
+    from tri_core.harness.persistence import open_checkpointer, open_store
     from tri_core.sync.runner import run_sync
-    from tri_nutrition import store as S
     from tri_nutrition.graph.deps import make_deps
     from tri_nutrition.graph.graph import build_graph
     from tri_nutrition.graph.llm import make_model
@@ -293,7 +296,7 @@ async def _check_in(*, yes: bool, no_sync: bool, no_live: bool) -> int:
         saver = await stack.enter_async_context(
             open_checkpointer(settings.database_url, STATE_TYPES)
         )
-        store = await stack.enter_async_context(S.open_store(settings.database_url))
+        store = await stack.enter_async_context(open_store(settings.database_url))
         graph = build_graph(make_deps(settings, make_model(settings), garmin, tp), saver, store)
         return await checkin_run(graph, thread_id=THREAD_ID, out=_out, approve=yes)
 
@@ -355,7 +358,12 @@ def reset(
 
 async def _reset(forget_profile: bool) -> None:
     from tri_core.db.connection import connect
-    from tri_core.harness.persistence import checkpointer_ready, open_checkpointer
+    from tri_core.harness.persistence import (
+        checkpointer_ready,
+        open_checkpointer,
+        open_store,
+        store_ready,
+    )
     from tri_nutrition import repo
     from tri_nutrition import store as S
     from tri_nutrition.graph.state import STATE_TYPES
@@ -369,8 +377,8 @@ async def _reset(forget_profile: bool) -> None:
         async with open_checkpointer(settings.database_url, STATE_TYPES) as saver:
             await saver.adelete_thread(THREAD_ID)
     forgotten = 0
-    if forget_profile and S.store_ready(settings.database_url):
-        async with S.open_store(settings.database_url) as store:
+    if forget_profile and store_ready(settings.database_url):
+        async with open_store(settings.database_url) as store:
             forgotten = await S.forget_all(store)
     console.print(
         f"reset: {targets} unwritten target(s) and {plans} fuel plan(s) deleted, thread cleared"

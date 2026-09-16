@@ -1,17 +1,13 @@
 """The athlete's long-term nutrition memory: LangGraph Store namespace, keys and typed access.
 
 Everything here is async because AsyncPostgresStore refuses synchronous calls from the event
-loop thread. The same helpers work on InMemoryStore in tests.
+loop thread. The same helpers work on InMemoryStore in tests. Opening the Postgres store and
+checking for its tables live in tri_core.harness.persistence.
 """
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
-
-import psycopg
 from langgraph.store.base import BaseStore
-from langgraph.store.postgres.aio import AsyncPostgresStore
 
 from tri_nutrition.nutrition.models import FuelLogEntry, NutritionProfile, Product
 
@@ -20,27 +16,6 @@ KEY_PROFILE = "profile"
 KEY_FUEL_LOG = "fuel_log"
 KEY_PRODUCTS = "product_library"
 KEYS = (KEY_PROFILE, KEY_FUEL_LOG, KEY_PRODUCTS)
-
-STORE_SETUP_HINT = (
-    "LangGraph store tables are missing; run once per database:\n"
-    "  uv run python scripts/setup_checkpointer.py $DATABASE_URL\n"
-    "  uv run python scripts/setup_checkpointer.py $TEST_DATABASE_URL"
-)
-
-
-@asynccontextmanager
-async def open_store(url: str) -> AsyncIterator[AsyncPostgresStore]:
-    async with AsyncPostgresStore.from_conn_string(url) as store:
-        yield store
-
-
-def store_ready(url: str) -> bool:
-    try:
-        with psycopg.connect(url) as conn:
-            row = conn.execute("select to_regclass('public.store') as t").fetchone()
-    except psycopg.OperationalError:
-        return False
-    return bool(row and row[0])
 
 
 async def get_profile(store: BaseStore, ns: tuple[str, ...] = NAMESPACE) -> NutritionProfile | None:
