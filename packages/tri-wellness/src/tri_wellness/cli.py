@@ -190,8 +190,8 @@ async def _chat() -> None:
 
     from tri_core.db.connection import connect
     from tri_core.db.sql_tool import make_query_tool
+    from tri_core.harness.agents import build_chat_agent
     from tri_wellness import repo
-    from tri_wellness.agent import build_agent
     from tri_wellness.graph.llm import make_model
     from tri_wellness.prompts.chat import render_chat_prompt
     from tri_wellness.ranges.registry import load_registry
@@ -217,7 +217,7 @@ async def _chat() -> None:
     prompt = render_chat_prompt(
         profile, registry.sex, panels, latest_report, date.today(), [t.name for t in tools]
     )
-    agent = build_agent(make_model(settings), tools, prompt)
+    agent = build_chat_agent(make_model(settings), tools, system_prompt=prompt)
 
     async def read() -> str | None:
         try:

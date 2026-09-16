@@ -5,8 +5,8 @@ import httpx
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+from tri_core.harness.agents import build_chat_agent
 from tri_core.testing import ScriptedChatModel, tool_call
-from tri_wellness.agent import build_agent
 from tri_wellness.labs.models import PanelSummary, StoredReport
 from tri_wellness.prompts.chat import render_chat_prompt
 from tri_wellness.prompts.report import REPORT_RULES
@@ -90,7 +90,7 @@ async def test_agent_answers_with_a_findings_tool():
             AIMessage(content="Ferritin's functional range is 50-150 ng/mL."),
         ]
     )
-    agent = build_agent(model, tools, "sys")
+    agent = build_chat_agent(model, tools, system_prompt="sys")
     out = []
     text = await run_chat_turn(agent, "what is the ferritin range?", "t1", out.append)
     assert text == "Ferritin's functional range is 50-150 ng/mL."
@@ -108,7 +108,7 @@ async def test_agent_answers_with_a_findings_tool():
 
 async def test_chat_loop_dispatches_commands_with_arguments():
     model = ScriptedChatModel(script=[AIMessage(content="hi")])
-    agent = build_agent(model, [], "sys")
+    agent = build_chat_agent(model, [], system_prompt="sys")
     lines = iter(["/panels", "/report 2", "/nope", "hello", "/quit"])
 
     async def read():
