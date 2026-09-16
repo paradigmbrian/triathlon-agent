@@ -31,8 +31,8 @@ from tri_coach.graph.nodes.planning import make_planning_node
 from tri_coach.graph.nodes.review import review_node
 from tri_coach.graph.state import CoachState
 from tri_core.harness.persistence import make_serde
-from tri_nutrition.graph.checkpointer import make_serde as nutrition_serde
 from tri_nutrition.graph.graph import build_graph as build_nutrition_graph
+from tri_nutrition.graph.state import STATE_TYPES as NUTRITION_STATE_TYPES
 from tri_planning.graph.graph import build_graph as build_planning_graph
 from tri_planning.graph.state import STATE_TYPES as PLANNING_STATE_TYPES
 
@@ -73,7 +73,10 @@ def build_graph(deps: CoachDeps, checkpointer: BaseCheckpointSaver[Any], store: 
         deps.planning_deps, InMemorySaver(serde=make_serde(PLANNING_STATE_TYPES)), embedded=True
     )
     nutrition_graph = build_nutrition_graph(
-        deps.nutrition_deps, InMemorySaver(serde=nutrition_serde()), store, embedded=True
+        deps.nutrition_deps,
+        InMemorySaver(serde=make_serde(NUTRITION_STATE_TYPES)),
+        store,
+        embedded=True,
     )
 
     g: StateGraph[CoachState] = StateGraph(CoachState)

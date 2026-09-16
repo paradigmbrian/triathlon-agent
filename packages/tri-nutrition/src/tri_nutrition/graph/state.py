@@ -9,6 +9,10 @@ from langgraph.graph.message import add_messages
 
 from tri_nutrition.nutrition.models import NutritionChange, ReviewDecision
 
+# Pydantic models that live in NutritionState. Registering them keeps the checkpointer from
+# warning (and, in strict mode, refusing) when it deserializes them.
+STATE_TYPES: tuple[type, ...] = (NutritionChange, ReviewDecision)
+
 
 class NutritionState(TypedDict, total=False):
     messages: Annotated[list[AnyMessage], add_messages]
