@@ -11,17 +11,12 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-import anthropic
 import yaml
-from langchain_core.messages import (
-    AIMessage,
-    AIMessageChunk,
-    BaseMessage,
-    HumanMessage,
-    ToolMessage,
-)
+from langchain_core.messages import HumanMessage
 from langgraph.types import Command
 
+from tri_core.harness.turns import GraphTurnPrinter, run_graph_turn
+from tri_core.harness.turns import Out as Out
 from tri_nutrition.nutrition.models import (
     DayTarget,
     NutritionChange,
@@ -31,7 +26,6 @@ from tri_nutrition.nutrition.models import (
 )
 from tri_nutrition.prompts.checkin import CHECKIN_REQUEST
 
-Out = Callable[[str], None]
 CommandFn = Callable[[], Awaitable[str]]
 EditFn = Callable[[list[NutritionChange]], Awaitable[list[NutritionChange] | None]]
 
@@ -87,78 +81,10 @@ def render_race(plan: RaceFuelPlan, violations: list[str]) -> str:
     return "\n".join(lines)
 
 
-def _text_of(msg: BaseMessage) -> str:
-    content = msg.content
-    if isinstance(content, str):
-        return content
-    parts: list[str] = []
-    for block in content:
-        if isinstance(block, dict) and block.get("type") == "text":
-            parts.append(str(block.get("text", "")))
-        elif isinstance(block, str):
-            parts.append(block)
-    return "".join(parts)
-
-
-class TurnPrinter:
-    def __init__(self, out: Out) -> None:
-        self.out = out
-        self.final_text = ""
-        self.interrupt: dict[str, Any] | None = None
-
-    def on_event(self, namespace: tuple[str, ...], mode: str, data: Any) -> None:
-        if mode == "messages":
-            chunk, meta = data
-            if (
-                isinstance(chunk, AIMessageChunk | AIMessage)
-                and meta.get("langgraph_node") == "model"
-            ):
-                text = _text_of(chunk)
-                if text:
-                    self.out(text)
-                    self.final_text += text
-            return
-        if mode != "updates" or not isinstance(data, dict):
-            return
-        if "__interrupt__" in data:
-            first = data["__interrupt__"][0]
-            self.interrupt = dict(first.value)
-            return
-        for node, payload in data.items():
-            if not namespace and node in STREAMED_NODES:
-                continue
-            for msg in (payload or {}).get("messages", []):
-                if node == "model" and isinstance(msg, AIMessage):
-                    for tc in msg.tool_calls:
-                        self.out(f"\n→ {tc['name']}({tc['args']})\n")
-                    if not msg.tool_calls:
-                        self.final_text = _text_of(msg) or self.final_text
-                        self.out("\n")
-                elif node == "tools" and isinstance(msg, ToolMessage):
-                    self.out(f"← {msg.name}: {len(_text_of(msg))} chars\n")
-                elif not namespace and isinstance(msg, AIMessage):
-                    text = _text_of(msg)
-                    self.out(f"[{node}] {text}\n")
-                    self.final_text = text
-
-
 async def run_turn(
     graph: Any, payload: dict[str, Any] | Command[Any], thread_id: str, out: Out
-) -> TurnPrinter:
-    printer = TurnPrinter(out)
-    cfg = {"configurable": {"thread_id": thread_id}}
-    try:
-        async for namespace, mode, data in graph.astream(
-            payload, config=cfg, stream_mode=["messages", "updates"], subgraphs=True
-        ):
-            printer.on_event(tuple(namespace), mode, data)
-    except anthropic.RateLimitError as exc:
-        out(f"\n[rate limited: {exc}. Wait a moment and try again.]\n")
-    except anthropic.APIStatusError as exc:
-        out(f"\n[Anthropic API error {exc.status_code}: {exc.message}]\n")
-    except anthropic.APIConnectionError as exc:
-        out(f"\n[connection error talking to Anthropic: {exc}]\n")
-    return printer
+) -> GraphTurnPrinter:
+    return await run_graph_turn(graph, payload, thread_id, out, streamed_nodes=STREAMED_NODES)
 
 
 def render_review(payload: dict[str, Any]) -> str:

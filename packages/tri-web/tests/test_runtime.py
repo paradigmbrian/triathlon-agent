@@ -5,8 +5,8 @@ import pytest
 
 from tri_coach.graph.checkpointer import checkpointer_ready
 from tri_core.config import Settings
+from tri_core.harness.persistence import store_ready
 from tri_core.testing import ScriptedChatModel
-from tri_nutrition.store import store_ready
 from tri_web.config import WebSettings
 from tri_web.runtime import Runtime, cfg, open_runtime
 

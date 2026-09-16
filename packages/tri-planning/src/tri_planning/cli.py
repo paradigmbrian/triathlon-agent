@@ -38,14 +38,15 @@ def _out(s: str) -> None:
 
 @asynccontextmanager
 async def _open_graph(*, no_live: bool) -> AsyncIterator[Any]:
+    from tri_core.harness.persistence import SETUP_HINT, checkpointer_ready, open_checkpointer
     from tri_core.mcp.client import McpToolClient
     from tri_core.mcp.live_tools import open_live_tools
     from tri_core.mcp.servers import garmin_spec, trainingpeaks_spec
     from tri_planning.allowlist import GARMIN_LIVE_TOOLS
-    from tri_planning.graph.checkpointer import SETUP_HINT, checkpointer_ready, open_checkpointer
     from tri_planning.graph.deps import make_deps
     from tri_planning.graph.graph import build_graph
     from tri_planning.graph.llm import make_model
+    from tri_planning.graph.state import STATE_TYPES
 
     settings = get_planning_settings()
     if not settings.anthropic_api_key:
@@ -74,7 +75,9 @@ async def _open_graph(*, no_live: bool) -> AsyncIterator[Any]:
                     {"garmin": (garmin_spec(settings), GARMIN_LIVE_TOOLS)}, lambda m: _out(m + "\n")
                 )
             )
-        saver = await stack.enter_async_context(open_checkpointer(settings.database_url))
+        saver = await stack.enter_async_context(
+            open_checkpointer(settings.database_url, STATE_TYPES)
+        )
         deps = make_deps(settings, make_model(settings), tp)
         deps.garmin_tools = garmin_tools
         yield build_graph(deps, saver)
@@ -215,15 +218,16 @@ def reset(yes: bool = typer.Option(False, "--yes", help="Skip the confirmation")
 
 async def _reset() -> None:
     from tri_core.db.connection import connect
+    from tri_core.harness.persistence import checkpointer_ready, open_checkpointer
     from tri_planning import repo
-    from tri_planning.graph.checkpointer import checkpointer_ready, open_checkpointer
+    from tri_planning.graph.state import STATE_TYPES
 
     settings = get_planning_settings()
     with connect(settings.database_url) as conn:
         goals, plans = repo.abandon_active(conn)
         conn.commit()
     if checkpointer_ready(settings.database_url):
-        async with open_checkpointer(settings.database_url) as saver:
+        async with open_checkpointer(settings.database_url, STATE_TYPES) as saver:
             await saver.adelete_thread(THREAD_ID)
     console.print(f"reset: {goals} goal(s) abandoned, {plans} plan(s) superseded, thread cleared")
 

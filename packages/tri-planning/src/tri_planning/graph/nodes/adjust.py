@@ -10,8 +10,8 @@ from langchain_core.messages import AnyMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 
 from tri_core.db.sql_tool import make_query_tool
+from tri_core.harness.agents import make_subagent
 from tri_planning.graph.deps import GraphDeps
-from tri_planning.graph.llm import make_subagent
 from tri_planning.graph.state import PlanningState
 from tri_planning.planning.models import CalendarChange
 from tri_planning.prompts.adjust import load_adjust_context, render_adjust_prompt

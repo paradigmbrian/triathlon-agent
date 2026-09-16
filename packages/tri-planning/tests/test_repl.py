@@ -2,12 +2,11 @@ from datetime import date
 
 import anthropic
 import httpx
-from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
+from langchain_core.messages import AIMessage
 from langgraph.types import Command, Interrupt
 
 from tri_planning.planning.models import CalendarChange, PlannedSession
 from tri_planning.repl import (
-    TurnPrinter,
     changes_from_yaml,
     changes_to_yaml,
     chat_loop,
@@ -65,24 +64,6 @@ def test_render_changes_groups_by_week():
     assert "week one" in text and "2026-09-14" in text and "2026-09-21" in text
     assert "Ride" in text
     assert text.index("2026-09-14") < text.index("2026-09-21")
-
-
-def test_turn_printer_handles_subgraph_events_and_interrupt():
-    buf = []
-    p = TurnPrinter(buf.append)
-    meta = {"langgraph_node": "model"}
-    p.on_event(("intake:abc",), "messages", (AIMessageChunk(content="Hel"), meta))
-    p.on_event(("intake:abc",), "messages", (AIMessageChunk(content="lo"), meta))
-    tool_msg = ToolMessage(content="{}", name="set_training_goal", tool_call_id="1")
-    p.on_event(("intake:abc",), "updates", {"tools": {"messages": [tool_msg]}})
-    p.on_event((), "updates", {"targets": {"messages": [AIMessage(content="Targets: 14 weeks")]}})
-    stop = Interrupt(value={"summary": "s", "changes": []})
-    p.on_event((), "updates", {"__interrupt__": (stop,)})
-    p.on_event((), "updates", {"intake": {"messages": [AIMessage(content="Hello")]}})
-    text = "".join(buf)
-    assert "Hello" in text and "← set_training_goal" in text and "Targets: 14 weeks" in text
-    assert text.count("Hello") == 1 and "[intake]" not in text
-    assert p.interrupt == {"summary": "s", "changes": []}
 
 
 async def test_run_turn_sets_error_on_api_connection_failure():

@@ -107,14 +107,16 @@ approve             apply: one TrainingPeaks call per change, each recorded in p
 
 ## Layout
 
-- `graph/`: `state.py` (PlanningState), `deps.py` (GraphDeps), `llm.py` (model, sub-agent
-  factory), `nodes/` (one file per node), `graph.py` (wiring and route functions),
-  `checkpointer.py` (AsyncPostgresSaver).
+- `graph/`: `state.py` (PlanningState and the `STATE_TYPES` its checkpointer registers),
+  `deps.py` (GraphDeps), `llm.py` (model), `nodes/` (one file per node), `graph.py` (wiring and
+  route functions). The sub-agent factory, the Postgres checkpointer and the turn printer come
+  from `tri_core.harness`.
 - `planning/`: `models.py`, `periodization.py` (every tunable number), `targets.py` (goal +
   fitness -> week targets, pure), `validate.py` (week rules, pure), `tp_calls.py`
   (`CalendarChange` -> TrainingPeaks tool call, pure).
 - `tools/goal.py`, `prompts/`: what the intake and design nodes give the model.
-- `repl.py`: terminal I/O, event rendering, the review dialogue, YAML edit round trip.
+- `repl.py`: terminal I/O over `tri_core.harness.turns`, the review dialogue, YAML edit round
+  trip.
 - `repo.py`: the four planning tables (`migrations/002_planning.sql`, `003_*.sql`).
 - `testing.py`: `FakeTp`, `NoCommit`, canned goal and week payloads for tests.
 

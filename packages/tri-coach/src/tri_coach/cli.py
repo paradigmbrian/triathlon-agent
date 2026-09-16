@@ -46,14 +46,14 @@ def _today() -> date:
 def ready(settings: CoachSettings) -> str | None:
     """Why chat cannot start, or None when the key, checkpointer and store are all there."""
     from tri_coach.graph.checkpointer import SETUP_HINT, checkpointer_ready
-    from tri_nutrition import store as S
+    from tri_core.harness.persistence import STORE_SETUP_HINT, store_ready
 
     if not settings.anthropic_api_key:
         return "ANTHROPIC_API_KEY is not set in .env"
     if not checkpointer_ready(settings.database_url):
         return SETUP_HINT
-    if not S.store_ready(settings.database_url):
-        return S.STORE_SETUP_HINT
+    if not store_ready(settings.database_url):
+        return STORE_SETUP_HINT
     return None
 
 
@@ -74,7 +74,7 @@ async def _open_graph(*, no_live: bool) -> AsyncIterator[tuple[Any, Any, Any]]:
     from tri_coach.graph.graph import build_graph
     from tri_coach.graph.llm import make_model
     from tri_coach.servers import open_servers
-    from tri_nutrition import store as S
+    from tri_core.harness.persistence import open_store
 
     settings = get_coach_settings()
     code = _ready(settings)
@@ -83,7 +83,7 @@ async def _open_graph(*, no_live: bool) -> AsyncIterator[tuple[Any, Any, Any]]:
     async with AsyncExitStack() as stack:
         servers = await open_servers(stack, settings, no_live=no_live, log=lambda m: _out(m + "\n"))
         saver = await stack.enter_async_context(open_checkpointer(settings.database_url))
-        store = await stack.enter_async_context(S.open_store(settings.database_url))
+        store = await stack.enter_async_context(open_store(settings.database_url))
         deps = make_deps(settings, make_model(settings), servers)
         yield build_graph(deps, saver, store), store, servers
 
@@ -243,13 +243,13 @@ def memory(
 
 async def _memory(*, forget: str | None) -> int:
     from tri_coach import memory as M
-    from tri_nutrition import store as S
+    from tri_core.harness.persistence import STORE_SETUP_HINT, open_store, store_ready
 
     settings = get_coach_settings()
-    if not S.store_ready(settings.database_url):
-        console.print(S.STORE_SETUP_HINT, style="red")
+    if not store_ready(settings.database_url):
+        console.print(STORE_SETUP_HINT, style="red")
         return 2
-    async with S.open_store(settings.database_url) as store:
+    async with open_store(settings.database_url) as store:
         if forget:
             ok = await M.forget_entry(store, forget)
             _out(("forgot " if ok else "no entry ") + forget + "\n")
@@ -320,15 +320,15 @@ def reset(
 async def reset_thread(settings: CoachSettings, *, forget_memory: bool) -> str:
     from tri_coach import memory as M
     from tri_coach.graph.checkpointer import checkpointer_ready, open_checkpointer
-    from tri_nutrition import store as S
+    from tri_core.harness.persistence import open_store, store_ready
 
     parts = []
     if checkpointer_ready(settings.database_url):
         async with open_checkpointer(settings.database_url) as saver:
             await saver.adelete_thread(THREAD_ID)
         parts.append("thread cleared")
-    if forget_memory and S.store_ready(settings.database_url):
-        async with S.open_store(settings.database_url) as store:
+    if forget_memory and store_ready(settings.database_url):
+        async with open_store(settings.database_url) as store:
             await M.clear(store)
         parts.append("memory forgotten")
     return "reset: " + (", ".join(parts) if parts else "nothing to do")

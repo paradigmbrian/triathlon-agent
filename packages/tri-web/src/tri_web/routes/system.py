@@ -7,7 +7,7 @@ import asyncio
 from fastapi import APIRouter, Request
 
 from tri_coach.graph.checkpointer import checkpointer_ready
-from tri_nutrition.store import store_ready
+from tri_core.harness.persistence import store_ready
 from tri_web.schemas import Readiness, StatusOut
 
 router = APIRouter()

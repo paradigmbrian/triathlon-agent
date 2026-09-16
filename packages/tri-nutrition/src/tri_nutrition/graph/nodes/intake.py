@@ -10,9 +10,9 @@ from langchain_core.messages import AnyMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 
 from tri_core.db.sql_tool import make_query_tool
+from tri_core.harness.agents import make_subagent
 from tri_nutrition.allowlist import INTAKE_READ_TOOLS
 from tri_nutrition.graph.deps import GraphDeps
-from tri_nutrition.graph.llm import make_subagent
 from tri_nutrition.graph.state import NutritionState
 from tri_nutrition.prompts.intake import render_intake_prompt
 from tri_nutrition.tools.garmin import make_garmin_read_tools
