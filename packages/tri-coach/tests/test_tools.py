@@ -361,3 +361,38 @@ async def test_ask_analyst_reports_a_failure_as_its_tool_result_instead_of_raisi
     result = await ask.ainvoke({"question": "what is my CTL?"})
     assert "RuntimeError" in result and "db is down" in result
     assert "do not guess" in result and analyst.calls == 0
+
+
+EXPECTED_ANALYST_DESCRIPTION = (
+    "Ask the analyst about past sessions, trends, readiness, sleep, HRV, body composition,\n"
+    "logged intake against nutrition targets, or how training compares to plan. It reads the\n"
+    "database and the devices; it changes nothing. Ask one specific question at a time."
+)
+EXPECTED_WELLNESS_DESCRIPTION = (
+    "Ask the lab interpreter about the athlete's lab panels: a marker's value against its\n"
+    "functional range, what is outside optimal and why, the retest plan, supplements, or\n"
+    "whether a symptom could be lab-related. It reads stored panels and reports; it changes\n"
+    "nothing. Ask one specific question at a time."
+)
+
+
+def test_ask_tool_names_descriptions_and_schemas_are_unchanged(registry):
+    def unreachable():
+        raise AssertionError("building a tool must not connect")
+
+    analyst = make_analyst_tool(
+        ScriptedChatModel(script=[]), [], unreachable, lambda: date(2026, 9, 14)
+    )
+    wellness = make_wellness_tool(
+        ScriptedChatModel(script=[]),
+        unreachable,
+        "postgresql://unused/db",
+        registry,
+        lambda: date(2026, 9, 14),
+    )
+    assert (analyst.name, analyst.description) == ("ask_analyst", EXPECTED_ANALYST_DESCRIPTION)
+    assert (wellness.name, wellness.description) == ("ask_wellness", EXPECTED_WELLNESS_DESCRIPTION)
+    for t in (analyst, wellness):
+        schema = t.tool_call_schema.model_json_schema()
+        assert schema["title"] == t.name and schema["required"] == ["question"]
+        assert schema["properties"] == {"question": {"title": "Question", "type": "string"}}
