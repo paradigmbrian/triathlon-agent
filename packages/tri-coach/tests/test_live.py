@@ -9,11 +9,12 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.store.memory import InMemoryStore
 
 from tri_coach.config import CoachSettings
-from tri_coach.graph.checkpointer import make_serde
 from tri_coach.graph.deps import make_deps
 from tri_coach.graph.graph import build_graph
 from tri_coach.graph.llm import make_model
+from tri_coach.graph.state import STATE_TYPES
 from tri_coach.servers import open_servers
+from tri_core.harness.persistence import make_serde
 
 pytestmark = pytest.mark.live
 
@@ -27,7 +28,7 @@ async def test_one_turn_answers_through_the_analyst_and_consults_nothing():
         assert servers.garmin is not None and servers.tp is not None, "both servers must be up"
         graph = build_graph(
             make_deps(settings, make_model(settings), servers),
-            InMemorySaver(serde=make_serde()),
+            InMemorySaver(serde=make_serde(STATE_TYPES)),
             InMemoryStore(),
         )
         cfg = {"configurable": {"thread_id": "coach-live"}, "recursion_limit": 60}

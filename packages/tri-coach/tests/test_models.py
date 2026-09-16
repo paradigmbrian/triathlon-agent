@@ -4,8 +4,9 @@ import pytest
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
 from tri_coach.allowlist import ANALYST_GARMIN_TOOLS, ANALYST_TP_TOOLS, GARMIN_TOOLS, TP_TOOLS
-from tri_coach.graph.checkpointer import make_serde
+from tri_coach.graph.state import STATE_TYPES
 from tri_coach.models import ApplyReport, Brief, ChangeSet, Proposal, ReviewDecision
+from tri_core.harness.persistence import make_serde
 from tri_nutrition.nutrition.models import NutritionChange
 from tri_planning.planning.models import CalendarChange
 
@@ -120,7 +121,7 @@ def test_allowlists_are_unions_without_duplicates():
 
 
 def test_serde_round_trips_state_types():
-    serde = make_serde()
+    serde = make_serde(STATE_TYPES)
     assert isinstance(serde, JsonPlusSerializer)
     p = Proposal.model_validate(
         {"id": "p1", "domain": "nutrition", "summary": "s", "changes": [nutrition_change()]}

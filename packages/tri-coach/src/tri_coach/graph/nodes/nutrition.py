@@ -17,7 +17,7 @@ from langgraph.errors import GraphBubbleUp
 from tri_coach.graph.nodes.planning import result_message
 from tri_coach.graph.state import CoachState
 from tri_coach.models import Proposal
-from tri_coach.text import last_ai_text
+from tri_core.harness.messages import last_ai_text
 from tri_nutrition.prompts.checkin import BRIEF_PREFIX
 
 FOLLOW_ON = "[follow-on]"

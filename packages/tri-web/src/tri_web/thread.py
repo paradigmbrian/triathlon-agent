@@ -10,7 +10,8 @@ from typing import Any, Literal
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 from pydantic import BaseModel
 
-from tri_coach.repl import paused_review, text_of
+from tri_coach.repl import paused_review
+from tri_core.harness.messages import text_of
 
 CONSULTS = {"consult_planning": "planning", "consult_nutrition": "nutrition"}
 REPORT_PREFIXES = ("[review]", "[follow-on]", "Review rejected:")

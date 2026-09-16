@@ -1,5 +1,6 @@
 import logging
 from datetime import date
+from typing import Any
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
@@ -8,10 +9,12 @@ from langgraph.types import Command
 
 from tri_coach import memory as M
 from tri_coach.graph import nodes
-from tri_coach.graph.checkpointer import make_serde
 from tri_coach.graph.graph import after_review, build_graph
+from tri_coach.graph.state import STATE_TYPES
 from tri_coach.models import ReviewDecision
 from tri_coach.testing import CFG, consult, move_call, propose, seed_active_plan
+from tri_core.harness.agents import one_tool_call_at_a_time
+from tri_core.harness.persistence import make_serde
 from tri_core.testing import ScriptedChatModel, tool_call
 from tri_planning.testing import FakeTp
 from tri_wellness.testing import seed_panel
@@ -28,7 +31,7 @@ def graph_for(make_deps, mem_store, *, tp=None, **scripts):
         **{k: scripts.get(k, []) for k in ("coach", "planning", "nutrition", "analyst")}
     )
     deps = make_deps(tp=tp, **models)
-    return build_graph(deps, InMemorySaver(serde=make_serde()), mem_store), models
+    return build_graph(deps, InMemorySaver(serde=make_serde(STATE_TYPES)), mem_store), models
 
 
 async def test_pure_question_uses_the_analyst_and_ends_without_a_handoff(
@@ -185,10 +188,10 @@ def _recording(monkeypatch):
     prompts: list[str] = []
     real = nodes.coach.make_subagent
 
-    def record(model, tools, system_prompt):
+    def record(model, tools, system_prompt, **kwargs):
         bound.append([t.name for t in tools])
         prompts.append(system_prompt)
-        return real(model, tools, system_prompt)
+        return real(model, tools, system_prompt, **kwargs)
 
     monkeypatch.setattr(nodes.coach, "make_subagent", record)
     return bound, prompts
@@ -305,7 +308,7 @@ async def test_lab_question_uses_the_wellness_consult_and_ends_without_a_handoff
         ],
     )
     deps = make_deps(registry=registry, **models)
-    graph = build_graph(deps, InMemorySaver(serde=make_serde()), mem_store)
+    graph = build_graph(deps, InMemorySaver(serde=make_serde(STATE_TYPES)), mem_store)
     out = await graph.ainvoke({"messages": [HumanMessage("how is my ferritin?")]}, CFG)
     tool_msgs = [m for m in out["messages"] if isinstance(m, ToolMessage)]
     assert [m.name for m in tool_msgs] == ["ask_wellness"]
@@ -329,3 +332,21 @@ async def test_wellness_tool_is_absent_when_labs_are_not_configured(
     await graph.ainvoke({"messages": [HumanMessage("hi")]}, CFG)
     assert "ask_wellness" not in bound[0] and "ask_analyst" in bound[0]
     assert "Labs: not configured" in prompts[0]
+
+
+async def test_the_coach_node_disables_parallel_tool_calls(
+    nocommit, make_deps, mem_store, monkeypatch
+):
+    """Spec S6.4: the real coach node builds its sub-agent with
+    middleware=[one_tool_call_at_a_time]."""
+    captured: list[Any] = []
+    real = nodes.coach.make_subagent
+
+    def record(model, tools, system_prompt, **kwargs):
+        captured.append(kwargs.get("middleware"))
+        return real(model, tools, system_prompt, **kwargs)
+
+    monkeypatch.setattr(nodes.coach, "make_subagent", record)
+    graph, _ = graph_for(make_deps, mem_store, coach=[AIMessage(content="Hello.")])
+    await graph.ainvoke({"messages": [HumanMessage("hi")]}, CFG)
+    assert captured == [[one_tool_call_at_a_time]]

@@ -8,26 +8,15 @@ from langchain_core.tools import tool
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
-from tri_coach.graph.llm import make_subagent
 from tri_coach.models import Brief, ProposalRequest
-from tri_coach.text import last_ai_text
 from tri_coach.tools.analyst import make_analyst_tool
-from tri_coach.tools.handoff import make_handoff_tools, turn_messages
+from tri_coach.tools.handoff import make_handoff_tools
 from tri_coach.tools.wellness import make_wellness_tool, wellness_tools
 from tri_core.config import Settings
+from tri_core.harness.agents import make_subagent, one_tool_call_at_a_time
+from tri_core.harness.messages import last_ai_text
 from tri_core.testing import ScriptedChatModel, tool_call
 from tri_wellness.testing import seed_panel
-
-
-def test_turn_messages_is_everything_after_the_last_human_message():
-    h1, a1, h2 = HumanMessage("a", id="1"), AIMessage("b", id="2"), HumanMessage("c", id="3")
-    a2 = AIMessage(
-        "", id="4", tool_calls=[{"name": "x", "args": {}, "id": "c1", "type": "tool_call"}]
-    )
-    t2 = ToolMessage("r", tool_call_id="c1", id="5")
-    assert turn_messages([h1, a1, h2, a2, t2]) == [a2, t2]
-    assert turn_messages([h1, a1]) == [a1]
-    assert turn_messages([]) == []
 
 
 class Outer(TypedDict, total=False):
@@ -40,7 +29,7 @@ class Outer(TypedDict, total=False):
 def outer_graph(model, tools):
     """The shape the coach graph uses: a node function wraps the agent; planning, nutrition and
     review are reachable only through the tools' Commands."""
-    agent = make_subagent(model, tools, "sys")
+    agent = make_subagent(model, tools, "sys", middleware=[one_tool_call_at_a_time])
 
     async def coach(state: Outer) -> dict[str, Any]:
         before = state.get("messages", [])
@@ -361,3 +350,38 @@ async def test_ask_analyst_reports_a_failure_as_its_tool_result_instead_of_raisi
     result = await ask.ainvoke({"question": "what is my CTL?"})
     assert "RuntimeError" in result and "db is down" in result
     assert "do not guess" in result and analyst.calls == 0
+
+
+EXPECTED_ANALYST_DESCRIPTION = (
+    "Ask the analyst about past sessions, trends, readiness, sleep, HRV, body composition,\n"
+    "logged intake against nutrition targets, or how training compares to plan. It reads the\n"
+    "database and the devices; it changes nothing. Ask one specific question at a time."
+)
+EXPECTED_WELLNESS_DESCRIPTION = (
+    "Ask the lab interpreter about the athlete's lab panels: a marker's value against its\n"
+    "functional range, what is outside optimal and why, the retest plan, supplements, or\n"
+    "whether a symptom could be lab-related. It reads stored panels and reports; it changes\n"
+    "nothing. Ask one specific question at a time."
+)
+
+
+def test_ask_tool_names_descriptions_and_schemas_are_unchanged(registry):
+    def unreachable():
+        raise AssertionError("building a tool must not connect")
+
+    analyst = make_analyst_tool(
+        ScriptedChatModel(script=[]), [], unreachable, lambda: date(2026, 9, 14)
+    )
+    wellness = make_wellness_tool(
+        ScriptedChatModel(script=[]),
+        unreachable,
+        "postgresql://unused/db",
+        registry,
+        lambda: date(2026, 9, 14),
+    )
+    assert (analyst.name, analyst.description) == ("ask_analyst", EXPECTED_ANALYST_DESCRIPTION)
+    assert (wellness.name, wellness.description) == ("ask_wellness", EXPECTED_WELLNESS_DESCRIPTION)
+    for t in (analyst, wellness):
+        schema = t.tool_call_schema.model_json_schema()
+        assert schema["title"] == t.name and schema["required"] == ["question"]
+        assert schema["properties"] == {"question": {"title": "Question", "type": "string"}}

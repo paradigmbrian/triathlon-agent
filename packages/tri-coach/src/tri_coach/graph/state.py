@@ -16,6 +16,8 @@ from tri_coach.models import (
     ProposalRequest,
     ReviewDecision,
 )
+from tri_nutrition.nutrition.models import NutritionChange
+from tri_planning.planning.models import CalendarChange, PlannedSession
 
 
 class CoachState(TypedDict, total=False):
@@ -29,3 +31,18 @@ class CoachState(TypedDict, total=False):
     review_decision: ReviewDecision | None
     reports: list[ApplyReport]
     last_error: str | None
+
+
+# Pydantic models that live in CoachState. Registering them keeps the checkpointer from
+# warning (and, in strict mode, refusing) when it deserializes them.
+STATE_TYPES: tuple[type, ...] = (
+    Brief,
+    Proposal,
+    ProposalRequest,
+    ChangeSet,
+    ReviewDecision,
+    ApplyReport,
+    CalendarChange,
+    PlannedSession,
+    NutritionChange,
+)

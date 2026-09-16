@@ -8,20 +8,23 @@ import inspect
 from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
 from datetime import date
-from uuid import uuid4
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import HumanMessage
-from langchain_core.tools import BaseTool, StructuredTool
+from langchain_core.tools import BaseTool
 from langgraph.checkpoint.memory import InMemorySaver
-from langgraph.errors import GraphBubbleUp
 
 from tri_analyze.agent import build_agent
 from tri_analyze.repo import load_athlete_context
-from tri_coach.text import last_ai_text
 from tri_core.db.repo import Conn
+from tri_core.harness.agent_tool import Invocation, agent_tool
 
 ANALYST_RECURSION_LIMIT = 40
+
+ASK_ANALYST_DESCRIPTION = inspect.cleandoc(
+    """Ask the analyst about past sessions, trends, readiness, sleep, HRV, body composition,
+    logged intake against nutrition targets, or how training compares to plan. It reads the
+    database and the devices; it changes nothing. Ask one specific question at a time."""
+)
 
 
 def make_analyst_tool(
@@ -30,35 +33,17 @@ def make_analyst_tool(
     connect: Callable[[], AbstractContextManager[Conn]],
     today: Callable[[], date],
 ) -> BaseTool:
-    async def ask_analyst(question: str) -> str:
-        """Ask the analyst about past sessions, trends, readiness, sleep, HRV, body composition,
-        logged intake against nutrition targets, or how training compares to plan. It reads the
-        database and the devices; it changes nothing. Ask one specific question at a time."""
-        try:
-            with connect() as conn:
-                ctx = load_athlete_context(conn, today())
-            agent = build_agent(model, tools, InMemorySaver())
-            out = await agent.ainvoke(
-                {"messages": [HumanMessage(question)]},
-                {
-                    "configurable": {"thread_id": f"analyst-{uuid4()}"},
-                    "recursion_limit": ANALYST_RECURSION_LIMIT,
-                },
-                context=ctx,
-            )
-        except GraphBubbleUp:
-            raise  # interrupts and other langgraph control flow must keep propagating
-        except Exception as exc:
-            return (
-                f"The analyst failed ({type(exc).__name__}: {exc}); "
-                "do not guess at the data it could not read."
-            )
-        return last_ai_text(out["messages"]) or (
-            "The analyst returned no answer; ask a narrower question."
-        )
+    def prepare() -> Invocation:
+        with connect() as conn:
+            ctx = load_athlete_context(conn, today())
+        return Invocation(build_agent(model, tools, InMemorySaver()), context=ctx)
 
-    return StructuredTool.from_function(
-        coroutine=ask_analyst,
+    return agent_tool(
         name="ask_analyst",
-        description=inspect.cleandoc(ask_analyst.__doc__ or ""),
+        description=ASK_ANALYST_DESCRIPTION,
+        prepare=prepare,
+        thread_prefix="analyst",
+        recursion_limit=ANALYST_RECURSION_LIMIT,
+        failure="The analyst failed ({error}); do not guess at the data it could not read.",
+        empty="The analyst returned no answer; ask a narrower question.",
     )

@@ -12,23 +12,23 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-import anthropic
 import yaml
 from langchain_core.messages import (
     AIMessage,
     AIMessageChunk,
-    BaseMessage,
     HumanMessage,
     ToolMessage,
 )
 from langgraph.types import Command
 
 from tri_coach.models import Proposal, ReviewDecision
+from tri_core.harness.messages import text_of
+from tri_core.harness.turns import Out as Out  # re-exported: tri_coach.checkin imports it
+from tri_core.harness.turns import format_failure, stream_turn, turn_config
 from tri_nutrition.nutrition.models import NutritionChange
 from tri_nutrition.repl import render_review as render_nutrition
 from tri_planning.repl import render_changes as render_planning
 
-Out = Callable[[str], None]
 CommandFn = Callable[[], Awaitable[str]]
 EditFn = Callable[[list[Proposal]], Awaitable[list[Proposal] | None]]
 
@@ -40,18 +40,6 @@ ROOT_NODES = frozenset({"start", "coach", "planning", "nutrition", "review", "ap
 
 
 Event = tuple[str, dict[str, Any]]
-
-
-def text_of(msg: BaseMessage) -> str:
-    content = msg.content
-    if isinstance(content, str):
-        return content
-    return "".join(
-        str(b.get("text", ""))
-        if isinstance(b, dict) and b.get("type") == "text"
-        else (b if isinstance(b, str) else "")
-        for b in content
-    )
 
 
 def label(namespace: tuple[str, ...]) -> str:
@@ -200,26 +188,19 @@ async def run_turn(
     tags: list[str] | None = None,
     printer: TurnPrinter | None = None,
 ) -> TurnPrinter:
+    """One coach turn. Any failure is printed and kept in `printer.error`; the chat keeps the
+    state at the last checkpoint."""
     printer = printer or TurnPrinter(out)
-    cfg: dict[str, Any] = {"configurable": {"thread_id": thread_id}, "recursion_limit": 60}
-    if tags:
-        cfg["tags"] = list(tags)
-    try:
-        async for namespace, mode, data in graph.astream(
-            payload, config=cfg, stream_mode=["messages", "updates"], subgraphs=True
-        ):
-            printer.on_event(tuple(namespace), mode, data)
-    except anthropic.RateLimitError as exc:
-        printer.error = f"\n[rate limited: {exc}. Wait a moment and try again.]\n"
-        out(printer.error)
-    except anthropic.APIStatusError as exc:
-        printer.error = f"\n[Anthropic API error {exc.status_code}: {exc.message}]\n"
-        out(printer.error)
-    except anthropic.APIConnectionError as exc:
-        printer.error = f"\n[connection error talking to Anthropic: {exc}]\n"
-        out(printer.error)
-    except Exception as exc:  # noqa: BLE001 - the chat keeps the state at the last checkpoint
-        printer.error = f"\n[the turn failed: {type(exc).__name__}: {exc}]\n"
+    failure = await stream_turn(
+        graph,
+        payload,
+        turn_config(thread_id, tags=tags, recursion_limit=60),
+        printer,
+        subgraphs=True,
+        catch_all="the turn failed",
+    )
+    if failure is not None:
+        printer.error = format_failure(failure)
         out(printer.error)
     return printer
 

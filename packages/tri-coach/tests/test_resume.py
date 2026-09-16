@@ -6,10 +6,11 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.types import Command
 
-from tri_coach.graph.checkpointer import checkpointer_ready, open_checkpointer
 from tri_coach.graph.graph import build_graph
+from tri_coach.graph.state import STATE_TYPES
 from tri_coach.testing import consult, move_call, propose, seed_active_plan
 from tri_core.config import Settings
+from tri_core.harness.persistence import checkpointer_ready, open_checkpointer
 from tri_core.testing import ScriptedChatModel
 from tri_planning.testing import FakeTp
 
@@ -37,11 +38,12 @@ async def test_second_process_resumes_the_paused_review(nocommit, make_deps, mem
         )
 
     try:
-        async with open_checkpointer(url) as saver:
+        async with open_checkpointer(url, STATE_TYPES) as saver:
             graph = build_graph(deps(), saver, mem_store)
             out = await graph.ainvoke({"messages": [HumanMessage("do it")]}, cfg)
             assert "__interrupt__" in out
-        async with open_checkpointer(url) as saver2:  # a new process: nothing in memory
+        # a new process: nothing in memory
+        async with open_checkpointer(url, STATE_TYPES) as saver2:
             graph2 = build_graph(deps(), saver2, mem_store)
             snap = await graph2.aget_state(cfg)
             assert snap.next == ("review",)
@@ -49,5 +51,5 @@ async def test_second_process_resumes_the_paused_review(nocommit, make_deps, mem
             out = await graph2.ainvoke(Command(resume={"action": "approve"}), cfg)
             assert [c[0] for c in tp.calls] == ["tp_update_workout"] and out["pending"] is None
     finally:
-        async with open_checkpointer(url) as saver3:
+        async with open_checkpointer(url, STATE_TYPES) as saver3:
             await saver3.adelete_thread(thread)

@@ -5,11 +5,12 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 
-from tri_coach.graph.checkpointer import make_serde
 from tri_coach.graph.graph import build_graph
 from tri_coach.graph.nodes.apply import _regeneration_due, merge_held
+from tri_coach.graph.state import STATE_TYPES
 from tri_coach.models import ApplyReport, ChangeSet, Proposal
 from tri_coach.testing import CFG, consult, move_call, propose, seed_active_plan
+from tri_core.harness.persistence import make_serde
 from tri_core.testing import ScriptedChatModel, tool_call
 from tri_nutrition import repo as nrepo
 from tri_nutrition import store as S
@@ -29,7 +30,7 @@ def graph_for(make_deps, mem_store, *, tp=None, garmin=None, **scripts):
         for k in ("coach", "planning", "nutrition", "analyst")
     }
     deps = make_deps(tp=tp, garmin=garmin, **models)
-    return build_graph(deps, InMemorySaver(serde=make_serde()), mem_store), models
+    return build_graph(deps, InMemorySaver(serde=make_serde(STATE_TYPES)), mem_store), models
 
 
 async def test_reject_returns_to_the_coach_with_the_note(nocommit, make_deps, mem_store):
@@ -172,9 +173,9 @@ async def test_partial_apply_keeps_the_remainder_pending_and_shows_it_next_turn(
     prompts: list[str] = []
     real = nodes.coach.make_subagent
 
-    def record(model, tools, system_prompt):
+    def record(model, tools, system_prompt, **kwargs):
         prompts.append(system_prompt)
-        return real(model, tools, system_prompt)
+        return real(model, tools, system_prompt, **kwargs)
 
     monkeypatch.setattr(nodes.coach, "make_subagent", record)
     seed_active_plan(nocommit)

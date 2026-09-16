@@ -1,9 +1,11 @@
 """The routing eval without LangSmith, a database or a real model."""
 
 from datetime import date
+from typing import Any
 
 from langchain_core.messages import AIMessage
 
+from tri_coach.evals import target as target_module
 from tri_coach.evals.cases import CASES, ROUTES
 from tri_coach.evals.evaluators import (
     make_brief_judge,
@@ -15,6 +17,7 @@ from tri_coach.evals.target import classify, make_target, stub_tools
 from tri_coach.prompts.coach import CHECKIN_REQUEST
 from tri_coach.tools.analyst import make_analyst_tool
 from tri_coach.tools.wellness import make_wellness_tool
+from tri_core.harness.agents import one_tool_call_at_a_time
 from tri_core.testing import ScriptedChatModel, tool_call
 from tri_wellness.ranges.registry import load_registry
 
@@ -116,6 +119,23 @@ async def test_target_records_the_calls_briefs_and_route():
         "comment": "route planning; expected one of planning",
     }
     assert no_unrequested_adjustment(out, c.outputs())["score"] is None
+
+
+async def test_the_eval_target_disables_parallel_tool_calls(monkeypatch):
+    """Spec S6.4: run_case builds its sub-agent with middleware=[one_tool_call_at_a_time], same
+    as the real coach node."""
+    captured: list[Any] = []
+    real = target_module.make_subagent
+
+    def record(model, tools, system_prompt, **kwargs):
+        captured.append(kwargs.get("middleware"))
+        return real(model, tools, system_prompt, **kwargs)
+
+    monkeypatch.setattr(target_module, "make_subagent", record)
+    c = case("tsb_from_context")
+    model = ScriptedChatModel(script=[AIMessage(content="TSB is -8.")])
+    await make_target(model)(c.inputs())
+    assert captured == [[one_tool_call_at_a_time]]
 
 
 async def test_a_pure_question_answered_from_context_consults_nothing():

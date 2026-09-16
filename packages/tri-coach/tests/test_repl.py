@@ -17,7 +17,6 @@ from tri_coach.repl import (
     proposals_to_yaml,
     render_review,
     run_turn,
-    text_of,
     where_of,
 )
 
@@ -369,6 +368,24 @@ async def test_run_turn_reports_a_non_anthropic_failure_instead_of_raising():
     assert "psycopg went away" in "".join(buf)
 
 
+async def test_run_turn_formats_the_failure_text_with_the_60_step_recursion_limit():
+    class Boom:
+        def __init__(self) -> None:
+            self.configs: list[Any] = []
+
+        async def astream(self, payload, config=None, stream_mode=None, subgraphs=False):
+            self.configs.append(config)
+            raise RuntimeError("boom")
+            yield  # pragma: no cover - makes this an async generator
+
+    graph = Boom()
+    buf: list[str] = []
+    printer = await run_turn(graph, {"messages": []}, "coach", buf.append)
+    assert printer.error == "\n[the turn failed: RuntimeError: boom]\n"
+    assert printer.error in "".join(buf)
+    assert graph.configs[0]["recursion_limit"] == 60
+
+
 def test_printer_prints_the_follow_on_message_once():
     out: list[str] = []
     p = TurnPrinter(out.append)
@@ -516,15 +533,6 @@ def test_classifier_emits_one_event_per_visible_thing():
     assert (
         c.classify((), "updates", {"coach": {"messages": [AIMessage(content="Your CTL is 45.")]}})
         == []
-    )
-
-
-def test_text_of_joins_text_blocks():
-    assert (
-        text_of(
-            AIMessage(content=[{"type": "text", "text": "a"}, {"type": "tool_use", "id": "x"}, "b"])
-        )
-        == "ab"
     )
 
 
