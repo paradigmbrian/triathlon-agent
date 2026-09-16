@@ -12,7 +12,8 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from tri_analyze.repo import AthleteContext
-from tri_core.harness.turns import Out, run_agent_turn
+from tri_core.harness.turns import Out as Out
+from tri_core.harness.turns import run_agent_turn
 
 Command = Callable[[], Awaitable[str]]
 

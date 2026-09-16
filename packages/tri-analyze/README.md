@@ -21,7 +21,7 @@ A LangChain agent is three things: a chat model, a list of tools, and a loop.
 ### The model, the tools and the loop
 
 `llm.make_model` wraps Claude in `ChatAnthropic` (no `thinking` parameter; adaptive thinking is
-the model default). `agent.build_agent(model, tools, checkpointer)` calls `create_agent` with
+the model default). `agent.build_agent(model, tools, checkpointer)` builds through `tri_core.harness.agents.build_chat_agent`, which calls `create_agent` with
 two middlewares and an `InMemorySaver`, and returns the graph with a run config: tag `analyst`
 and metadata `analyst_prompt_version`. The graph is a state machine with a `model` node and a
 `tools` node and an edge that loops while tool calls exist. The checkpointer stores state per
