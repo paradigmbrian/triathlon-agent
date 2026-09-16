@@ -45,8 +45,12 @@ def _today() -> date:
 
 def ready(settings: CoachSettings) -> str | None:
     """Why chat cannot start, or None when the key, checkpointer and store are all there."""
-    from tri_coach.graph.checkpointer import SETUP_HINT, checkpointer_ready
-    from tri_core.harness.persistence import STORE_SETUP_HINT, store_ready
+    from tri_core.harness.persistence import (
+        SETUP_HINT,
+        STORE_SETUP_HINT,
+        checkpointer_ready,
+        store_ready,
+    )
 
     if not settings.anthropic_api_key:
         return "ANTHROPIC_API_KEY is not set in .env"
@@ -69,12 +73,12 @@ def _ready(settings: CoachSettings) -> int | None:
 @asynccontextmanager
 async def _open_graph(*, no_live: bool) -> AsyncIterator[tuple[Any, Any, Any]]:
     """Yields (graph, store, servers)."""
-    from tri_coach.graph.checkpointer import open_checkpointer
     from tri_coach.graph.deps import make_deps
     from tri_coach.graph.graph import build_graph
     from tri_coach.graph.llm import make_model
+    from tri_coach.graph.state import STATE_TYPES
     from tri_coach.servers import open_servers
-    from tri_core.harness.persistence import open_store
+    from tri_core.harness.persistence import open_checkpointer, open_store
 
     settings = get_coach_settings()
     code = _ready(settings)
@@ -82,7 +86,9 @@ async def _open_graph(*, no_live: bool) -> AsyncIterator[tuple[Any, Any, Any]]:
         raise typer.Exit(code=code)
     async with AsyncExitStack() as stack:
         servers = await open_servers(stack, settings, no_live=no_live, log=lambda m: _out(m + "\n"))
-        saver = await stack.enter_async_context(open_checkpointer(settings.database_url))
+        saver = await stack.enter_async_context(
+            open_checkpointer(settings.database_url, STATE_TYPES)
+        )
         store = await stack.enter_async_context(open_store(settings.database_url))
         deps = make_deps(settings, make_model(settings), servers)
         yield build_graph(deps, saver, store), store, servers
@@ -319,12 +325,17 @@ def reset(
 
 async def reset_thread(settings: CoachSettings, *, forget_memory: bool) -> str:
     from tri_coach import memory as M
-    from tri_coach.graph.checkpointer import checkpointer_ready, open_checkpointer
-    from tri_core.harness.persistence import open_store, store_ready
+    from tri_coach.graph.state import STATE_TYPES
+    from tri_core.harness.persistence import (
+        checkpointer_ready,
+        open_checkpointer,
+        open_store,
+        store_ready,
+    )
 
     parts = []
     if checkpointer_ready(settings.database_url):
-        async with open_checkpointer(settings.database_url) as saver:
+        async with open_checkpointer(settings.database_url, STATE_TYPES) as saver:
             await saver.adelete_thread(THREAD_ID)
         parts.append("thread cleared")
     if forget_memory and store_ready(settings.database_url):

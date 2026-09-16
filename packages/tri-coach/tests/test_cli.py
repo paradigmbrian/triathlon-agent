@@ -15,10 +15,10 @@ def test_ready_names_the_missing_piece(monkeypatch):
     assert ready(CoachSettings(_env_file=None, anthropic_api_key=None)) == (
         "ANTHROPIC_API_KEY is not set in .env"
     )
-    monkeypatch.setattr("tri_coach.graph.checkpointer.checkpointer_ready", lambda url: False)
+    monkeypatch.setattr("tri_core.harness.persistence.checkpointer_ready", lambda url: False)
     s = CoachSettings(_env_file=None, anthropic_api_key="k", database_url="postgresql://x/y")
     assert ready(s) is not None and "setup_checkpointer" in ready(s)
-    monkeypatch.setattr("tri_coach.graph.checkpointer.checkpointer_ready", lambda url: True)
+    monkeypatch.setattr("tri_core.harness.persistence.checkpointer_ready", lambda url: True)
     monkeypatch.setattr("tri_core.harness.persistence.store_ready", lambda url: False)
     assert ready(s) is not None and "LangGraph store tables are missing" in ready(s)
     monkeypatch.setattr("tri_core.harness.persistence.store_ready", lambda url: True)

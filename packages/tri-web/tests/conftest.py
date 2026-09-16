@@ -14,11 +14,12 @@ import pytest
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.store.memory import InMemoryStore
 
-from tri_coach.graph.checkpointer import make_serde
 from tri_coach.graph.graph import build_graph
+from tri_coach.graph.state import STATE_TYPES
 from tri_coach.servers import Servers
 from tri_coach.testing import make_test_deps
 from tri_core.config import Settings
+from tri_core.harness.persistence import make_serde
 from tri_core.testing import ScriptedChatModel
 from tri_planning.testing import MONDAY, NoCommit
 from tri_web.app import create_app
@@ -56,7 +57,7 @@ def runtime(nocommit, mem_store) -> Callable[..., Runtime]:
             tp=tp,
             today=today,
         )
-        graph = build_graph(deps, InMemorySaver(serde=make_serde()), mem_store)
+        graph = build_graph(deps, InMemorySaver(serde=make_serde(STATE_TYPES)), mem_store)
         settings = WebSettings(
             _env_file=None, anthropic_api_key="test-key", database_url=Settings().test_database_url
         )

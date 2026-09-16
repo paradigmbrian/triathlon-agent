@@ -8,10 +8,11 @@ from langgraph.types import Command
 
 from tri_coach import memory as M
 from tri_coach.graph import nodes
-from tri_coach.graph.checkpointer import make_serde
 from tri_coach.graph.graph import after_review, build_graph
+from tri_coach.graph.state import STATE_TYPES
 from tri_coach.models import ReviewDecision
 from tri_coach.testing import CFG, consult, move_call, propose, seed_active_plan
+from tri_core.harness.persistence import make_serde
 from tri_core.testing import ScriptedChatModel, tool_call
 from tri_planning.testing import FakeTp
 from tri_wellness.testing import seed_panel
@@ -28,7 +29,7 @@ def graph_for(make_deps, mem_store, *, tp=None, **scripts):
         **{k: scripts.get(k, []) for k in ("coach", "planning", "nutrition", "analyst")}
     )
     deps = make_deps(tp=tp, **models)
-    return build_graph(deps, InMemorySaver(serde=make_serde()), mem_store), models
+    return build_graph(deps, InMemorySaver(serde=make_serde(STATE_TYPES)), mem_store), models
 
 
 async def test_pure_question_uses_the_analyst_and_ends_without_a_handoff(
@@ -305,7 +306,7 @@ async def test_lab_question_uses_the_wellness_consult_and_ends_without_a_handoff
         ],
     )
     deps = make_deps(registry=registry, **models)
-    graph = build_graph(deps, InMemorySaver(serde=make_serde()), mem_store)
+    graph = build_graph(deps, InMemorySaver(serde=make_serde(STATE_TYPES)), mem_store)
     out = await graph.ainvoke({"messages": [HumanMessage("how is my ferritin?")]}, CFG)
     tool_msgs = [m for m in out["messages"] if isinstance(m, ToolMessage)]
     assert [m.name for m in tool_msgs] == ["ask_wellness"]

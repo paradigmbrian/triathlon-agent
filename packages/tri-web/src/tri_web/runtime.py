@@ -52,19 +52,21 @@ async def open_runtime(
     """Readiness, then servers, checkpointer, store, deps, graph; everything closes with the
     exit stack. `model` overrides make_model (tests)."""
     from tri_coach.cli import ready
-    from tri_coach.graph.checkpointer import open_checkpointer
     from tri_coach.graph.deps import make_deps
     from tri_coach.graph.graph import build_graph
     from tri_coach.graph.llm import make_model
+    from tri_coach.graph.state import STATE_TYPES
     from tri_coach.servers import open_servers
-    from tri_core.harness.persistence import open_store
+    from tri_core.harness.persistence import open_checkpointer, open_store
 
     problem = ready(settings)
     if problem is not None:
         raise NotReady(problem)
     async with AsyncExitStack() as stack:
         servers = await open_servers(stack, settings, no_live=no_live, log=log)
-        saver = await stack.enter_async_context(open_checkpointer(settings.database_url))
+        saver = await stack.enter_async_context(
+            open_checkpointer(settings.database_url, STATE_TYPES)
+        )
         store = await stack.enter_async_context(open_store(settings.database_url))
         deps = make_deps(settings, model or make_model(settings), servers)
         yield Runtime(
