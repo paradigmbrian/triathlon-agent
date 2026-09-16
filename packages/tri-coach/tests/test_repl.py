@@ -17,7 +17,6 @@ from tri_coach.repl import (
     proposals_to_yaml,
     render_review,
     run_turn,
-    text_of,
     where_of,
 )
 
@@ -516,15 +515,6 @@ def test_classifier_emits_one_event_per_visible_thing():
     assert (
         c.classify((), "updates", {"coach": {"messages": [AIMessage(content="Your CTL is 45.")]}})
         == []
-    )
-
-
-def test_text_of_joins_text_blocks():
-    assert (
-        text_of(
-            AIMessage(content=[{"type": "text", "text": "a"}, {"type": "tool_use", "id": "x"}, "b"])
-        )
-        == "ab"
     )
 
 
