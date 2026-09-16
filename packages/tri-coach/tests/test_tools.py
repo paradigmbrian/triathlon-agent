@@ -10,24 +10,13 @@ from langgraph.graph.message import add_messages
 
 from tri_coach.models import Brief, ProposalRequest
 from tri_coach.tools.analyst import make_analyst_tool
-from tri_coach.tools.handoff import make_handoff_tools, turn_messages
+from tri_coach.tools.handoff import make_handoff_tools
 from tri_coach.tools.wellness import make_wellness_tool, wellness_tools
 from tri_core.config import Settings
 from tri_core.harness.agents import make_subagent, one_tool_call_at_a_time
 from tri_core.harness.messages import last_ai_text
 from tri_core.testing import ScriptedChatModel, tool_call
 from tri_wellness.testing import seed_panel
-
-
-def test_turn_messages_is_everything_after_the_last_human_message():
-    h1, a1, h2 = HumanMessage("a", id="1"), AIMessage("b", id="2"), HumanMessage("c", id="3")
-    a2 = AIMessage(
-        "", id="4", tool_calls=[{"name": "x", "args": {}, "id": "c1", "type": "tool_call"}]
-    )
-    t2 = ToolMessage("r", tool_call_id="c1", id="5")
-    assert turn_messages([h1, a1, h2, a2, t2]) == [a2, t2]
-    assert turn_messages([h1, a1]) == [a1]
-    assert turn_messages([]) == []
 
 
 class Outer(TypedDict, total=False):
