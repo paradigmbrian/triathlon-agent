@@ -3,9 +3,10 @@ from datetime import date
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from langgraph.types import Command, Interrupt
 
+from tri_core.harness.turns import GraphTurnPrinter
 from tri_nutrition.nutrition.models import DayTarget, NutritionChange
 from tri_nutrition.repl import (
-    TurnPrinter,
+    STREAMED_NODES,
     changes_from_yaml,
     changes_to_yaml,
     chat_loop,
@@ -76,7 +77,7 @@ def test_render_targets_and_review():
 
 def test_turn_printer_handles_subgraph_events_and_interrupt():
     buf = []
-    p = TurnPrinter(buf.append)
+    p = GraphTurnPrinter(buf.append, STREAMED_NODES)
     meta = {"langgraph_node": "model"}
     p.on_event(("checkin:abc",), "messages", (AIMessageChunk(content="Hel"), meta))
     p.on_event(("checkin:abc",), "messages", (AIMessageChunk(content="lo"), meta))
