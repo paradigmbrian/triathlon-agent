@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 420" width="1000" height="420" role="img" aria-labelledby="packages-title packages-desc">
+  <title id="packages-title">Packages on tri_core.harness</title>
+  <desc id="packages-desc">Six packages, tri-coach, tri-planning, tri-nutrition, tri-wellness, tri-analyze and tri-web, each keep their own graphs, tools, prompts and a few turn pieces, and each imports from tri_core.harness. The harness has six modules: agents, agent_tool, handoff, messages, persistence and turns. Every package except tri-web carries its own make_model.</desc>
+  <style>
+    svg {
+      --surface: #F8FAF9; --ink: #16201E; --muted: #5A6A66; --rule: #C3CECB;
+      --acc: #0E6B66; --acc-tint: #DAEAE7;
+      --sans: -apple-system, "Segoe UI", "Public Sans", Helvetica, Arial, sans-serif;
+      --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      svg {
+        --surface: #151D1C; --ink: #E2EAE8; --muted: #93A39F; --rule: #2C3836;
+        --acc: #5BBDB4; --acc-tint: #15302E;
+      }
+    }
+    .bg { fill: var(--surface); }
+    .b-n { fill: var(--surface); stroke: var(--rule); stroke-width: 1; }
+    .b-acc { fill: var(--acc-tint); stroke: var(--acc); stroke-width: 1.4; }
+    .b-dup { fill: var(--surface); stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+    .ln-acc { fill: none; stroke: var(--acc); stroke-width: 1.4; }
+    .ah-acc { fill: var(--acc); }
+    .t { font: 600 13px var(--sans); fill: var(--ink); }
+    .ss { font: 500 11px var(--sans); fill: var(--ink); }
+    .mh { font: 600 11px var(--mono); fill: var(--ink); }
+    .mi { font: 600 11.5px var(--mono); fill: var(--ink); }
+    .m { font: 400 11px var(--mono); fill: var(--muted); }
+    .m10 { font: 400 10px var(--mono); fill: var(--muted); }
+    .ma { font: 500 11px var(--mono); fill: var(--acc); }
+    .lab { font: 600 10.5px var(--mono); letter-spacing: 0.08em; fill: var(--muted); }
+  </style>
+  <defs>
+    <marker id="packages-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="ah-acc"/></marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1000" height="420"/>
+
+  <text class="lab" x="20" y="24">PACKAGES · WHAT EACH KEEPS</text>
+
+  <!-- package row: 6 × 150 wide, 12 gap, starting x=20 -->
+  <rect class="b-n" x="20" y="40" width="150" height="110" rx="3"/>
+  <text class="mh" x="95" y="62" text-anchor="middle">tri-coach</text>
+  <text class="m10" x="95" y="86" text-anchor="middle">graph · tools · review</text>
+  <text class="m10" x="95" y="104" text-anchor="middle">TurnPrinter</text>
+  <rect class="b-dup" x="35" y="116" width="120" height="20" rx="2"/>
+  <text class="m10" x="95" y="130" text-anchor="middle">make_model</text>
+
+  <rect class="b-n" x="182" y="40" width="150" height="110" rx="3"/>
+  <text class="mh" x="257" y="62" text-anchor="middle">tri-planning</text>
+  <text class="m10" x="257" y="86" text-anchor="middle">graph · prompts</text>
+  <text class="m10" x="257" y="104" text-anchor="middle">run_turn</text>
+  <rect class="b-dup" x="197" y="116" width="120" height="20" rx="2"/>
+  <text class="m10" x="257" y="130" text-anchor="middle">make_model</text>
+
+  <rect class="b-n" x="344" y="40" width="150" height="110" rx="3"/>
+  <text class="mh" x="419" y="62" text-anchor="middle">tri-nutrition</text>
+  <text class="m10" x="419" y="86" text-anchor="middle">graph · Store access</text>
+  <text class="m10" x="419" y="104" text-anchor="middle">run_turn</text>
+  <rect class="b-dup" x="359" y="116" width="120" height="20" rx="2"/>
+  <text class="m10" x="419" y="130" text-anchor="middle">make_model</text>
+
+  <rect class="b-n" x="506" y="40" width="150" height="110" rx="3"/>
+  <text class="mh" x="581" y="62" text-anchor="middle">tri-wellness</text>
+  <text class="m10" x="581" y="86" text-anchor="middle">ingest graph · report</text>
+  <text class="m10" x="581" y="104" text-anchor="middle">_IngestSink</text>
+  <rect class="b-dup" x="521" y="116" width="120" height="20" rx="2"/>
+  <text class="m10" x="581" y="130" text-anchor="middle">make_model</text>
+
+  <rect class="b-n" x="668" y="40" width="150" height="110" rx="3"/>
+  <text class="mh" x="743" y="62" text-anchor="middle">tri-analyze</text>
+  <text class="m10" x="743" y="86" text-anchor="middle">analyst prompt · tools</text>
+  <text class="m10" x="743" y="104" text-anchor="middle">build_agent</text>
+  <rect class="b-dup" x="683" y="116" width="120" height="20" rx="2"/>
+  <text class="m10" x="743" y="130" text-anchor="middle">make_model</text>
+
+  <rect class="b-n" x="830" y="40" width="150" height="110" rx="3"/>
+  <text class="mh" x="905" y="62" text-anchor="middle">tri-web</text>
+  <text class="m10" x="905" y="86" text-anchor="middle">routes · runtime</text>
+  <text class="m10" x="905" y="104" text-anchor="middle">TurnEmitter</text>
+  <text class="m10" x="905" y="130" text-anchor="middle">hosts the coach</text>
+
+  <!-- imports -->
+  <path class="ln-acc" d="M95 150 V197" marker-end="url(#packages-c)"/>
+  <path class="ln-acc" d="M257 150 V197" marker-end="url(#packages-c)"/>
+  <path class="ln-acc" d="M419 150 V197" marker-end="url(#packages-c)"/>
+  <path class="ln-acc" d="M581 150 V197" marker-end="url(#packages-c)"/>
+  <path class="ln-acc" d="M743 150 V197" marker-end="url(#packages-c)"/>
+  <path class="ln-acc" d="M905 150 V197" marker-end="url(#packages-c)"/>
+  <text class="ma" x="103" y="180">imports</text>
+
+  <!-- harness -->
+  <rect class="b-acc" x="20" y="200" width="960" height="166" rx="4"/>
+  <text class="t" x="40" y="226">tri_core.harness</text>
+  <text class="m" x="960" y="226" text-anchor="end">packages/tri-core/src/tri_core/harness/</text>
+
+  <text class="mi" x="40" y="256">agents</text>
+  <text class="m10" x="40" y="274">make_subagent · build_chat_agent</text>
+  <text class="m10" x="40" y="290">one_tool_call_at_a_time</text>
+
+  <text class="mi" x="360" y="256">agent_tool</text>
+  <text class="m10" x="360" y="274">agent_tool · Invocation</text>
+  <text class="m10" x="360" y="290">an agent run as a one-question tool</text>
+
+  <text class="mi" x="664" y="256">handoff</text>
+  <text class="m10" x="664" y="274">handoff · turn_messages · undelivered</text>
+  <text class="m10" x="664" y="290">leave a sub-agent via Command.PARENT</text>
+
+  <text class="mi" x="40" y="320">messages</text>
+  <text class="m10" x="40" y="338">text_of · last_ai_text</text>
+  <text class="m10" x="40" y="354">text out of LangChain messages</text>
+
+  <text class="mi" x="360" y="320">persistence</text>
+  <text class="m10" x="360" y="338">open_checkpointer · open_store · make_serde</text>
+  <text class="m10" x="360" y="354">checkpointer_ready · store_ready · hints</text>
+
+  <text class="mi" x="664" y="320">turns</text>
+  <text class="m10" x="664" y="338">stream_turn · run_agent_turn · run_graph_turn</text>
+  <text class="m10" x="664" y="354">AgentTurnPrinter · GraphTurnPrinter</text>
+
+  <!-- key -->
+  <rect class="b-dup" x="20" y="386" width="40" height="16" rx="2"/>
+  <text class="ss" x="70" y="398">one copy per package</text>
+  <path class="ln-acc" d="M230 394 H266" marker-end="url(#packages-c)"/>
+  <text class="ss" x="276" y="398">imports from the harness</text>
+</svg>

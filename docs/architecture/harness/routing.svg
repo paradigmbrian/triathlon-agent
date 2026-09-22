@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 350" width="1000" height="350" role="img" aria-labelledby="routing-title routing-desc">
+  <title id="routing-title">How the coach graph routes</title>
+  <desc id="routing-desc">From start the run enters coach. Coach hands off to planning or nutrition with consult tools and gets a proposal back, or replies and ends. propose_changes goes to review, which pauses with interrupt. Reject returns to coach. Approve or edit goes to apply, which writes to TrainingPeaks and Garmin, then ends or regenerates nutrition targets.</desc>
+  <style>
+    svg {
+      --surface: #F8FAF9; --ink: #16201E; --muted: #5A6A66; --rule: #C3CECB;
+      --acc: #0E6B66; --acc-tint: #DAEAE7; --w: #B4470F; --w-tint: #F6E4D8;
+      --sans: -apple-system, "Segoe UI", "Public Sans", Helvetica, Arial, sans-serif;
+      --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      svg {
+        --surface: #151D1C; --ink: #E2EAE8; --muted: #93A39F; --rule: #2C3836;
+        --acc: #5BBDB4; --acc-tint: #15302E; --w: #EE8C4E; --w-tint: #3A2518;
+      }
+    }
+    .bg { fill: var(--surface); }
+    .b-n { fill: var(--surface); stroke: var(--rule); stroke-width: 1; }
+    .b-acc { fill: var(--acc-tint); stroke: var(--acc); stroke-width: 1.4; }
+    .b-w { fill: var(--w-tint); stroke: var(--w); stroke-width: 1.4; }
+    .ln { fill: none; stroke: var(--ink); stroke-width: 1.4; }
+    .ln-acc { fill: none; stroke: var(--acc); stroke-width: 1.4; }
+    .ln-w { fill: none; stroke: var(--w); stroke-width: 1.6; }
+    .dash { stroke-dasharray: 5 4; }
+    .ah-ink { fill: var(--ink); }
+    .ah-acc { fill: var(--acc); }
+    .ah-w { fill: var(--w); }
+    .dot-ink { fill: var(--ink); }
+    .ring { fill: none; stroke: var(--ink); stroke-width: 1.4; }
+    .t { font: 600 13px var(--sans); fill: var(--ink); }
+    .s { font: 600 12px var(--sans); fill: var(--ink); }
+    .mi { font: 400 11px var(--mono); fill: var(--ink); }
+    .m10 { font: 400 10px var(--mono); fill: var(--muted); }
+    .ma { font: 500 11px var(--mono); fill: var(--acc); }
+    .mw { font: 500 11px var(--mono); fill: var(--w); }
+    .mw105 { font: 500 10.5px var(--mono); fill: var(--w); }
+  </style>
+  <defs>
+    <marker id="routing-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="ah-ink"/></marker>
+    <marker id="routing-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="ah-acc"/></marker>
+    <marker id="routing-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="ah-w"/></marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1000" height="350"/>
+
+  <circle class="dot-ink" cx="40" cy="180" r="7"/>
+  <text class="m10" x="40" y="206" text-anchor="middle">START</text>
+  <path class="ln" d="M47 180 H77" marker-end="url(#routing-a)"/>
+
+  <rect class="b-n" x="80" y="160" width="100" height="40" rx="3"/>
+  <text class="mi" x="130" y="184" text-anchor="middle">start</text>
+  <path class="ln" d="M180 180 H257" marker-end="url(#routing-a)"/>
+
+  <rect class="b-acc" x="260" y="150" width="140" height="60" rx="3"/>
+  <text class="t" x="330" y="176" text-anchor="middle">coach</text>
+  <text class="m10" x="330" y="195" text-anchor="middle">make_subagent</text>
+
+  <!-- planning handoff -->
+  <rect class="b-n" x="500" y="26" width="150" height="56" rx="3"/>
+  <text class="s" x="575" y="50" text-anchor="middle">planning</text>
+  <text class="m10" x="575" y="68" text-anchor="middle">embedded graph</text>
+  <path class="ln-acc dash" d="M360 150 V48 H497" marker-end="url(#routing-c)"/>
+  <text class="ma" x="430" y="41" text-anchor="middle">consult_planning</text>
+  <path class="ln" d="M500 70 H385 V147" marker-end="url(#routing-a)"/>
+  <text class="m10" x="442" y="64" text-anchor="middle">proposal</text>
+
+  <!-- nutrition handoff -->
+  <rect class="b-n" x="500" y="278" width="150" height="56" rx="3"/>
+  <text class="s" x="575" y="302" text-anchor="middle">nutrition</text>
+  <text class="m10" x="575" y="320" text-anchor="middle">embedded graph</text>
+  <path class="ln-acc dash" d="M360 210 V312 H497" marker-end="url(#routing-c)"/>
+  <text class="ma" x="430" y="328" text-anchor="middle">consult_nutrition</text>
+  <path class="ln" d="M500 290 H385 V213" marker-end="url(#routing-a)"/>
+  <text class="m10" x="442" y="305" text-anchor="middle">proposal</text>
+
+  <!-- conversational end -->
+  <path class="ln" d="M290 210 V251" marker-end="url(#routing-a)"/>
+  <circle class="ring" cx="290" cy="262" r="8"/>
+  <circle class="dot-ink" cx="290" cy="262" r="3.5"/>
+  <text class="m10" x="290" y="288" text-anchor="middle">END</text>
+  <text class="m10" x="298" y="236">reply</text>
+
+  <!-- review -->
+  <path class="ln-w dash" d="M400 170 H497" marker-end="url(#routing-w)"/>
+  <text class="mw105" x="450" y="163" text-anchor="middle">propose_changes</text>
+  <rect class="b-w" x="500" y="150" width="150" height="60" rx="3"/>
+  <text class="t" x="575" y="176" text-anchor="middle">review</text>
+  <text class="m10" x="575" y="195" text-anchor="middle">interrupt()</text>
+  <path class="ln" d="M500 194 H403" marker-end="url(#routing-a)"/>
+  <text class="m10" x="450" y="208" text-anchor="middle">reject</text>
+
+  <!-- apply -->
+  <path class="ln-w" d="M650 180 H757" marker-end="url(#routing-w)"/>
+  <text class="mw" x="704" y="172" text-anchor="middle">approve · edit</text>
+  <rect class="b-w" x="760" y="150" width="120" height="60" rx="3"/>
+  <text class="t" x="820" y="176" text-anchor="middle">apply</text>
+  <text class="m10" x="820" y="195" text-anchor="middle">apply_changes</text>
+
+  <rect class="b-n" x="760" y="26" width="120" height="56" rx="3"/>
+  <text class="s" x="820" y="50" text-anchor="middle">TrainingPeaks</text>
+  <text class="s" x="820" y="68" text-anchor="middle">Garmin</text>
+  <path class="ln-w" d="M820 150 V85" marker-end="url(#routing-w)"/>
+  <text class="mw" x="828" y="122">writes</text>
+
+  <path class="ln" d="M880 180 H939" marker-end="url(#routing-a)"/>
+  <circle class="ring" cx="950" cy="180" r="8"/>
+  <circle class="dot-ink" cx="950" cy="180" r="3.5"/>
+  <text class="m10" x="950" y="206" text-anchor="middle">END</text>
+
+  <path class="ln" d="M820 210 V306 H653" marker-end="url(#routing-a)"/>
+  <text class="m10" x="736" y="298" text-anchor="middle">regenerate targets</text>
+</svg>
