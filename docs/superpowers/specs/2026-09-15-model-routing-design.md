@@ -1,7 +1,7 @@
 # Model routing — per-role model, effort and Claude fallback (module `tri_core.llm`)
 
 **Date:** 2026-09-15
-**Status:** Draft (amended 2026-09-15 to follow the agent harness spec)
+**Status:** Draft (amended 2026-09-15 to follow the agent harness spec; amended 2026-09-22 after the harness merged, see §11)
 **Prerequisite:** the agent harness spec (`2026-09-15-tri-harness-design.md`, branch `docs/tri-harness-spec`) lands first. Its plans move `make_subagent`, the chat-agent builders, checkpointer setup and the turn drivers into `tri_core.harness`, and leave only `make_model` in each package's `llm.py`. The file and line references in §2 and §5.3 describe `main` @ 3a5a82c, before that move, and are re-checked when plan 01 is written.
 **Purpose:** Replace the single `TRI_MODEL` pin with a per-role model registry. Each role (coach, analyst, lab extraction, eval judge, ...) gets its own model, effort, output ceiling and fallback chain, so light work stops paying for heavy settings and an overloaded model no longer fails the turn. Every role launches on today's model; a role moves to a lighter model or effort only when its eval shows it holds quality.
 
@@ -17,7 +17,7 @@ Companion specs: `tri-coach` (2026-09-11) owns `CoachDeps` and the sub-agent wir
 | Approach | A static role registry in `tri_core` (approach A, chosen 2026-09-15). No per-turn router. | A thread stays on one model, so the prompt cache (model-scoped) keeps hitting. A router can wrap the registry later. |
 | Overrides | Env vars per role through the existing pydantic `Settings` (chosen 2026-09-15). | Same mechanism as every other setting; an eval run can try a candidate with one env var. |
 | Launch defaults | Every role starts on `claude-opus-5` at the model's default effort, i.e. today's behaviour. Targets in §6.2 are adopted per role only after an eval passes the gate in §7.2. | Changing a model without a measurement is a guess. |
-| Fallback carrier | The chain rides on the `ChatAnthropic` instance as `metadata`; no wrapper model class. | `AnthropicPromptCachingMiddleware(unsupported_model_behavior="ignore")` silently skips anything that is not a `ChatAnthropic`; a wrapper would switch caching off. Fakes carry no metadata, so the 112 existing deps constructions in tests are untouched. |
+| Fallback carrier | The chain rides on the `ChatAnthropic` instance as `metadata`; no wrapper model class. | `AnthropicPromptCachingMiddleware(unsupported_model_behavior="ignore")` silently skips anything that is not a `ChatAnthropic`; a wrapper would switch caching off. Fakes and hand-built models carry no `tri_fallbacks` key (every model does carry LangChain's `lc_versions` metadata), so the existing deps constructions in tests are untouched. |
 
 ## 2. Feasibility, verified 2026-09-15
 
@@ -71,6 +71,8 @@ packages/tri-core/src/tri_core/harness/agents.py
                    make_subagent and build_chat_agent append claude_fallback after caching
 packages/tri-planning/src/tri_planning/evals/run.py   NEW: run_eval for design_eval
 packages/tri-planning/src/tri_planning/cli.py          adds `eval`
+packages/tri-planning/pyproject.toml                   adds langsmith>=0.12,<1
+scripts/design_eval.py                                 deleted (replaced by `tri-planning eval`)
 ```
 
 The harness spec already makes `langchain==1.4.0`, `langchain-anthropic==1.7.1` and `anthropic` dependencies of `tri-core`, so this spec adds none.
@@ -102,6 +104,7 @@ class ModelSpec:
     fallbacks: tuple[str, ...]
 
 DEFAULTS: dict[Role, ModelSpec]  # §6.2 launch column
+STRUCTURED_ROLES: frozenset[Role]  # PLANNING_DESIGN, NUTRITION_FUEL, LAB_EXTRACT, JUDGE
 RETRYABLE: tuple[type[BaseException], ...] = (
     RateLimitError, OverloadedError, InternalServerError, ServiceUnavailableError,
     DeadlineExceededError, APIConnectionError,
@@ -111,7 +114,7 @@ ModelProvider = Callable[[Role], BaseChatModel]
 def resolve(settings: Settings, role: Role) -> ModelSpec: ...
 def make_model(settings: Settings, role: Role) -> ChatAnthropic: ...
 def fallbacks_of(model: BaseChatModel) -> list[ChatAnthropic]: ...
-claude_fallback: AgentMiddleware          # built with @wrap_model_call
+claude_fallback: AgentMiddleware          # an AgentMiddleware subclass with sync and async hooks
 def structured(model: BaseChatModel, schema: type[BaseModel]) -> Runnable[LanguageModelInput, Any]: ...
 def streaming(model: BaseChatModel) -> Runnable[LanguageModelInput, BaseMessage]: ...
 ```
@@ -136,8 +139,8 @@ The ten pairs are written out as explicit fields (mypy strict, pydantic validati
 - `tri_wellness.graph.deps.GraphDeps.model` is documented as the lab-extract model; no field change.
 - `tri_coach.graph.deps.make_deps(settings, models: ModelProvider, servers, *, today=...)`: `model=models(COACH)`, `analyst_model=models(ANALYST)`, `wellness_model=models(WELLNESS_CHAT)`, planning deps built with `models(PLANNING_AGENT)` and `design_model=models(PLANNING_DESIGN)`, nutrition deps with `models(NUTRITION_AGENT)` and `fuel_model=models(NUTRITION_FUEL)`.
 - `tri_web.runtime.open_runtime(settings, *, no_live, log, model=None)` keeps its test override: `models = (lambda _: model) if model else (lambda r: make_model(settings, r))`.
-- CLI call sites pass a role: `tri_analyze/cli.py:93,154` → `ANALYST` (eval via §7.1); `tri_coach/cli.py:87,296` → `models` provider; `tri_planning/cli.py:78` → `PLANNING_AGENT` with `design_model=PLANNING_DESIGN`; `tri_nutrition/cli.py:127,241,291` → `NUTRITION_AGENT` with `fuel_model=NUTRITION_FUEL`, `:325` via §7.1; `tri_wellness/cli.py:125` → `LAB_EXTRACT`, `:172` → `LAB_REPORT`, `:219` → `WELLNESS_CHAT`, `:295` via §7.1.
-- `CoachDeps`, `tri_coach.testing.make_test_deps` and every test constructor keep their current signatures.
+- CLI call sites pass a role (lines as of `main` @ b4c7efa): `tri_analyze/cli.py:93,154` → `ANALYST` (eval via §7.1); `tri_coach/cli.py:93` → `models` provider, `:302` via §7.1; `tri_planning/cli.py:81` → `PLANNING_AGENT` with `design_model=PLANNING_DESIGN`; `tri_nutrition/cli.py:134,300` → `NUTRITION_AGENT` with `fuel_model=NUTRITION_FUEL`, `:248` (`today`, no model call) → `NUTRITION_AGENT`, `:334` via §7.1; `tri_wellness/cli.py:126` → `LAB_EXTRACT`, `:173` → `LAB_REPORT`, `:220` → `WELLNESS_CHAT`, `:296` via §7.1. Also: `scripts/design_eval.py` → `PLANNING_DESIGN` (until plan 02 replaces it), and the opt-in live tests `tri-coach/tests/test_live.py` (provider) and `tri-wellness/tests/test_live_pdf.py` (`LAB_EXTRACT`).
+- `CoachDeps`, `tri_coach.testing.make_test_deps` and every test fixture keep their current signatures. The two tests in `tri-coach/tests/test_servers.py` that call the real coach `make_deps` pass `lambda _: model` as the provider; their assertions do not change.
 
 ## 6. Behaviour
 
@@ -149,7 +152,9 @@ The ten pairs are written out as explicit fields (mypy strict, pydantic validati
 2. `effort` = `tri_effort_<role>` or `DEFAULTS[role].effort`. A per-role model override does not reset effort; set both when trying a candidate.
 3. `max_tokens` = `DEFAULTS[role].max_tokens` (16000; 32000 for `lab_extract` and `lab_report`). Not env-overridable.
 4. `fallbacks` = parsed `tri_model_fallbacks` when set (empty string → `()`), else the first two of `("claude-opus-5", "claude-opus-4-8", "claude-sonnet-5")` that differ from `model`. The primary is removed from any list.
-5. Validation: when `effort` is set and the model's profile (`_PROFILES` via `ChatAnthropic(model=...).profile`) does not list it, raise `ValueError("TRI_EFFORT_<ROLE>=<effort> is not supported by <model>")`. A model with no profile entry is accepted with `effort=None` only.
+5. Validation: when `effort` is set on a role in `STRUCTURED_ROLES`, raise `ValueError("TRI_EFFORT_<ROLE>=<effort> is not allowed: <role> runs structured output, which cannot use thinking")`. Otherwise, when `effort` is set and the model's profile (`_PROFILES` via `ChatAnthropic(model=...).profile`) does not list it, raise `ValueError("TRI_EFFORT_<ROLE>=<effort> is not supported by <model>")`. A model with no profile entry is accepted with `effort=None` only.
+
+   Why structured roles take no effort: an effort level on Opus 5, Opus 4.8 or Sonnet 5 turns on adaptive thinking, and `with_structured_output` (default `method="function_calling"`) forces the tool choice, which the API rejects when thinking is on (a 400). Moving these roles to `method="json_schema"`, which allows both, is a separate, measured change and out of scope here.
 
 `make_model` raises at construction, so a bad override fails when the CLI or server starts, before any turn.
 
@@ -161,25 +166,25 @@ The ten pairs are written out as explicit fields (mypy strict, pydantic validati
 |---|---|---|---|
 | `coach` | opus-5 / default | opus-5 / high (unchanged) | `tri-coach eval` |
 | `planning_agent` | opus-5 / default | unchanged | none |
-| `planning_design` | opus-5 / default | unchanged; candidate opus-5 / medium | `tri-planning eval` (§7.1) |
+| `planning_design` | opus-5 / default | unchanged (structured: no effort) | `tri-planning eval` (§7.1) |
 | `lab_report` | opus-5 / default | unchanged | `tri-wellness eval` |
 | `analyst` | opus-5 / default | opus-5 / medium, candidate sonnet-5 / medium | `tri-analyze eval` |
 | `wellness_chat` | opus-5 / default | candidate opus-5 / medium | none |
-| `lab_extract` | opus-5 / default | candidate sonnet-5 / medium | none (manual: `TRI_WELLNESS_LIVE_PDF` test) |
+| `lab_extract` | opus-5 / default | candidate sonnet-5 (structured: no effort) | none (manual: `TRI_WELLNESS_LIVE_PDF` test) |
 | `nutrition_agent` | opus-5 / default | candidate sonnet-5 / medium | none |
-| `nutrition_fuel` | opus-5 / default | sonnet-5 / medium | `tri-nutrition eval` |
+| `nutrition_fuel` | opus-5 / default | sonnet-5 (structured: no effort) | `tri-nutrition eval` |
 | `judge` | opus-5 / default | never tuned | — |
 
 Roles with no gate stay on the launch default unless the athlete sets an env override. `judge` is held fixed so experiments across candidates stay comparable.
 
 ### 6.3 Fallback
 
-`fallbacks_of(model)` returns `[]` unless `model` is a `ChatAnthropic` whose `metadata` carries `tri_fallbacks`. Otherwise each id becomes a fresh `ChatAnthropic(model=id, max_tokens=model.max_tokens, api_key=model.anthropic_api_key, effort=e, metadata={"tri_role": role, "tri_fallback_from": model.model})`, built with the constructor so the fallback's profile is its own. `e` is the primary's effort when the fallback's profile lists it; else `"high"` when the fallback lists any levels (so Opus 4.8 runs with adaptive thinking, which it would not by default); else `None`.
+`fallbacks_of(model)` returns `[]` unless `model` is a `ChatAnthropic` whose `metadata` carries `tri_fallbacks`. Otherwise each id becomes a fresh `ChatAnthropic(model=id, max_tokens=model.max_tokens, api_key=model.anthropic_api_key, effort=e, metadata={"tri_role": role, "tri_fallback_from": model.model})`, built with the constructor so the fallback's profile is its own. `e` is `None` for a role in `STRUCTURED_ROLES`; otherwise the primary's effort when the fallback's profile lists it; else `"high"` when the fallback lists any levels (so Opus 4.8 runs with adaptive thinking, which it would not by default); else `None`.
 
-- **Agents.** `claude_fallback` (async and sync hooks) calls `handler(request)`; on an error in `RETRYABLE` it tries `handler(request.override(model=fb))` for each `fb` in `fallbacks_of(request.model)`, in order. `GraphBubbleUp` and any other exception propagate immediately. When every model fails, the last error is raised. Middleware order puts it last, after `AnthropicPromptCachingMiddleware`: the cache markers are valid on every Claude fallback, and `one_tool_call_at_a_time`'s `model_settings` travel with the overridden request. Added once, in `tri_core.harness.agents` (`make_subagent` and `build_chat_agent`), which imports it from `tri_core.llm`. After the harness spec every agent goes through one of those two builders: the coach, planning and nutrition nodes, `tri_analyze.agent.build_agent`, wellness chat, `ask_analyst` and `ask_wellness`.
-- **Structured output.** `structured(model, schema)` is `model.with_structured_output(schema)` plus `.with_fallbacks([fb.with_structured_output(schema) for fb in fallbacks_of(model)], exceptions_to_handle=RETRYABLE)` when there are fallbacks. Replaces the direct calls in planning `design.py:43`, nutrition `fuel.py:63-64`, wellness `structured.py:28` and the four judges.
-- **Streaming.** `streaming(model)` is `model.with_fallbacks([...], exceptions_to_handle=RETRYABLE)`; `ReportWriter` streams through it. A failure after the first chunk surfaces as today (the athlete reruns `tri-wellness report`).
-- **Visibility.** Each fallback attempt logs `WARNING tri_core.llm: <role> fell back from <primary> to <fallback> after <ErrorClass>`. The fallback model's `metadata` marks its LangSmith run with `tri_fallback_from`. REPL and web error messages are unchanged and now appear only when the whole chain has failed.
+- **Agents.** `claude_fallback` is an `AgentMiddleware` subclass instance with both `wrap_model_call` and `awrap_model_call` (the `@wrap_model_call` decorator only builds one of the two). It calls `handler(request)`; on an error in `RETRYABLE` it tries `handler(request.override(model=fb))` for each `fb` in `fallbacks_of(request.model)`, in order. `GraphBubbleUp` and any other exception propagate immediately. When every model fails, the last error is raised. Middleware order puts it just before `AnthropicPromptCachingMiddleware`, which stays last as the harness requires: caching then marks the request for whichever Claude model the fallback chose, and `one_tool_call_at_a_time`'s `model_settings` travel with the overridden request. Added once, in `tri_core.harness.agents` (`make_subagent` and `build_chat_agent`), which imports it from `tri_core.llm`. After the harness spec every agent goes through one of those two builders: the coach, planning and nutrition nodes, `tri_analyze.agent.build_agent`, wellness chat, `ask_analyst` and `ask_wellness`.
+- **Structured output.** `structured(model, schema)` is `model.with_structured_output(schema)` plus `.with_fallbacks([fb.with_structured_output(schema) for fb in fallbacks_of(model)], exceptions_to_handle=RETRYABLE)` when there are fallbacks. Replaces the direct calls in planning `design.py:43`, nutrition `fuel.py:63-64`, wellness `structured.py:28` and the three judges (`make_judge`, `make_brief_judge`, `make_fuel_judge`; wellness's evaluators use no model). When every model fails, `RunnableWithFallbacks` raises the primary's error.
+- **Streaming.** `streaming(model)` is `model.with_fallbacks([...], exceptions_to_handle=RETRYABLE)`; `ReportWriter` streams through it. A failure after the first chunk surfaces as today (the athlete reruns `tri-wellness report`). When every model fails, the primary's error is raised.
+- **Visibility.** Each fallback attempt logs `WARNING tri_core.llm: <role> fell back from <primary> to <fallback> after <ErrorClass>`. `structured` and `streaming` log the same line without `after <ErrorClass>`, since `with_fallbacks` does not pass the error on. The fallback model's `metadata` marks its LangSmith run with `tri_fallback_from`. REPL and web error messages are unchanged and now appear only when the whole chain has failed.
 
 ### 6.4 Errors
 
@@ -191,9 +196,9 @@ Roles with no gate stay on the launch default unless the athlete sets an env ove
 
 ### 7.1 Eval wiring
 
-- Each `run_eval` takes `models: ModelProvider` instead of one model: the target uses its role (`analyst`, `coach`, `nutrition_fuel`, `lab_report`), the judge uses `judge`.
-- `metadata` records `{"model": <target spec.model>, "effort": <target spec.effort>, "judge_model": <judge spec.model>}` from `resolve`, replacing `settings.tri_model`.
-- `tri-planning eval [--prefix] [--recreate-dataset]` is new: a LangSmith dataset `tri_planning_design` from `build_examples(today)`, target `design_target(deps)` with `design_model=models(PLANNING_DESIGN)`, evaluator `validator_pass`, same `ensure_dataset` / `pass_rates` / `render_pass_rates` shape as the siblings. Exits 2 without `ANTHROPIC_API_KEY` or `LANGSMITH_API_KEY`.
+- Each `run_eval` takes `models: ModelProvider` instead of one model: the target uses its role (`analyst`, `coach`, `nutrition_fuel`, `lab_report`), the judge uses `judge`. `tri-wellness` has no judge, so its `run_eval` only resolves `lab_report`.
+- `metadata` records `{"model": <target spec.model>, "effort": <target spec.effort>}` from `resolve`, replacing `settings.tri_model`, plus `"judge_model": <judge spec.model>` when a judge runs.
+- `tri-planning eval [--prefix] [--recreate-dataset]` is new and replaces `scripts/design_eval.py`, which is deleted: the LangSmith dataset keeps the script's name, `tri-planning-design-weeks`, so earlier experiments stay comparable. It is built from `build_examples(today)`, the target is `design_target(deps)` with `design_model=models(PLANNING_DESIGN)`, the evaluator is `validator_pass`, and the `ensure_dataset` / `pass_rates` / `render_pass_rates` shape matches the siblings (tri_planning has no `PROMPT_VERSION`, so the default experiment prefix is `design`). `langsmith>=0.12,<1` is added to `tri-planning`'s dependencies. Exits 2 without `ANTHROPIC_API_KEY` or `LANGSMITH_API_KEY`.
 
 ### 7.2 Tuning procedure and gate
 
@@ -209,14 +214,14 @@ Run by the athlete (every run costs API money):
 New `packages/tri-core/tests/test_llm.py`, no network:
 
 - `resolve`: role override beats `TRI_MODEL` beats default; effort override; `TRI_MODEL_FALLBACKS` parsing, `""` → `()`, primary removed; default chain for opus-5, sonnet-5, haiku-4-5.
-- Validation: `TRI_MODEL_JUDGE=claude-haiku-4-5` with `TRI_EFFORT_JUDGE=low` raises naming the env var; haiku with no effort passes.
+- Validation: `TRI_MODEL_ANALYST=claude-haiku-4-5` with `TRI_EFFORT_ANALYST=low` raises naming the env var; haiku with no effort passes; an effort on any structured role raises.
 - `make_model`: model id, `max_tokens` (32000 for lab roles), effort, metadata.
-- `fallbacks_of`: `[]` for `ScriptedChatModel` and for a `ChatAnthropic` without metadata; ids, effort mapping (primary effort kept when listed; `"high"` for Opus 4.8 when primary is `None`; `None` for haiku), `tri_fallback_from` set.
+- `fallbacks_of`: `[]` for `ScriptedChatModel` and for a `ChatAnthropic` without `tri_fallbacks`; ids, effort mapping (primary effort kept when listed; `"high"` for Opus 4.8 when primary is `None`; `None` for haiku; `None` on every structured role), `tri_fallback_from` set.
 - `claude_fallback` with a fake handler: `OverloadedError` → second model answers; `BadRequestError` → raised, no second call; `GraphBubbleUp` → propagated; all fail → last error raised; no fallbacks → original error.
-- `structured` and `streaming` over fake runnables: retryable error before first chunk falls back; non-retryable does not.
+- `structured` and `streaming` over fake runnables: retryable error before first chunk falls back; non-retryable does not; all fail → the primary's error.
 - `tri-core/tests/test_config.py`: `tri_model` default is `None`; per-role fields read from env.
 
-Existing suites (`uv run pytest`), `uv run ruff check`, `uv run mypy` pass without changes to test deps constructors. `tri-analyze/tests/test_llm.py` moves to `tri-core` as a `make_model` case. `tri-planning` gains a CLI test for `eval` exiting 2 without keys.
+Existing suites (`uv run pytest`), `uv run ruff check`, `uv run mypy` pass without changes to test deps constructors. `tri-analyze/tests/test_llm.py` moves to `tri-core` as a `make_model` case. `tri-planning` gains `tests/test_cli.py` with a test for `eval` exiting 2 without keys. `tri-core/tests/test_harness_agents.py` expects `[..., claude_fallback, caching]`.
 
 ## 9. Out of scope
 
@@ -233,3 +238,13 @@ Existing suites (`uv run pytest`), `uv run ruff check`, `uv run mypy` pass witho
 2. **Plan 02, eval wiring and tuning.** `run_eval` per role, `tri-planning eval`, metadata; then the §7.2 runs (athlete-run), and one commit per adopted default.
 
 Docs in plan 01: `.env.example` replaces `TRI_MODEL=claude-opus-5` with a commented block listing `TRI_MODEL`, `TRI_MODEL_<ROLE>`, `TRI_EFFORT_<ROLE>`, `TRI_MODEL_FALLBACKS`; `packages/tri-analyze/README.md:189` points at those vars and `tri_core/llm.py`. The athlete removes `TRI_MODEL` from their own `.env`, or every role stays pinned to it. Earlier specs are left as written.
+
+## 11. Amendments 2026-09-22
+
+Re-checked against `main` @ b4c7efa, after all four harness plans merged. Decisions by the athlete:
+
+1. **Fallback sits just before caching.** `claude_fallback` goes in as `[*middleware, claude_fallback, caching]`, keeping the harness rule that prompt caching is the last middleware (§6.3).
+2. **Structured roles take no effort.** Effort turns on thinking, and thinking cannot be combined with the forced tool choice `with_structured_output` uses. `planning_design`, `nutrition_fuel`, `lab_extract` and `judge` refuse an effort override, and their fallbacks run without one (§6.1, §6.2, §6.3).
+3. **`tri-planning eval` replaces `scripts/design_eval.py`** and keeps its dataset name `tri-planning-design-weeks` (§7.1).
+
+Corrections from the re-check: three judges, not four (wellness has none); `RunnableWithFallbacks` raises the primary's error when every model fails; the `@wrap_model_call` decorator builds only one hook, so `claude_fallback` is a subclass; every model carries `lc_versions` metadata; the §5.3 line numbers, and the callers the first draft missed (`scripts/design_eval.py`, two opt-in live tests), are updated in place.
