@@ -41,7 +41,7 @@
   6. `uv run mypy`
 
   The only acceptable pytest warning is the existing langsmith `DeprecationWarning`. `ruff check --fix` may reorder the import lines shown below; accept its order. Never add `# type: ignore`.
-- **Commits:** git commits are permitted (Brian's standing permission). Commit once per task on `feat/model-routing-01`, ending every message with `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`.
+- **Commits:** git commits are permitted (Brian's standing permission). Commit once per task on `feat/model-routing-01`, ending every message with the executing model's attribution line (the `Co-Authored-By:` line the session's git attribution reminder gives).
 - No "LangChain lesson:" framing in docstrings or comments.
 - Every markdown file edited is also copied to `/Users/brian/Documents/dev-vault/projects/paradigm/fitness_agents/triathlon_agent/<same relative path>` with a kebab-case name (`readme.md` for READMEs). The two SVGs are copied alongside `harness.md` there too.
 

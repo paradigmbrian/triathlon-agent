@@ -43,7 +43,7 @@
   6. `uv run mypy`
 
   The only acceptable pytest warning is the existing langsmith `DeprecationWarning`. Never add `# type: ignore`.
-- **Commits:** git commits are permitted (Brian's standing permission). Commit once per task on `feat/model-routing-02`, ending every message with `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`.
+- **Commits:** git commits are permitted (Brian's standing permission). Commit once per task on `feat/model-routing-02`, ending every message with the executing model's attribution line (the `Co-Authored-By:` line the session's git attribution reminder gives).
 - No "LangChain lesson:" framing in docstrings or comments.
 - Every markdown file edited is also copied to `/Users/brian/Documents/dev-vault/projects/paradigm/fitness_agents/triathlon_agent/<same relative path>` with a kebab-case name (`readme.md` for READMEs).
 - **Every eval run costs API money.** Tasks 1 and 2 never call a model: their tests use fakes and stub LangSmith. Only Brian runs Task 3.
@@ -56,7 +56,7 @@
 4. `tri_planning.evals.design_eval` has `build_examples(today)`, `validator_pass(inputs, outputs)` and `design_target(deps)`; its examples carry `inputs` and `metadata` but no `outputs`. `tri_planning` has no `PROMPT_VERSION`, no `evals/run.py`, no `eval` command, no `tests/test_cli.py`, and does not list `langsmith` (siblings pin `langsmith>=0.12,<1`; 0.12.2 is already in `uv.lock`).
 5. `scripts/design_eval.py` runs the design eval against dataset `tri-planning-design-weeks` with experiment prefix `design-<version>`; `packages/tri-planning/README.md:75` documents it. Nothing else imports it.
 6. `tri_planning/cli.py` calls `get_planning_settings()` at import (line 22) to set `LANGSMITH_PROJECT`; tests patch `cli.get_planning_settings` the same way `tri-analyze/tests/test_cli.py` patches `cli.get_analyze_settings`.
-7. `design_week` never touches `deps.connect`; the eval target needs only `deps.design_model or deps.model`.
+7. `design_week` never touches `deps.connect`; the eval target needs only `deps.design_model or deps.model`, so `run_eval` asks the provider for `PLANNING_DESIGN` once and uses it for both fields.
 
 ### Stop conditions
 
@@ -558,7 +558,7 @@ async def test_run_eval_designs_on_the_design_role(monkeypatch):
 
     settings = PlanningSettings(_env_file=None, langsmith_api_key="ls")
     assert await planning_run.run_eval(settings, models, log=lambda m: None) == {}
-    assert Role.PLANNING_DESIGN in roles
+    assert roles == [Role.PLANNING_DESIGN]
     assert captured["experiment_prefix"] == "design"
     assert captured["metadata"] == {"model": "claude-opus-5", "effort": None}
     assert [e.__name__ for e in captured["evaluators"]] == ["validator_pass"]
@@ -704,11 +704,12 @@ async def run_eval(
     """The pass rate per evaluator key. Weeks are designed on the planning_design role."""
     client = Client(api_key=settings.langsmith_api_key)
     ensure_dataset(client, recreate=recreate)
+    designer = models(Role.PLANNING_DESIGN)  # design_week reads design_model; model is the required field
     deps = GraphDeps(
-        model=models(Role.PLANNING_AGENT),
+        model=designer,
         connect=_no_database,
         db_url=settings.database_url,
-        design_model=models(Role.PLANNING_DESIGN),
+        design_model=designer,
     )
     results = await aevaluate(
         design_target(deps),
@@ -886,7 +887,7 @@ def test_every_role_launches_on_its_default():
 (the fallback-chain assertion moves to `test_default_chain_is_the_first_two_other_models`, which already covers it). Run the six Definition of Done commands, then commit with both experiment names:
 
 ```bash
-git commit -am "tune(analyst): claude-sonnet-5 / medium (analyst-sonnet5-med vs analyst-base)" -m "Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+git commit -am "tune(analyst): claude-sonnet-5 / medium (analyst-sonnet5-med vs analyst-base)" -m "<the executing model's Co-Authored-By line>"
 ```
 
 A candidate that fails the gate changes nothing; record the experiment names in the tri-harness/model-routing notes instead.

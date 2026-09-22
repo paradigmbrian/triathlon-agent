@@ -164,7 +164,7 @@ The ten pairs are written out as explicit fields (mypy strict, pydantic validati
 
 | Role | Launch default | Target (adopt only after §7.2) | Gate |
 |---|---|---|---|
-| `coach` | opus-5 / default | opus-5 / high (unchanged) | `tri-coach eval` |
+| `coach` | opus-5 / default | candidate opus-5 / high (an explicit effort also sends `thinking: adaptive`, which today's request omits; whether that matches the API default is what the eval decides) | `tri-coach eval` |
 | `planning_agent` | opus-5 / default | unchanged | none |
 | `planning_design` | opus-5 / default | unchanged (structured: no effort) | `tri-planning eval` (§7.1) |
 | `lab_report` | opus-5 / default | unchanged | `tri-wellness eval` |
@@ -191,6 +191,7 @@ Roles with no gate stay on the launch default unless the athlete sets an env ove
 - A 400, 401, 403, 404 or 413 never falls back.
 - An invalid override raises `ValueError` from `make_model` when the CLI or server builds its models (§6.1 step 5), before any model call. It is not caught.
 - A thread whose earlier turns ran on a different model continues normally: Claude models accept each other's history, and thinking blocks from another model are dropped by the API.
+- In an agent, `claude_fallback` wraps the whole model call while the REPL and web stream tokens through callbacks as they arrive. A RETRYABLE error after the first token (a dropped connection, in practice) reruns the call on the fallback, so the athlete may see the partial answer twice. Accepted for one athlete; the primary's SDK retries and the rarity of mid-stream errors keep it uncommon.
 
 ## 7. Evals and tuning
 
