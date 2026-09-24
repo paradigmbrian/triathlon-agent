@@ -12,8 +12,8 @@ from pathlib import Path
 import pytest
 from dotenv import load_dotenv
 
+from tri_core.llm import Role, make_model
 from tri_wellness.config import WellnessSettings
-from tri_wellness.graph.llm import make_model
 from tri_wellness.labs.extract.pdf import extract_pdf
 from tri_wellness.labs.normalize import normalize
 from tri_wellness.ranges.registry import load_registry
@@ -27,7 +27,7 @@ async def test_live_pdf_extraction():
     if not path:
         pytest.skip("set TRI_WELLNESS_LIVE_PDF to a redacted lab PDF")
     settings = WellnessSettings()
-    panel, pages = await extract_pdf(make_model(settings), Path(path), None, None)
+    panel, pages = await extract_pdf(make_model(settings, Role.LAB_EXTRACT), Path(path), None, None)
     print(
         f"\n{pages} pages, {len(panel.results)} rows, drawn {panel.drawn_on}, lab {panel.lab_name}"
     )

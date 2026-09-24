@@ -110,12 +110,12 @@ async def _chat(*, no_live: bool) -> None:
 
     from tri_core.db.connection import connect
     from tri_core.harness.persistence import open_checkpointer, open_store
+    from tri_core.llm import Role, make_model
     from tri_core.sync.runner import run_sync
     from tri_nutrition import repo
     from tri_nutrition import store as S
     from tri_nutrition.graph.deps import make_deps
     from tri_nutrition.graph.graph import build_graph
-    from tri_nutrition.graph.llm import make_model
     from tri_nutrition.graph.state import STATE_TYPES
     from tri_nutrition.nutrition.models import NutritionChange
     from tri_nutrition.repl import changes_from_yaml, changes_to_yaml, chat_loop
@@ -131,7 +131,14 @@ async def _chat(*, no_live: bool) -> None:
             open_checkpointer(settings.database_url, STATE_TYPES)
         )
         store = await stack.enter_async_context(open_store(settings.database_url))
-        graph = build_graph(make_deps(settings, make_model(settings), garmin, tp), saver, store)
+        deps = make_deps(
+            settings,
+            make_model(settings, Role.NUTRITION_AGENT),
+            garmin,
+            tp,
+            fuel_model=make_model(settings, Role.NUTRITION_FUEL),
+        )
+        graph = build_graph(deps, saver, store)
         cfg = {"configurable": {"thread_id": THREAD_ID}}
 
         async def read() -> str | None:
@@ -220,12 +227,12 @@ async def _today(*, yes: bool, no_live: bool) -> int:
     from contextlib import AsyncExitStack
 
     from tri_core.harness.persistence import STORE_SETUP_HINT, open_store, store_ready
+    from tri_core.llm import Role, make_model
     from tri_core.mcp.client import McpToolClient
     from tri_core.mcp.servers import garmin_spec
     from tri_nutrition.allowlist import GARMIN_SERVER_TOOLS
     from tri_nutrition.daily import describe_change, propose_today, write_today
     from tri_nutrition.graph.deps import make_deps
-    from tri_nutrition.graph.llm import make_model
 
     settings = get_nutrition_settings()
     if not store_ready(settings.database_url):
@@ -245,7 +252,7 @@ async def _today(*, yes: bool, no_live: bool) -> int:
                 _out(f"garmin MCP server unavailable ({type(exc).__name__}: {exc})\n")
                 return 1
         store = await stack.enter_async_context(open_store(settings.database_url))
-        deps = make_deps(settings, make_model(settings), garmin)
+        deps = make_deps(settings, make_model(settings, Role.NUTRITION_AGENT), garmin)
         h = await propose_today(deps, store)
         _out(h.summary() + "\n")
         if h.error or h.violations:
@@ -276,10 +283,10 @@ async def _check_in(*, yes: bool, no_sync: bool, no_live: bool) -> int:
     from contextlib import AsyncExitStack
 
     from tri_core.harness.persistence import open_checkpointer, open_store
+    from tri_core.llm import Role, make_model
     from tri_core.sync.runner import run_sync
     from tri_nutrition.graph.deps import make_deps
     from tri_nutrition.graph.graph import build_graph
-    from tri_nutrition.graph.llm import make_model
     from tri_nutrition.graph.state import STATE_TYPES
     from tri_nutrition.repl import checkin_run
 
@@ -297,7 +304,14 @@ async def _check_in(*, yes: bool, no_sync: bool, no_live: bool) -> int:
             open_checkpointer(settings.database_url, STATE_TYPES)
         )
         store = await stack.enter_async_context(open_store(settings.database_url))
-        graph = build_graph(make_deps(settings, make_model(settings), garmin, tp), saver, store)
+        deps = make_deps(
+            settings,
+            make_model(settings, Role.NUTRITION_AGENT),
+            garmin,
+            tp,
+            fuel_model=make_model(settings, Role.NUTRITION_FUEL),
+        )
+        graph = build_graph(deps, saver, store)
         return await checkin_run(graph, thread_id=THREAD_ID, out=_out, approve=yes)
 
 
@@ -319,8 +333,8 @@ def eval_cmd(
 
 
 async def _eval(*, judge: bool, prefix: str | None, recreate: bool) -> int:
+    from tri_core.llm import Role, make_model
     from tri_nutrition.evals.run import run_eval
-    from tri_nutrition.graph.llm import make_model
 
     settings = get_nutrition_settings()
     if not settings.langsmith_api_key:
@@ -331,7 +345,7 @@ async def _eval(*, judge: bool, prefix: str | None, recreate: bool) -> int:
         return 2
     rates = await run_eval(
         settings,
-        make_model(settings),
+        make_model(settings, Role.NUTRITION_FUEL),
         judge=judge,
         prefix=prefix,
         recreate=recreate,

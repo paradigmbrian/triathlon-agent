@@ -1,11 +1,16 @@
+import contextlib
 from datetime import timedelta
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
+import tri_planning.graph.nodes.design as design_node
 from tri_core.testing import ScriptedChatModel, tool_call
 from tri_planning import repo
-from tri_planning.graph.nodes.design import make_design_node, window_weeks
+from tri_planning.config import PlanningSettings
+from tri_planning.graph.deps import GraphDeps
+from tri_planning.graph.deps import make_deps as real_make_deps
+from tri_planning.graph.nodes.design import design_week, make_design_node, window_weeks
 from tri_planning.planning.models import (
     FitnessSnapshot,
     PlannedWeek,
@@ -126,3 +131,32 @@ def test_prompt_mentions_target_availability_and_rules():
     assert "250" in text
     assert "consecutive" in DESIGN_SYSTEM and "percentOfFtp" in DESIGN_SYSTEM
     assert isinstance(PlannedWeek.model_validate(week_json(MONDAY, 300)), PlannedWeek)
+
+
+class _Stop(Exception):
+    pass
+
+
+async def test_design_week_uses_the_design_model_when_one_is_set(monkeypatch):
+    seen = []
+
+    def spy(model, schema):
+        seen.append((model, schema))
+        raise _Stop
+
+    monkeypatch.setattr(design_node, "structured", spy)
+    agent, designer = ScriptedChatModel(script=[]), ScriptedChatModel(script=[])
+    deps = GraphDeps(model=agent, connect=lambda: contextlib.nullcontext(None), db_url="unused")
+    with pytest.raises(_Stop):
+        await design_week(deps, None, None, None, None, None, {})
+    deps.design_model = designer
+    with pytest.raises(_Stop):
+        await design_week(deps, None, None, None, None, None, {})
+    assert seen == [(agent, PlannedWeek), (designer, PlannedWeek)]
+
+
+def test_make_deps_takes_an_optional_design_model():
+    agent, designer = ScriptedChatModel(script=[]), ScriptedChatModel(script=[])
+    settings = PlanningSettings(_env_file=None)
+    assert real_make_deps(settings, agent, None).design_model is None
+    assert real_make_deps(settings, agent, None, design_model=designer).design_model is designer

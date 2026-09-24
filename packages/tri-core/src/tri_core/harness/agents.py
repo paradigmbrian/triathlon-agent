@@ -1,5 +1,7 @@
-"""The agent builders every package uses. Prompt caching is always the last middleware, so the
-prompt an earlier dynamic-prompt middleware renders is what gets marked for the cache."""
+"""The agent builders every package uses. Every agent ends with the same two middlewares: the
+Claude fallback, then prompt caching. Caching stays last, so the prompt an earlier
+dynamic-prompt middleware renders is what gets marked for the cache, and the marks are applied
+to whichever model the fallback picked."""
 
 from __future__ import annotations
 
@@ -13,6 +15,8 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.tools import BaseTool
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import InMemorySaver
+
+from tri_core.llm import claude_fallback
 
 Middleware = AgentMiddleware[Any, Any, Any]
 
@@ -52,7 +56,7 @@ def make_subagent(
         model,
         list(tools),
         system_prompt=system_prompt,
-        middleware=[*middleware, _caching()],
+        middleware=[*middleware, claude_fallback, _caching()],
         checkpointer=False,
     )
 
@@ -72,7 +76,7 @@ def build_chat_agent(
         model,
         list(tools),
         system_prompt=system_prompt,
-        middleware=[*middleware, _caching()],
+        middleware=[*middleware, claude_fallback, _caching()],
         context_schema=context_schema,
         checkpointer=checkpointer or InMemorySaver(),
     )

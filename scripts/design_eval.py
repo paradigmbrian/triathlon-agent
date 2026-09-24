@@ -16,10 +16,10 @@ from dotenv import load_dotenv
 from langsmith import Client
 from langsmith.evaluation import aevaluate
 
+from tri_core.llm import Role, make_model
 from tri_planning.config import get_planning_settings
 from tri_planning.evals.design_eval import build_examples, design_target, validator_pass
 from tri_planning.graph.deps import GraphDeps
-from tri_planning.graph.llm import make_model
 
 
 def ensure_dataset(client: Client, name: str) -> None:
@@ -42,7 +42,7 @@ async def main(dataset: str, version: str) -> None:
     client = Client(api_key=settings.langsmith_api_key)
     ensure_dataset(client, dataset)
     deps = GraphDeps(
-        model=make_model(settings),
+        model=make_model(settings, Role.PLANNING_DESIGN),
         connect=lambda: contextlib.nullcontext(None),
         db_url=settings.database_url,
     )  # type: ignore[arg-type]

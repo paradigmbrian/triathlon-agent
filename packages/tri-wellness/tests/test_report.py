@@ -1,8 +1,12 @@
 from datetime import date
+from typing import Any
 
+import anthropic
+import httpx
 import pytest
 from langchain_core.messages import AIMessage
 
+import tri_core.llm as llm
 from tri_core.testing import ScriptedChatModel
 from tri_wellness import repo
 from tri_wellness.ranges.registry import MARKERS_PATH, load_registry
@@ -75,3 +79,26 @@ async def test_run_report_without_panels_or_with_bad_id(nocommit, reg):
         == 1
     )
     assert any("no panel 999999" in s for s in out)
+
+
+class Overloaded(ScriptedChatModel):
+    def _generate(self, *a: Any, **k: Any) -> Any:
+        raise self._error()
+
+    def _stream(self, *a: Any, **k: Any) -> Any:
+        raise self._error()
+
+    @staticmethod
+    def _error() -> anthropic.OverloadedError:
+        req = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+        return anthropic.OverloadedError(
+            "overloaded", response=httpx.Response(529, request=req), body=None
+        )
+
+
+async def test_writer_falls_back_when_the_report_model_is_overloaded(monkeypatch):
+    backup = ScriptedChatModel(script=[AIMessage(content="from the backup")])
+    monkeypatch.setattr(llm, "fallbacks_of", lambda model: [backup])
+    chunks: list[str] = []
+    text = await ReportWriter(Overloaded(script=[])).write("prompt", chunks.append, ["panel_id:1"])
+    assert text == "from the backup" and "".join(chunks) == "from the backup"

@@ -12,6 +12,7 @@ from langchain_core.language_models import BaseChatModel
 from langsmith import Client, aevaluate
 
 from tri_core.config import Settings
+from tri_core.llm import Role, resolve
 from tri_nutrition.evals.cases import CASES
 from tri_nutrition.evals.evaluators import (
     fuel_within_bounds,
@@ -75,7 +76,10 @@ async def run_eval(
         data=DATASET_NAME,
         evaluators=evaluators,
         experiment_prefix=prefix or f"fuel-v{PROMPT_VERSION}",
-        metadata={"prompt_version": PROMPT_VERSION, "model": settings.tri_model},
+        metadata={
+            "prompt_version": PROMPT_VERSION,
+            "model": resolve(settings, Role.NUTRITION_FUEL).model,
+        },
         client=client,
         max_concurrency=2,
     )

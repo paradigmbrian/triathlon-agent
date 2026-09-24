@@ -9,6 +9,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.runnables.config import merge_configs
 
+from tri_core.llm import structured
 from tri_planning import repo
 from tri_planning.graph.deps import GraphDeps
 from tri_planning.graph.state import PlanningState
@@ -40,13 +41,13 @@ async def design_week(
     note: str | None,
     config: RunnableConfig,
 ) -> tuple[PlannedWeek, list[str]]:
-    structured = deps.model.with_structured_output(PlannedWeek)
+    designer = structured(deps.design_model or deps.model, PlannedWeek)
     cfg = merge_configs(
         config, {"tags": [f"week_start:{target.week_start}", f"phase:{target.phase}"]}
     )
 
     async def one(prompt: str) -> PlannedWeek:
-        out = await structured.ainvoke(
+        out = await designer.ainvoke(
             [SystemMessage(DESIGN_SYSTEM), HumanMessage(prompt)], config=cfg
         )
         assert isinstance(out, PlannedWeek)

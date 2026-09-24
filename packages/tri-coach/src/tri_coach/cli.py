@@ -75,10 +75,10 @@ async def _open_graph(*, no_live: bool) -> AsyncIterator[tuple[Any, Any, Any]]:
     """Yields (graph, store, servers)."""
     from tri_coach.graph.deps import make_deps
     from tri_coach.graph.graph import build_graph
-    from tri_coach.graph.llm import make_model
     from tri_coach.graph.state import STATE_TYPES
     from tri_coach.servers import open_servers
     from tri_core.harness.persistence import open_checkpointer, open_store
+    from tri_core.llm import make_model
 
     settings = get_coach_settings()
     code = _ready(settings)
@@ -90,7 +90,7 @@ async def _open_graph(*, no_live: bool) -> AsyncIterator[tuple[Any, Any, Any]]:
             open_checkpointer(settings.database_url, STATE_TYPES)
         )
         store = await stack.enter_async_context(open_store(settings.database_url))
-        deps = make_deps(settings, make_model(settings), servers)
+        deps = make_deps(settings, lambda role: make_model(settings, role), servers)
         yield build_graph(deps, saver, store), store, servers
 
 
@@ -288,7 +288,7 @@ def eval_cmd(
 
 async def _eval(*, judge: bool, prefix: str | None, recreate: bool) -> int:
     from tri_coach.evals.run import run_eval
-    from tri_coach.graph.llm import make_model
+    from tri_core.llm import Role, make_model
 
     settings = get_coach_settings()
     if not settings.langsmith_api_key:
@@ -299,7 +299,7 @@ async def _eval(*, judge: bool, prefix: str | None, recreate: bool) -> int:
         return 2
     rates = await run_eval(
         settings,
-        make_model(settings),
+        make_model(settings, Role.COACH),
         judge=judge,
         prefix=prefix,
         recreate=recreate,

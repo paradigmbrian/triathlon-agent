@@ -20,9 +20,9 @@ A LangChain agent is three things: a chat model, a list of tools, and a loop.
 
 ### The model, the tools and the loop
 
-`llm.make_model` wraps Claude in `ChatAnthropic` (no `thinking` parameter; adaptive thinking is
-the model default). `agent.build_agent(model, tools, checkpointer)` builds through `tri_core.harness.agents.build_chat_agent`, which calls `create_agent` with
-two middlewares and an `InMemorySaver`, and returns the graph with a run config: tag `analyst`
+`tri_core.llm.make_model(settings, Role.ANALYST)` wraps Claude in `ChatAnthropic` with the
+analyst role's model, effort and fallback chain. `agent.build_agent(model, tools, checkpointer)` builds through `tri_core.harness.agents.build_chat_agent`, which calls `create_agent` with
+three middlewares and an `InMemorySaver`, and returns the graph with a run config: tag `analyst`
 and metadata `analyst_prompt_version`. The graph is a state machine with a `model` node and a
 `tools` node and an edge that loops while tool calls exist. The checkpointer stores state per
 `thread_id`; each REPL turn sends only the new human message and LangGraph loads the prior
@@ -106,7 +106,6 @@ any example errored, else 0.
 ```
 src/tri_analyze/
   config.py           AnalyzeSettings (tri_core Settings + TRI_ANALYZE_LANGSMITH_PROJECT)
-  llm.py              make_model, MAX_TOKENS
   repo.py             AthleteContext, load_athlete_context
   prompts/analyst.py  PROMPT_VERSION, FEEDBACK_RULES, TOOL_GUIDE, render_system_prompt
   agent.py            analyst_prompt (@dynamic_prompt), build_agent
@@ -186,7 +185,8 @@ with those fixes, so the next run is `uv run tri-analyze eval --recreate-dataset
   bump `PROMPT_VERSION`.
 - **The model ignores a tool or picks the wrong one:** edit its `TOOL_GUIDE` line, or
   `allowlist.py` for which tools are bound.
-- **Model or cost:** `TRI_MODEL` in `.env`; `MAX_TOKENS` in `llm.py`.
+- **Model or cost:** `TRI_MODEL_ANALYST` and `TRI_EFFORT_ANALYST` in `.env` (see `.env.example`);
+  the defaults and output ceilings are in `tri_core/llm.py`.
 - **How much context the prompt carries:** the date windows in `repo.load_athlete_context`.
 - **Where traces go:** `TRI_ANALYZE_LANGSMITH_PROJECT` (default `tri_analyze`).
 - **The eval disagrees with you:** the cases are in `evals/cases.py`; `--recreate-dataset`

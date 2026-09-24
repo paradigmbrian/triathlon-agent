@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 820" width="1000" height="820" role="img" aria-labelledby="layers-title layers-desc">
   <title id="layers-title">One coach turn, layer by layer</title>
-  <desc id="layers-desc">Hosts call run_turn on harness.turns. open_runtime opens the checkpointer and store through harness.persistence and builds the coach StateGraph. The coach node runs a create_agent loop built by harness.agents.make_subagent with one tool call per step and prompt caching last. Its tools include handoffs built on harness.handoff and ask_analyst and ask_wellness built on harness.agent_tool. apply writes through ToolsCaller without passing through a model loop. State checkpoints to Postgres.</desc>
+  <desc id="layers-desc">Hosts call run_turn on harness.turns. open_runtime opens the checkpointer and store through harness.persistence and builds the coach StateGraph. The coach node runs a create_agent loop built by harness.agents.make_subagent with one tool call per step, a Claude fallback, and prompt caching last. Its tools include handoffs built on harness.handoff and ask_analyst and ask_wellness built on harness.agent_tool. apply writes through ToolsCaller without passing through a model loop. State checkpoints to Postgres.</desc>
   <style>
     svg {
       --surface: #F8FAF9; --ink: #16201E; --muted: #5A6A66; --rule: #C3CECB;
@@ -115,7 +115,7 @@
 
   <rect class="b-n" x="166" y="405" width="130" height="60" rx="3"/>
   <text class="s" x="231" y="432" text-anchor="middle">model</text>
-  <text class="m10" x="231" y="450" text-anchor="middle">ChatAnthropic</text>
+  <text class="m10" x="231" y="450" text-anchor="middle">tri_core.llm · per role</text>
   <rect class="b-n" x="380" y="405" width="140" height="60" rx="3"/>
   <text class="s" x="450" y="432" text-anchor="middle">tools</text>
   <text class="m10" x="450" y="450" text-anchor="middle">bound to the model</text>
@@ -124,11 +124,13 @@
   <path class="ln" d="M380 447 H299" marker-end="url(#layers-a)"/>
   <text class="m10" x="338" y="461" text-anchor="middle">tool_result</text>
 
-  <text class="m10" x="538" y="410">middleware, in order</text>
-  <rect class="b-n" x="538" y="418" width="124" height="20" rx="10"/>
-  <text class="ss" x="600" y="432" text-anchor="middle">1 · one call per step</text>
-  <rect class="b-n" x="538" y="444" width="124" height="20" rx="10"/>
-  <text class="ss" x="600" y="458" text-anchor="middle">2 · prompt caching</text>
+  <text class="m10" x="538" y="402">middleware, in order</text>
+  <rect class="b-n" x="538" y="408" width="124" height="20" rx="10"/>
+  <text class="ss" x="600" y="422" text-anchor="middle">1 · one call per step</text>
+  <rect class="b-n" x="538" y="432" width="124" height="20" rx="10"/>
+  <text class="ss" x="600" y="446" text-anchor="middle">2 · Claude fallback</text>
+  <rect class="b-n" x="538" y="456" width="124" height="20" rx="10"/>
+  <text class="ss" x="600" y="470" text-anchor="middle">3 · prompt caching</text>
 
   <!-- write corridor -->
   <path class="ln-w dash" d="M691 300 V531" marker-end="url(#layers-w)"/>

@@ -20,16 +20,23 @@ ConnectFactory = Callable[[], AbstractContextManager[Conn]]
 
 @dataclass
 class GraphDeps:
-    model: BaseChatModel
+    model: BaseChatModel  # the intake and adjust sub-agents
     connect: ConnectFactory
     db_url: str  # for the read-only SQL tool, which opens its own connections
     tp: ToolCaller | None = None  # live TrainingPeaks session; None when the server is down
     garmin_tools: list[BaseTool] = field(default_factory=list)  # Plan 4
     horizon_weeks: int = 3
     today: Callable[[], date] = date.today
+    design_model: BaseChatModel | None = None  # the week design call; None: use `model`
 
 
-def make_deps(settings: PlanningSettings, model: BaseChatModel, tp: ToolCaller | None) -> GraphDeps:
+def make_deps(
+    settings: PlanningSettings,
+    model: BaseChatModel,
+    tp: ToolCaller | None,
+    *,
+    design_model: BaseChatModel | None = None,
+) -> GraphDeps:
     url = settings.database_url
     return GraphDeps(
         model=model,
@@ -37,4 +44,5 @@ def make_deps(settings: PlanningSettings, model: BaseChatModel, tp: ToolCaller |
         db_url=url,
         tp=tp,
         horizon_weeks=settings.tri_planning_horizon_weeks,
+        design_model=design_model,
     )

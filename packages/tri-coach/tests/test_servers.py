@@ -116,7 +116,9 @@ def test_make_deps_wires_sub_agent_deps():
         tp=ToolsCaller([]),
     )
     model = ScriptedChatModel(script=[])
-    deps = make_deps(CoachSettings(_env_file=None), model, servers, today=lambda: date(2026, 9, 14))
+    deps = make_deps(
+        CoachSettings(_env_file=None), lambda _: model, servers, today=lambda: date(2026, 9, 14)
+    )
     assert deps.model is model and deps.analyst_model is model
     assert deps.planning_deps.tp is servers.tp and deps.nutrition_deps.garmin is servers.garmin
     assert [t.name for t in deps.planning_deps.garmin_tools] == ["get_training_readiness"]
@@ -128,8 +130,8 @@ def test_make_deps_loads_the_wellness_registry_only_when_sex_is_set(monkeypatch)
     servers = Servers()
     model = ScriptedChatModel(script=[])
     monkeypatch.delenv("TRI_ATHLETE_SEX", raising=False)
-    deps = make_deps(CoachSettings(_env_file=None), model, servers)
+    deps = make_deps(CoachSettings(_env_file=None), lambda _: model, servers)
     assert deps.wellness_registry is None and deps.wellness_model is model
     monkeypatch.setenv("TRI_ATHLETE_SEX", "male")
-    deps = make_deps(CoachSettings(_env_file=None), model, servers)
+    deps = make_deps(CoachSettings(_env_file=None), lambda _: model, servers)
     assert deps.wellness_registry is not None and deps.wellness_registry.sex == "male"

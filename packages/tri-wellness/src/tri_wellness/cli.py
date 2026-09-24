@@ -92,9 +92,9 @@ def _settings_or_exit() -> Any:
 
 async def _ingest(file: Path, kind: str | None, drawn_on: str | None) -> int:
     from tri_core.harness.persistence import SETUP_HINT, checkpointer_ready, open_checkpointer
+    from tri_core.llm import Role, make_model
     from tri_wellness.graph.deps import make_deps
     from tri_wellness.graph.graph import build_ingest_graph
-    from tri_wellness.graph.llm import make_model
     from tri_wellness.graph.state import STATE_TYPES
     from tri_wellness.labs.extract import file_sha256, sniff
     from tri_wellness.repl import run_ingest
@@ -123,7 +123,7 @@ async def _ingest(file: Path, kind: str | None, drawn_on: str | None) -> int:
         return 2
     thread_id = f"ingest:{file_sha256(file)}"
     async with open_checkpointer(settings.database_url, STATE_TYPES) as saver:
-        deps = make_deps(settings, make_model(settings))
+        deps = make_deps(settings, make_model(settings, Role.LAB_EXTRACT))
         graph = build_ingest_graph(deps, saver)
         return await run_ingest(
             graph,
@@ -160,7 +160,7 @@ def report(
 
 async def _report(panel: int | None, out_path: Path | None) -> int:
     from tri_core.db.connection import connect
-    from tri_wellness.graph.llm import make_model
+    from tri_core.llm import Role, make_model
     from tri_wellness.ranges.registry import load_registry
     from tri_wellness.report import run_report
 
@@ -170,7 +170,7 @@ async def _report(panel: int | None, out_path: Path | None) -> int:
         return 2
     url = settings.database_url
     return await run_report(
-        make_model(settings),
+        make_model(settings, Role.LAB_REPORT),
         lambda: connect(url),
         load_registry(settings.tri_athlete_sex),
         panel,
@@ -191,8 +191,8 @@ async def _chat() -> None:
     from tri_core.db.connection import connect
     from tri_core.db.sql_tool import make_query_tool
     from tri_core.harness.agents import build_chat_agent
+    from tri_core.llm import Role, make_model
     from tri_wellness import repo
-    from tri_wellness.graph.llm import make_model
     from tri_wellness.prompts.chat import render_chat_prompt
     from tri_wellness.ranges.registry import load_registry
     from tri_wellness.repl import chat_loop, render_panels
@@ -217,7 +217,7 @@ async def _chat() -> None:
     prompt = render_chat_prompt(
         profile, registry.sex, panels, latest_report, date.today(), [t.name for t in tools]
     )
-    agent = build_chat_agent(make_model(settings), tools, system_prompt=prompt)
+    agent = build_chat_agent(make_model(settings, Role.WELLNESS_CHAT), tools, system_prompt=prompt)
 
     async def read() -> str | None:
         try:
@@ -281,8 +281,8 @@ def eval_cmd(
 
 
 async def _eval(*, prefix: str | None, recreate: bool) -> int:
+    from tri_core.llm import Role, make_model
     from tri_wellness.evals.run import run_eval
-    from tri_wellness.graph.llm import make_model
 
     settings = _settings_or_exit()
     if not settings.langsmith_api_key:
@@ -293,7 +293,7 @@ async def _eval(*, prefix: str | None, recreate: bool) -> int:
         return 2
     rates = await run_eval(
         settings,
-        make_model(settings),
+        make_model(settings, Role.LAB_REPORT),
         prefix=prefix,
         recreate=recreate,
         log=lambda m: _out(m + "\n"),

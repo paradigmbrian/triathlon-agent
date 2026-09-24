@@ -108,7 +108,7 @@ approve             apply: one TrainingPeaks call per change, each recorded in p
 ## Layout
 
 - `graph/`: `state.py` (PlanningState and the `STATE_TYPES` its checkpointer registers),
-  `deps.py` (GraphDeps), `llm.py` (model), `nodes/` (one file per node), `graph.py` (wiring and
+  `deps.py` (GraphDeps), `nodes/` (one file per node), `graph.py` (wiring and
   route functions). The sub-agent factory, the Postgres checkpointer and the turn printer come
   from `tri_core.harness`.
 - `planning/`: `models.py`, `periodization.py` (every tunable number), `targets.py` (goal +

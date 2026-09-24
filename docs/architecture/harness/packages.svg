@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 420" width="1000" height="420" role="img" aria-labelledby="packages-title packages-desc">
   <title id="packages-title">Packages on tri_core.harness</title>
-  <desc id="packages-desc">Six packages, tri-coach, tri-planning, tri-nutrition, tri-wellness, tri-analyze and tri-web, each keep their own graphs, tools, prompts and a few turn pieces, and each imports from tri_core.harness. The harness has six modules: agents, agent_tool, handoff, messages, persistence and turns. Every package except tri-web carries its own make_model.</desc>
+  <desc id="packages-desc">Six packages, tri-coach, tri-planning, tri-nutrition, tri-wellness, tri-analyze and tri-web, each keep their own graphs, tools, prompts and a few turn pieces, and each imports from tri_core.harness. The harness has six modules: agents, agent_tool, handoff, messages, persistence and turns. Every model comes from tri_core.llm.make_model.</desc>
   <style>
     svg {
       --surface: #F8FAF9; --ink: #16201E; --muted: #5A6A66; --rule: #C3CECB;
@@ -17,7 +17,6 @@
     .bg { fill: var(--surface); }
     .b-n { fill: var(--surface); stroke: var(--rule); stroke-width: 1; }
     .b-acc { fill: var(--acc-tint); stroke: var(--acc); stroke-width: 1.4; }
-    .b-dup { fill: var(--surface); stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
     .ln-acc { fill: none; stroke: var(--acc); stroke-width: 1.4; }
     .ah-acc { fill: var(--acc); }
     .t { font: 600 13px var(--sans); fill: var(--ink); }
@@ -42,36 +41,31 @@
   <text class="mh" x="95" y="62" text-anchor="middle">tri-coach</text>
   <text class="m10" x="95" y="86" text-anchor="middle">graph · tools · review</text>
   <text class="m10" x="95" y="104" text-anchor="middle">TurnPrinter</text>
-  <rect class="b-dup" x="35" y="116" width="120" height="20" rx="2"/>
-  <text class="m10" x="95" y="130" text-anchor="middle">make_model</text>
+  <text class="m10" x="95" y="130" text-anchor="middle">models: tri_core.llm</text>
 
   <rect class="b-n" x="182" y="40" width="150" height="110" rx="3"/>
   <text class="mh" x="257" y="62" text-anchor="middle">tri-planning</text>
   <text class="m10" x="257" y="86" text-anchor="middle">graph · prompts</text>
   <text class="m10" x="257" y="104" text-anchor="middle">run_turn</text>
-  <rect class="b-dup" x="197" y="116" width="120" height="20" rx="2"/>
-  <text class="m10" x="257" y="130" text-anchor="middle">make_model</text>
+  <text class="m10" x="257" y="130" text-anchor="middle">models: tri_core.llm</text>
 
   <rect class="b-n" x="344" y="40" width="150" height="110" rx="3"/>
   <text class="mh" x="419" y="62" text-anchor="middle">tri-nutrition</text>
   <text class="m10" x="419" y="86" text-anchor="middle">graph · Store access</text>
   <text class="m10" x="419" y="104" text-anchor="middle">run_turn</text>
-  <rect class="b-dup" x="359" y="116" width="120" height="20" rx="2"/>
-  <text class="m10" x="419" y="130" text-anchor="middle">make_model</text>
+  <text class="m10" x="419" y="130" text-anchor="middle">models: tri_core.llm</text>
 
   <rect class="b-n" x="506" y="40" width="150" height="110" rx="3"/>
   <text class="mh" x="581" y="62" text-anchor="middle">tri-wellness</text>
   <text class="m10" x="581" y="86" text-anchor="middle">ingest graph · report</text>
   <text class="m10" x="581" y="104" text-anchor="middle">_IngestSink</text>
-  <rect class="b-dup" x="521" y="116" width="120" height="20" rx="2"/>
-  <text class="m10" x="581" y="130" text-anchor="middle">make_model</text>
+  <text class="m10" x="581" y="130" text-anchor="middle">models: tri_core.llm</text>
 
   <rect class="b-n" x="668" y="40" width="150" height="110" rx="3"/>
   <text class="mh" x="743" y="62" text-anchor="middle">tri-analyze</text>
   <text class="m10" x="743" y="86" text-anchor="middle">analyst prompt · tools</text>
   <text class="m10" x="743" y="104" text-anchor="middle">build_agent</text>
-  <rect class="b-dup" x="683" y="116" width="120" height="20" rx="2"/>
-  <text class="m10" x="743" y="130" text-anchor="middle">make_model</text>
+  <text class="m10" x="743" y="130" text-anchor="middle">models: tri_core.llm</text>
 
   <rect class="b-n" x="830" y="40" width="150" height="110" rx="3"/>
   <text class="mh" x="905" y="62" text-anchor="middle">tri-web</text>
@@ -118,8 +112,6 @@
   <text class="m10" x="664" y="354">AgentTurnPrinter · GraphTurnPrinter</text>
 
   <!-- key -->
-  <rect class="b-dup" x="20" y="386" width="40" height="16" rx="2"/>
-  <text class="ss" x="70" y="398">one copy per package</text>
-  <path class="ln-acc" d="M230 394 H266" marker-end="url(#packages-c)"/>
-  <text class="ss" x="276" y="398">imports from the harness</text>
+  <path class="ln-acc" d="M20 394 H56" marker-end="url(#packages-c)"/>
+  <text class="ss" x="66" y="398">imports from the harness</text>
 </svg>

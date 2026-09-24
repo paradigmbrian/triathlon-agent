@@ -17,6 +17,7 @@ from tri_coach.servers import Servers
 from tri_core.db.connection import connect as core_connect
 from tri_core.db.repo import Conn
 from tri_core.db.sql_tool import make_query_tool
+from tri_core.llm import ModelProvider, Role
 from tri_core.mcp.live_tools import filter_tools
 from tri_nutrition.config import get_nutrition_settings
 from tri_nutrition.graph.deps import GraphDeps as NutritionDeps
@@ -68,28 +69,41 @@ def analyst_tools_for(
 
 def make_deps(
     settings: CoachSettings,
-    model: BaseChatModel,
+    models: ModelProvider,
     servers: Servers,
     *,
     today: Callable[[], date] = date.today,
 ) -> CoachDeps:
+    """`models` maps each role to its model: `lambda role: make_model(settings, role)` in the
+    CLI and tri-web, one fake for every role in tests."""
     url = settings.database_url
     connect = lambda: core_connect(url)  # noqa: E731
-    planning = make_planning_deps(get_planning_settings(), model, servers.tp)
+    planning = make_planning_deps(
+        get_planning_settings(),
+        models(Role.PLANNING_AGENT),
+        servers.tp,
+        design_model=models(Role.PLANNING_DESIGN),
+    )
     planning.garmin_tools = filter_tools(servers.garmin_tools, planning_allow.GARMIN_LIVE_TOOLS)
     planning.today = today
-    nutrition = make_nutrition_deps(get_nutrition_settings(), model, servers.garmin, servers.tp)
+    nutrition = make_nutrition_deps(
+        get_nutrition_settings(),
+        models(Role.NUTRITION_AGENT),
+        servers.garmin,
+        servers.tp,
+        fuel_model=models(Role.NUTRITION_FUEL),
+    )
     nutrition.today = today
     registry = load_registry(settings.tri_athlete_sex) if settings.tri_athlete_sex else None
     return CoachDeps(
-        model=model,
-        analyst_model=model,
+        model=models(Role.COACH),
+        analyst_model=models(Role.ANALYST),
         connect=connect,
         db_url=url,
         planning_deps=planning,
         nutrition_deps=nutrition,
         analyst_tools=analyst_tools_for(servers, url, today, connect),
-        wellness_model=model,
+        wellness_model=models(Role.WELLNESS_CHAT),
         wellness_registry=registry,
         max_consults=settings.tri_coach_max_consults_per_domain,
         today=today,

@@ -7,6 +7,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 import tri_core.harness.agents as agents
 from tri_core.harness.agents import build_chat_agent, make_subagent, one_tool_call_at_a_time
+from tri_core.llm import claude_fallback
 from tri_core.testing import ScriptedChatModel, tool_call
 
 
@@ -81,10 +82,13 @@ def test_builders_put_prompt_caching_last_and_pass_their_arguments(monkeypatch):
     (sub_args, sub), (chat_args, chat), (_, bare) = calls
     assert sub_args == (model, [add]) and chat_args == (model, [add])
     assert sub["system_prompt"] == "sys" and sub["checkpointer"] is False
-    assert len(sub["middleware"]) == 2 and sub["middleware"][0] is one_tool_call_at_a_time
-    assert isinstance(sub["middleware"][1], AnthropicPromptCachingMiddleware)
+    assert len(sub["middleware"]) == 3 and sub["middleware"][0] is one_tool_call_at_a_time
+    assert sub["middleware"][1] is claude_fallback
+    assert isinstance(sub["middleware"][2], AnthropicPromptCachingMiddleware)
     assert chat["middleware"][0] is one_tool_call_at_a_time
-    assert isinstance(chat["middleware"][1], AnthropicPromptCachingMiddleware)
+    assert chat["middleware"][1] is claude_fallback
+    assert isinstance(chat["middleware"][2], AnthropicPromptCachingMiddleware)
     assert chat["context_schema"] is dict and chat["checkpointer"] is saver
     assert chat["system_prompt"] is None
-    assert isinstance(bare["checkpointer"], InMemorySaver) and len(bare["middleware"]) == 1
+    assert isinstance(bare["checkpointer"], InMemorySaver) and len(bare["middleware"]) == 2
+    assert bare["middleware"][0] is claude_fallback
