@@ -94,7 +94,7 @@ Ranked within each package. Items above are not repeated.
 8. **Two conventional bounds in wellness.** `conventional_status` uses the lab's printed range while `functional_status` uses the registry's, so "ferritin 25 low (conventional in range)" is a normal line. The registry also contradicts its own notes (WBC, testosterone, creatinine) and flags a dozen markers on a typical endurance panel that the notes then dismiss. An athlete tier or a personal-baseline comparison would cut the noise.
 9. **Medical framing.** The report prompt makes the model a practitioner who names compounds and dose ranges while the disclaimer says it is not a prescription. For a personal tool: prepend the disclaimer in code, lead Priorities with any conventionally abnormal marker and "practitioner first", and leave dosing out.
 10. **SQL safety is lexical where it should be a role.** The single-statement check plus `BEGIN READ ONLY` holds, but the tool uses the ETL's role, so `pg_terminate_backend` on the checkpointer's connection is callable. A dedicated read-only role makes the boundary real and lets the lexical check go.
-11. **Repo layer.** No CI; the six definition-of-done commands run only by hand. Five hand-applied migrations with no tracking table. The frontend has no tests and `strict` off. The Garmin and TrainingPeaks MCP servers get the whole environment.
+11. **Repo layer.** No CI; the six definition-of-done commands run only by hand. Five hand-applied migrations with no tracking table. The frontend has 12 Vitest files and a Playwright smoke, but TypeScript `strict` is off and the e2e stubs every route. The Garmin and TrainingPeaks MCP servers get the whole environment.
 
 ## Optimizations, largest first
 
