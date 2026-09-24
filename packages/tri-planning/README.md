@@ -72,7 +72,7 @@ checklist is for `tri-planning check-in` and the athlete's own messages.
 uv run tri-planning chat [--no-live]   # intake -> targets -> design -> review -> apply
 uv run tri-planning reset [--yes]      # abandon goal and plan, clear the thread; TrainingPeaks untouched
 uv run tri-planning check-in [--yes] [--no-sync] [--no-live]   # sync, review last 7 days, propose; exit 3 when paused, 1 on a model error
-uv run python scripts/design_eval.py --prompt-version v1         # LangSmith pass rate for the design prompt
+uv run tri-planning eval [--prefix NAME] [--recreate-dataset]    # LangSmith pass rate for the design prompt
 ```
 
 In chat: `/status` (goal, phase, this week's target vs actual, weeks on the calendar), `/pending`

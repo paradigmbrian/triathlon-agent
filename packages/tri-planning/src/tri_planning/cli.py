@@ -1,4 +1,4 @@
-"""Command-line entry points for the planning agent: chat, check-in, reset."""
+"""Command-line entry points for the planning agent: chat, check-in, reset, eval."""
 
 from __future__ import annotations
 
@@ -235,6 +235,43 @@ async def _reset() -> None:
         async with open_checkpointer(settings.database_url, STATE_TYPES) as saver:
             await saver.adelete_thread(THREAD_ID)
     console.print(f"reset: {goals} goal(s) abandoned, {plans} plan(s) superseded, thread cleared")
+
+
+@app.command(name="eval")
+def eval_cmd(
+    prefix: str | None = typer.Option(
+        None, "--prefix", help="Experiment name prefix (default design)"
+    ),
+    recreate: bool = typer.Option(
+        False,
+        "--recreate-dataset",
+        help="Delete and re-create the LangSmith dataset from the presets in code",
+    ),
+) -> None:
+    """Design one week per example in the LangSmith dataset and print the validator pass rate
+    (exit 1 when it is below 100%)."""
+    raise typer.Exit(code=asyncio.run(_eval(prefix=prefix, recreate=recreate)))
+
+
+async def _eval(*, prefix: str | None, recreate: bool) -> int:
+    from tri_core.llm import make_model
+    from tri_planning.evals.run import run_eval
+
+    settings = get_planning_settings()
+    if not settings.langsmith_api_key:
+        console.print("LANGSMITH_API_KEY is not set in .env", style="red")
+        return 2
+    if not settings.anthropic_api_key:
+        console.print("ANTHROPIC_API_KEY is not set in .env", style="red")
+        return 2
+    rates = await run_eval(
+        settings,
+        lambda role: make_model(settings, role),
+        prefix=prefix,
+        recreate=recreate,
+        log=lambda m: _out(m + "\n"),
+    )
+    return 0 if rates and all(r == 1.0 for r in rates.values()) else 1
 
 
 if __name__ == "__main__":
