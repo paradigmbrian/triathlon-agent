@@ -23,7 +23,7 @@ The §7.2 runs from `docs/superpowers/specs/2026-09-15-model-routing-design.md`,
 
 ## Adopted (one commit each)
 
-- `analyst`: claude-opus-5 / medium (commit after 286a605, "tune(analyst)").
+- `analyst`: claude-opus-5 / medium (70126ac).
 - `nutrition_fuel`: claude-sonnet-5, no effort (286a605).
 - `coach`, `planning_design`, `lab_report` and the ungated roles stay on opus-5 at default effort.
 
