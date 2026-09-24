@@ -249,3 +249,7 @@ Re-checked against `main` @ b4c7efa, after all four harness plans merged. Decisi
 3. **`tri-planning eval` replaces `scripts/design_eval.py`** and keeps its dataset name `tri-planning-design-weeks` (§7.1).
 
 Corrections from the re-check: three judges, not four (wellness has none); `RunnableWithFallbacks` raises the primary's error when every model fails; the `@wrap_model_call` decorator builds only one hook, so `claude_fallback` is a subclass; every model carries `lc_versions` metadata; the §5.3 line numbers, and the callers the first draft missed (`scripts/design_eval.py`, two opt-in live tests), are updated in place.
+
+## 12. Tuning results 2026-09-24
+
+The §7.2 runs are in `docs/notes/2026-09-24-model-routing-tuning.md`. Adopted: `analyst` on opus-5 / medium, `nutrition_fuel` on sonnet-5. Not adopted: `coach` opus-5 / high (brief_quality fell), `analyst` sonnet-5 / medium (feedback_quality fell). LangSmith stored none of the experiments (trace quota), so the gate was applied to the printed pass rates.
