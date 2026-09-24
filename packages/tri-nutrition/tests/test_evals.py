@@ -2,7 +2,10 @@ from datetime import date
 
 from langsmith.evaluation import EvaluationResult
 
+import tri_nutrition.evals.run as nutrition_run
+from tri_core.llm import Role
 from tri_core.testing import ScriptedChatModel, tool_call
+from tri_nutrition.config import NutritionSettings
 from tri_nutrition.evals.cases import CASES
 from tri_nutrition.evals.evaluators import (
     fuel_within_bounds,
@@ -12,6 +15,7 @@ from tri_nutrition.evals.evaluators import (
 from tri_nutrition.evals.run import DATASET_NAME, case_examples, pass_rates, render_pass_rates
 from tri_nutrition.evals.target import make_target, parse_inputs
 from tri_nutrition.graph.nodes.fuel import qualifies, race_due
+from tri_nutrition.prompts.fuel import PROMPT_VERSION
 from tri_nutrition.testing import race_plan_json, session_fuel_json
 
 
@@ -110,3 +114,59 @@ def test_pass_rates_and_rendering():
     assert rates == {"a": 1.0, "b": 0.5}
     text = render_pass_rates(rates, 2)
     assert "a" in text and "100%" in text and "50%" in text and "2 examples" in text
+
+
+class _FakeClient:
+    def __init__(self, **kw):
+        pass
+
+    def has_dataset(self, **kw):
+        return True
+
+
+class _FakeResults:
+    experiment_name = "exp"
+
+    def __aiter__(self):
+        async def rows():
+            return
+            yield
+
+        return rows()
+
+
+def _stub_langsmith(monkeypatch, run_module) -> dict:
+    captured: dict = {}
+
+    async def fake_aevaluate(target, **kw):
+        captured.update(kw)
+        return _FakeResults()
+
+    monkeypatch.setattr(run_module, "Client", _FakeClient)
+    monkeypatch.setattr(run_module, "aevaluate", fake_aevaluate)
+    return captured
+
+
+def _recording_models():
+    roles: list[Role] = []
+    fake = ScriptedChatModel(script=[])
+
+    def models(role: Role):
+        roles.append(role)
+        return fake
+
+    return models, roles
+
+
+async def test_run_eval_uses_the_fuel_and_judge_roles(monkeypatch):
+    captured = _stub_langsmith(monkeypatch, nutrition_run)
+    models, roles = _recording_models()
+    settings = NutritionSettings(_env_file=None, langsmith_api_key="ls")
+    assert await nutrition_run.run_eval(settings, models, log=lambda m: None) == {}
+    assert sorted(roles) == sorted([Role.NUTRITION_FUEL, Role.JUDGE])
+    assert captured["metadata"] == {
+        "prompt_version": PROMPT_VERSION,
+        "model": "claude-opus-5",
+        "effort": None,
+        "judge_model": "claude-opus-5",
+    }

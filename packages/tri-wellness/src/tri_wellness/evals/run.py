@@ -7,10 +7,9 @@ from collections import defaultdict
 from collections.abc import Callable
 from typing import Any
 
-from langchain_core.language_models import BaseChatModel
 from langsmith import Client, aevaluate
 
-from tri_core.llm import Role, resolve
+from tri_core.llm import ModelProvider, Role, eval_metadata
 from tri_wellness.config import WellnessSettings
 from tri_wellness.evals.cases import CASES
 from tri_wellness.evals.evaluators import (
@@ -60,7 +59,7 @@ def render_pass_rates(rates: dict[str, float], n: int) -> str:
 
 async def run_eval(
     settings: WellnessSettings,
-    model: BaseChatModel,
+    models: ModelProvider,
     *,
     prefix: str | None = None,
     recreate: bool = False,
@@ -70,14 +69,14 @@ async def run_eval(
     ensure_dataset(client, recreate=recreate)
     registry = load_registry(settings.tri_athlete_sex)
     results = await aevaluate(
-        make_target(model, registry),
+        make_target(models(Role.LAB_REPORT), registry),
         data=DATASET_NAME,
         evaluators=[cites_functional_ranges, has_required_sections, names_active_confounders],
         experiment_prefix=prefix or f"report-v{PROMPT_VERSION}",
         metadata={
             "prompt_version": PROMPT_VERSION,
             "ranges_version": registry.version,
-            "model": resolve(settings, Role.LAB_REPORT).model,
+            **eval_metadata(settings, Role.LAB_REPORT, judge=False),
         },
         client=client,
         max_concurrency=2,

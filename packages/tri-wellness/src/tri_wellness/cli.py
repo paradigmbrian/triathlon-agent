@@ -281,7 +281,7 @@ def eval_cmd(
 
 
 async def _eval(*, prefix: str | None, recreate: bool) -> int:
-    from tri_core.llm import Role, make_model
+    from tri_core.llm import make_model
     from tri_wellness.evals.run import run_eval
 
     settings = _settings_or_exit()
@@ -293,7 +293,7 @@ async def _eval(*, prefix: str | None, recreate: bool) -> int:
         return 2
     rates = await run_eval(
         settings,
-        make_model(settings, Role.LAB_REPORT),
+        lambda role: make_model(settings, role),
         prefix=prefix,
         recreate=recreate,
         log=lambda m: _out(m + "\n"),

@@ -8,7 +8,6 @@ from collections import defaultdict
 from collections.abc import Callable
 from typing import Any
 
-from langchain_core.language_models import BaseChatModel
 from langsmith import Client, aevaluate
 
 from tri_analyze.config import AnalyzeSettings
@@ -16,7 +15,7 @@ from tri_analyze.evals.cases import CASES
 from tri_analyze.evals.evaluators import make_judge, pulls_splits, states_window, uses_sql
 from tri_analyze.evals.target import make_target
 from tri_analyze.prompts.analyst import PROMPT_VERSION
-from tri_core.llm import Role, resolve
+from tri_core.llm import ModelProvider, Role, eval_metadata
 
 DATASET_NAME = "tri_analyze_feedback"
 DATASET_DESCRIPTION = (
@@ -63,25 +62,29 @@ def errored(rows: list[dict[str, Any]]) -> int:
 
 async def run_eval(
     settings: AnalyzeSettings,
-    model: BaseChatModel,
+    models: ModelProvider,
     *,
     judge: bool = True,
     prefix: str | None = None,
     recreate: bool = False,
     log: Callable[[str], None] = print,
 ) -> tuple[dict[str, float], int]:
-    """Returns the pass rate per evaluator key and the number of errored examples."""
+    """Returns the pass rate per evaluator key and the number of errored examples. The analyst
+    runs on its role's model and the judge on the judge role's."""
     client = Client(api_key=settings.langsmith_api_key)
     ensure_dataset(client, recreate=recreate)
     evaluators: list[Any] = [uses_sql, pulls_splits, states_window]
     if judge:
-        evaluators.append(make_judge(model))
+        evaluators.append(make_judge(models(Role.JUDGE)))
     results = await aevaluate(
-        make_target(model),
+        make_target(models(Role.ANALYST)),
         data=DATASET_NAME,
         evaluators=evaluators,
         experiment_prefix=prefix or f"analyst-v{PROMPT_VERSION}",
-        metadata={"prompt_version": PROMPT_VERSION, "model": resolve(settings, Role.ANALYST).model},
+        metadata={
+            "prompt_version": PROMPT_VERSION,
+            **eval_metadata(settings, Role.ANALYST, judge=judge),
+        },
         client=client,
         max_concurrency=2,
     )

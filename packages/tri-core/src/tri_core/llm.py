@@ -259,3 +259,13 @@ def streaming(model: BaseChatModel) -> Runnable[LanguageModelInput, Any]:
     return model.with_fallbacks(
         [_noting(model, fb) | fb for fb in fallbacks], exceptions_to_handle=RETRYABLE
     )
+
+
+def eval_metadata(settings: Settings, target: Role, *, judge: bool) -> dict[str, Any]:
+    """What an eval experiment records about its models: the target role's model and effort,
+    and the judge's model when a judge runs."""
+    spec = resolve(settings, target)
+    out: dict[str, Any] = {"model": spec.model, "effort": spec.effort}
+    if judge:
+        out["judge_model"] = resolve(settings, Role.JUDGE).model
+    return out

@@ -288,7 +288,7 @@ def eval_cmd(
 
 async def _eval(*, judge: bool, prefix: str | None, recreate: bool) -> int:
     from tri_coach.evals.run import run_eval
-    from tri_core.llm import Role, make_model
+    from tri_core.llm import make_model
 
     settings = get_coach_settings()
     if not settings.langsmith_api_key:
@@ -299,7 +299,7 @@ async def _eval(*, judge: bool, prefix: str | None, recreate: bool) -> int:
         return 2
     rates = await run_eval(
         settings,
-        make_model(settings, Role.COACH),
+        lambda role: make_model(settings, role),
         judge=judge,
         prefix=prefix,
         recreate=recreate,

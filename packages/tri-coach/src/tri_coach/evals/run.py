@@ -7,7 +7,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from langchain_core.language_models import BaseChatModel
 from langsmith import Client, aevaluate
 
 from tri_coach.evals.cases import CASES
@@ -19,7 +18,7 @@ from tri_coach.evals.evaluators import (
 from tri_coach.evals.target import make_target
 from tri_coach.prompts.coach import PROMPT_VERSION
 from tri_core.config import Settings
-from tri_core.llm import Role, resolve
+from tri_core.llm import ModelProvider, Role, eval_metadata
 from tri_nutrition.evals.run import pass_rates
 
 DATASET_NAME = "tri_coach_routing"
@@ -52,7 +51,7 @@ def render_pass_rates(rates: dict[str, float], n: int) -> str:
 
 async def run_eval(
     settings: Settings,
-    model: BaseChatModel,
+    models: ModelProvider,
     *,
     judge: bool = True,
     prefix: str | None = None,
@@ -63,13 +62,16 @@ async def run_eval(
     ensure_dataset(client, recreate=recreate)
     evaluators: list[Any] = [routing_accuracy, no_unrequested_adjustment]
     if judge:
-        evaluators.append(make_brief_judge(model))
+        evaluators.append(make_brief_judge(models(Role.JUDGE)))
     results = await aevaluate(
-        make_target(model),
+        make_target(models(Role.COACH)),
         data=DATASET_NAME,
         evaluators=evaluators,
         experiment_prefix=prefix or f"coach-v{PROMPT_VERSION}",
-        metadata={"prompt_version": PROMPT_VERSION, "model": resolve(settings, Role.COACH).model},
+        metadata={
+            "prompt_version": PROMPT_VERSION,
+            **eval_metadata(settings, Role.COACH, judge=judge),
+        },
         client=client,
         max_concurrency=2,
     )

@@ -15,6 +15,7 @@ from tri_core.llm import (
     STRUCTURED_ROLES,
     Role,
     claude_fallback,
+    eval_metadata,
     fallbacks_of,
     make_model,
     resolve,
@@ -327,3 +328,16 @@ async def test_streaming_does_not_fall_back_on_a_bad_request(monkeypatch):
 def test_streaming_without_fallbacks_is_the_model_itself():
     model = ScriptedChatModel(script=[])
     assert streaming(model) is model
+
+
+def test_eval_metadata_names_the_target_and_judge_models():
+    assert eval_metadata(settings(), Role.ANALYST, judge=True) == {
+        "model": "claude-opus-5",
+        "effort": None,
+        "judge_model": "claude-opus-5",
+    }
+    s = settings(tri_model_analyst="claude-sonnet-5", tri_effort_analyst="medium")
+    assert eval_metadata(s, Role.ANALYST, judge=False) == {
+        "model": "claude-sonnet-5",
+        "effort": "medium",
+    }
