@@ -17,17 +17,21 @@ from rich.console import Console
 
 from tri_wellness.config import get_wellness_settings
 
-load_dotenv()
-# The agents share one .env; give this one its own LangSmith project before LangChain loads.
-os.environ["LANGSMITH_PROJECT"] = os.environ.get("TRI_WELLNESS_LANGSMITH_PROJECT", "tri_wellness")
-
 app = typer.Typer(help="Functional-medicine lab interpreter", no_args_is_help=True)
 console = Console()
 
 
 @app.callback()
 def main() -> None:
-    """Functional-medicine lab interpreter."""
+    """Functional-medicine lab interpreter.
+
+    Runs before every command. .env is read here, not at import, so importing this module
+    (tests do) never switches LangSmith tracing on.
+    """
+    load_dotenv()
+    os.environ["LANGSMITH_PROJECT"] = os.environ.get(
+        "TRI_WELLNESS_LANGSMITH_PROJECT", "tri_wellness"
+    )
 
 
 def _out(s: str) -> None:

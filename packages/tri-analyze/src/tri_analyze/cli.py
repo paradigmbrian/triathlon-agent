@@ -16,10 +16,6 @@ from tri_analyze.config import get_analyze_settings
 if TYPE_CHECKING:
     from langchain_core.tools import BaseTool
 
-load_dotenv()
-# The agents share one .env; give the analyst its own LangSmith project before LangChain loads.
-os.environ["LANGSMITH_PROJECT"] = get_analyze_settings().tri_analyze_langsmith_project
-
 app = typer.Typer(
     help="Triathlon training analysis agent (run `tri sync` to load data)", no_args_is_help=True
 )
@@ -29,7 +25,13 @@ THREAD_ID = "analyze"
 
 @app.callback()
 def main() -> None:
-    """Triathlon training analysis agent."""
+    """Triathlon training analysis agent.
+
+    Runs before every command. .env is read here, not at import, so importing this module
+    (tests do) never switches LangSmith tracing on.
+    """
+    load_dotenv()
+    os.environ["LANGSMITH_PROJECT"] = get_analyze_settings().tri_analyze_langsmith_project
 
 
 def _out(s: str) -> None:

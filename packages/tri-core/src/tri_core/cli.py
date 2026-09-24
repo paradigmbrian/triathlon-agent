@@ -12,15 +12,18 @@ from rich.console import Console
 from tri_core.config import get_settings
 from tri_core.sync.runner import run_sync
 
-load_dotenv()
-
 app = typer.Typer(help="Shared triathlon data tools", no_args_is_help=True)
 console = Console()
 
 
 @app.callback()
 def main() -> None:
-    """Shared triathlon data tools."""
+    """Shared triathlon data tools.
+
+    Runs before every command. .env is read here, not at import, so importing this module
+    (tests do) never switches LangSmith tracing on.
+    """
+    load_dotenv()
 
 
 @app.command()

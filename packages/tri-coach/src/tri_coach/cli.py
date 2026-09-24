@@ -18,10 +18,6 @@ from rich.console import Console
 
 from tri_coach.config import CoachSettings, get_coach_settings
 
-load_dotenv()
-# The agents share one .env; give the coach its own LangSmith project before LangChain loads.
-os.environ["LANGSMITH_PROJECT"] = get_coach_settings().tri_coach_langsmith_project
-
 app = typer.Typer(
     help="Head coach: one conversation over the analyst, wellness, planning and nutrition",
     no_args_is_help=True,
@@ -32,7 +28,13 @@ THREAD_ID = "coach"
 
 @app.callback()
 def main() -> None:
-    """Head coach agent."""
+    """Head coach agent.
+
+    Runs before every command. .env is read here, not at import, so importing this module
+    (tests do) never switches LangSmith tracing on.
+    """
+    load_dotenv()
+    os.environ["LANGSMITH_PROJECT"] = get_coach_settings().tri_coach_langsmith_project
 
 
 def _out(s: str) -> None:

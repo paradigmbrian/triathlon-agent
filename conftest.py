@@ -1,4 +1,13 @@
+import os
+
 import pytest
+
+# Every graph run in the suite would be a LangSmith trace if tracing were on. The package CLIs
+# load .env only inside their Typer callback, and load_dotenv never overrides a set variable, so
+# this holds for the whole run whatever .env says. (5,000 traces in two days of tri-wellness work
+# were the test suite.)
+os.environ["LANGSMITH_TRACING"] = "false"
+os.environ["LANGCHAIN_TRACING_V2"] = "false"
 
 pytest_plugins = ["tri_core.testing.fixtures"]
 

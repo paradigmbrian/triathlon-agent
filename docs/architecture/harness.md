@@ -72,5 +72,6 @@ Which harness modules each package's `src/` imports:
 - **`ask_analyst` and `ask_wellness` descriptions are part of the prompt cache prefix.** `test_ask_tool_names_descriptions_and_schemas_are_unchanged` pins them.
 - **Each package's `STATE_TYPES` lives in its `graph/state.py`** and is passed to `open_checkpointer(url, STATE_TYPES)` and `make_serde(STATE_TYPES)`. A new pydantic type in graph state must be added there, or checkpoints holding it will not load.
 - **CLIs import readiness helpers inside their function bodies,** so tests can patch `tri_core.harness.persistence.checkpointer_ready` and `store_ready`.
+- **CLIs read `.env` in their Typer callback, never at import.** Tests import CLI modules; an import-time `load_dotenv()` switched LangSmith tracing on for the whole suite and every graph run became a trace (5,000 in two days). The root `conftest.py` also pins `LANGSMITH_TRACING=false`, and `test_tracing_guard.py` checks both.
 - **A `repl.py` whose `Out` other modules import re-exports it as `from tri_core.harness.turns import Out as Out`.** mypy runs in strict mode, which rejects implicit re-exports.
 - **Writes to TrainingPeaks and Garmin go only through `ToolsCaller`,** after `interrupt()` in `review` and then `apply`.

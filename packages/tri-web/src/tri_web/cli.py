@@ -20,15 +20,18 @@ if TYPE_CHECKING:
 
     from tri_web.runtime import Log, Runtime
 
-load_dotenv()
-
 app = typer.Typer(help="Local web UI over the head coach", no_args_is_help=True)
 console = Console()
 
 
 @app.callback()
 def main() -> None:
-    """tri-web server."""
+    """tri-web server.
+
+    Runs before every command. .env is read here, not at import, so importing this module
+    (tests do) never switches LangSmith tracing on.
+    """
+    load_dotenv()
 
 
 def _log(m: str) -> None:

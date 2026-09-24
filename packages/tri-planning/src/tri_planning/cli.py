@@ -17,10 +17,6 @@ from rich.console import Console
 
 from tri_planning.config import get_planning_settings
 
-load_dotenv()
-# Both agents share one .env; give this agent its own LangSmith project before LangChain loads.
-os.environ["LANGSMITH_PROJECT"] = get_planning_settings().tri_planning_langsmith_project
-
 app = typer.Typer(help="Triathlon training planning agent", no_args_is_help=True)
 console = Console()
 THREAD_ID = "planning"
@@ -29,7 +25,13 @@ TP_START_TIMEOUT_S = 120
 
 @app.callback()
 def main() -> None:
-    """Triathlon training planning agent."""
+    """Triathlon training planning agent.
+
+    Runs before every command. .env is read here, not at import, so importing this module
+    (tests do) never switches LangSmith tracing on.
+    """
+    load_dotenv()
+    os.environ["LANGSMITH_PROJECT"] = get_planning_settings().tri_planning_langsmith_project
 
 
 def _out(s: str) -> None:
