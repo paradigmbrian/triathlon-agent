@@ -65,9 +65,8 @@ async def run_eval(
     """The pass rate per evaluator key. Weeks are designed on the planning_design role."""
     client = Client(api_key=settings.langsmith_api_key)
     ensure_dataset(client, recreate=recreate)
-    designer = models(
-        Role.PLANNING_DESIGN
-    )  # design_week reads design_model; model is the required field
+    # design_week reads design_model; model is only the dataclass's required field.
+    designer = models(Role.PLANNING_DESIGN)
     deps = GraphDeps(
         model=designer,
         connect=_no_database,
