@@ -9,6 +9,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.runnables.config import merge_configs
 
+from tri_core.llm import structured
 from tri_wellness.labs.models import ExtractedPanel
 from tri_wellness.prompts.extract import EXTRACT_SYSTEM
 
@@ -25,9 +26,9 @@ async def extract_structured(
     content: list[str | dict[Any, Any]] = [{"type": "text", "text": prompt}]
     if attachment is not None:
         content.append(attachment)
-    structured = model.with_structured_output(ExtractedPanel)
+    extractor = structured(model, ExtractedPanel)
     cfg = merge_configs(config, {"tags": tags})
-    out = await structured.ainvoke(
+    out = await extractor.ainvoke(
         [SystemMessage(EXTRACT_SYSTEM), HumanMessage(content=content)], config=cfg
     )
     assert isinstance(out, ExtractedPanel)

@@ -12,6 +12,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
 from tri_coach.evals.target import HANDOFFS
+from tri_core.llm import structured
 
 AsyncEvaluator = Callable[[dict[str, Any], dict[str, Any]], Awaitable[dict[str, Any]]]
 
@@ -69,7 +70,7 @@ def render_judge_prompt(inputs: dict[str, Any], brief: str) -> str:
 
 
 def make_brief_judge(model: BaseChatModel) -> AsyncEvaluator:
-    judge = model.with_structured_output(BriefJudgement)
+    judge = structured(model, BriefJudgement)
 
     async def brief_quality(inputs: dict[str, Any], outputs: dict[str, Any]) -> dict[str, Any]:
         briefs = [b for b in outputs.get("briefs") or [] if b]

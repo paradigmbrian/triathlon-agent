@@ -12,6 +12,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
+from tri_core.llm import structured
 from tri_nutrition.evals.target import parse_inputs
 from tri_nutrition.nutrition.bounds import validate_fuel, validate_race, validate_targets
 from tri_nutrition.nutrition.models import DayTarget, RaceFuelPlan, SessionFuel
@@ -102,7 +103,7 @@ def render_judge_prompt(inputs: dict[str, Any], outputs: dict[str, Any]) -> str:
 
 
 def make_fuel_judge(model: BaseChatModel) -> AsyncEvaluator:
-    judge = model.with_structured_output(FuelJudgement)
+    judge = structured(model, FuelJudgement)
 
     async def fuel_respects_profile(
         inputs: dict[str, Any], outputs: dict[str, Any]

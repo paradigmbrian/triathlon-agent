@@ -6,9 +6,11 @@ from pathlib import Path
 import pytest
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from tri_core.testing import tool_call
+import tri_wellness.labs.extract.structured as structured_module
+from tri_core.testing import ScriptedChatModel, tool_call
 from tri_wellness.labs.extract import count_pdf_pages, file_sha256, sniff
 from tri_wellness.labs.extract.pdf import extract_pdf
+from tri_wellness.labs.extract.structured import extract_structured
 from tri_wellness.labs.models import ExtractedPanel
 from tri_wellness.prompts.extract import EXTRACT_SYSTEM, render_extract_prompt
 from tri_wellness.testing import RecordingScriptedModel, load_extracted
@@ -59,3 +61,20 @@ async def test_extract_pdf_sends_document_block_and_parses(tiny_pdf):
         "mime_type": "application/pdf",
         "base64": base64.b64encode(tiny_pdf.read_bytes()).decode(),
     }
+
+
+async def test_extraction_goes_through_the_structured_helper(monkeypatch):
+    class _Stop(Exception):
+        pass
+
+    seen = []
+
+    def spy(model, schema):
+        seen.append((model, schema))
+        raise _Stop
+
+    monkeypatch.setattr(structured_module, "structured", spy)
+    model = ScriptedChatModel(script=[])
+    with pytest.raises(_Stop):
+        await extract_structured(model, "prompt", None, [], None)
+    assert seen == [(model, ExtractedPanel)]

@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from tri_analyze.evals.target import athlete_from_inputs, stub_tools
 from tri_analyze.prompts.analyst import render_system_prompt
+from tri_core.llm import structured
 
 _MONTH = r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*"
 _DAY = r"\d{1,2}(?:st|nd|rd|th)?"
@@ -160,7 +161,7 @@ def make_judge(model: BaseChatModel) -> AsyncEvaluator:
     """One structured-output call per example, scoring `grounded` always and
     `feedback_quality` for session reviews. A judge call that raises scores both keys 0 with the
     error as the comment."""
-    judge = model.with_structured_output(FeedbackJudgement)
+    judge = structured(model, FeedbackJudgement)
 
     async def feedback_judge(
         inputs: dict[str, Any], outputs: dict[str, Any], reference_outputs: dict[str, Any]

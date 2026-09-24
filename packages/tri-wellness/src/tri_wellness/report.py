@@ -14,6 +14,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from tri_core.db.repo import Conn
 from tri_core.harness.messages import text_of
+from tri_core.llm import streaming
 from tri_wellness import repo
 from tri_wellness.labs.evaluate import evaluate
 from tri_wellness.labs.training_context import load_training_context
@@ -50,7 +51,7 @@ class ReportWriter:
 
     async def write(self, prompt: str, out: Out, tags: list[str]) -> str:
         parts: list[str] = []
-        async for chunk in self.model.astream(
+        async for chunk in streaming(self.model).astream(
             [SystemMessage(REPORT_SYSTEM), HumanMessage(prompt)], config={"tags": tags}
         ):
             text = text_of(chunk)
