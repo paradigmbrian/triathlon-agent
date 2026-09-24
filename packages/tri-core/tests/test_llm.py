@@ -1,12 +1,17 @@
+import logging
 from typing import Any
 
+import anthropic
+import httpx
 import pytest
+from langgraph.errors import GraphBubbleUp
 
 from tri_core.config import Settings
 from tri_core.llm import (
     DEFAULTS,
     STRUCTURED_ROLES,
     Role,
+    claude_fallback,
     fallbacks_of,
     make_model,
     resolve,
@@ -145,3 +150,103 @@ def test_structured_roles_fall_back_without_effort():
     fbs = fallbacks_of(make_model(settings(), Role.NUTRITION_FUEL))
     assert [f.model for f in fbs] == ["claude-opus-4-8", "claude-sonnet-5"]
     assert all(f.effort is None for f in fbs)
+
+
+REQ = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+
+
+def overloaded() -> anthropic.OverloadedError:
+    return anthropic.OverloadedError(
+        "overloaded", response=httpx.Response(529, request=REQ), body=None
+    )
+
+
+def bad_request() -> anthropic.BadRequestError:
+    return anthropic.BadRequestError("bad", response=httpx.Response(400, request=REQ), body=None)
+
+
+# claude_fallback
+
+
+class FakeRequest:
+    def __init__(self, model: Any) -> None:
+        self.model = model
+
+    def override(self, **kw: Any) -> "FakeRequest":
+        return FakeRequest(kw["model"])
+
+
+def recording_handler(errors: dict[str, BaseException]):
+    seen: list[str] = []
+
+    async def handler(request: FakeRequest) -> str:
+        seen.append(request.model.model)
+        if request.model.model in errors:
+            raise errors[request.model.model]
+        return f"answered by {request.model.model}"
+
+    return handler, seen
+
+
+async def test_claude_fallback_moves_to_the_next_model_on_overload(caplog):
+    handler, seen = recording_handler({"claude-opus-5": overloaded()})
+    primary = make_model(settings(), Role.COACH)
+    with caplog.at_level(logging.WARNING, logger="tri_core.llm"):
+        out = await claude_fallback.awrap_model_call(FakeRequest(primary), handler)
+    assert out == "answered by claude-opus-4-8"
+    assert seen == ["claude-opus-5", "claude-opus-4-8"]
+    assert "coach fell back from claude-opus-5 to claude-opus-4-8 after OverloadedError" in (
+        caplog.text
+    )
+
+
+async def test_claude_fallback_raises_a_bad_request_without_retrying():
+    handler, seen = recording_handler({"claude-opus-5": bad_request()})
+    with pytest.raises(anthropic.BadRequestError):
+        await claude_fallback.awrap_model_call(
+            FakeRequest(make_model(settings(), Role.COACH)), handler
+        )
+    assert seen == ["claude-opus-5"]
+
+
+async def test_claude_fallback_lets_graph_control_flow_through():
+    handler, seen = recording_handler({"claude-opus-5": GraphBubbleUp()})
+    with pytest.raises(GraphBubbleUp):
+        await claude_fallback.awrap_model_call(
+            FakeRequest(make_model(settings(), Role.COACH)), handler
+        )
+    assert seen == ["claude-opus-5"]
+
+
+async def test_claude_fallback_raises_the_last_error_when_every_model_fails():
+    last = overloaded()
+    errors = {
+        "claude-opus-5": overloaded(),
+        "claude-opus-4-8": overloaded(),
+        "claude-sonnet-5": last,
+    }
+    handler, seen = recording_handler(errors)
+    with pytest.raises(anthropic.OverloadedError) as info:
+        await claude_fallback.awrap_model_call(
+            FakeRequest(make_model(settings(), Role.COACH)), handler
+        )
+    assert info.value is last and len(seen) == 3
+
+
+async def test_claude_fallback_without_fallbacks_raises_the_original_error():
+    first = overloaded()
+    handler, seen = recording_handler({"claude-opus-5": first})
+    model = make_model(settings(tri_model_fallbacks=""), Role.COACH)
+    with pytest.raises(anthropic.OverloadedError) as info:
+        await claude_fallback.awrap_model_call(FakeRequest(model), handler)
+    assert info.value is first and seen == ["claude-opus-5"]
+
+
+def test_claude_fallback_has_a_sync_hook_too():
+    def handler(request: FakeRequest) -> str:
+        if request.model.model == "claude-opus-5":
+            raise overloaded()
+        return request.model.model
+
+    out = claude_fallback.wrap_model_call(FakeRequest(make_model(settings(), Role.COACH)), handler)
+    assert out == "claude-opus-4-8"

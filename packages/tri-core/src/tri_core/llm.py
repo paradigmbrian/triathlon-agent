@@ -9,9 +9,11 @@ model in the role's chain.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Any
 
 from anthropic import (
     APIConnectionError,
@@ -21,11 +23,14 @@ from anthropic import (
     RateLimitError,
     ServiceUnavailableError,
 )
+from langchain.agents.middleware import AgentMiddleware
 from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models import BaseChatModel
 
 from tri_core.config import Effort as Effort
 from tri_core.config import Settings
+
+log = logging.getLogger(__name__)
 
 
 class Role(StrEnum):
@@ -170,3 +175,50 @@ def fallbacks_of(model: BaseChatModel) -> list[ChatAnthropic]:
             )
         )
     return out
+
+
+def _note(primary: BaseChatModel, fallback: ChatAnthropic, error: BaseException | None) -> None:
+    meta = primary.metadata or {}
+    after = f" after {type(error).__name__}" if error is not None else ""
+    log.warning(
+        "%s fell back from %s to %s%s",
+        meta.get("tri_role", "?"),
+        getattr(primary, "model", "?"),
+        getattr(fallback, "model", "?"),
+        after,
+    )
+
+
+class ClaudeFallbackMiddleware(AgentMiddleware[Any, Any, Any]):
+    """Retries a failed model call on the role's next Claude model. Only RETRYABLE errors fall
+    back; interrupts and every other error propagate at once. When the whole chain fails, the
+    last error is raised."""
+
+    def wrap_model_call(self, request: Any, handler: Any) -> Any:
+        try:
+            return handler(request)
+        except RETRYABLE as exc:
+            error: BaseException = exc
+        for fallback in fallbacks_of(request.model):
+            _note(request.model, fallback, error)
+            try:
+                return handler(request.override(model=fallback))
+            except RETRYABLE as exc:
+                error = exc
+        raise error
+
+    async def awrap_model_call(self, request: Any, handler: Any) -> Any:
+        try:
+            return await handler(request)
+        except RETRYABLE as exc:
+            error: BaseException = exc
+        for fallback in fallbacks_of(request.model):
+            _note(request.model, fallback, error)
+            try:
+                return await handler(request.override(model=fallback))
+            except RETRYABLE as exc:
+                error = exc
+        raise error
+
+
+claude_fallback = ClaudeFallbackMiddleware()
