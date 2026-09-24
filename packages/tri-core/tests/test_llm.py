@@ -34,7 +34,10 @@ def settings(**kw: Any) -> Settings:
 
 def test_every_role_launches_on_its_default():
     assert set(DEFAULTS) == set(Role)
-    tuned = {Role.NUTRITION_FUEL: ("claude-sonnet-5", None)}
+    tuned = {
+        Role.ANALYST: ("claude-opus-5", "medium"),
+        Role.NUTRITION_FUEL: ("claude-sonnet-5", None),
+    }
     for role in Role:
         spec = resolve(settings(), role)
         assert (spec.model, spec.effort) == tuned.get(role, ("claude-opus-5", None))
@@ -80,6 +83,7 @@ def test_an_effort_the_model_does_not_list_raises_naming_the_env_var():
     s = settings(tri_model_analyst="claude-haiku-4-5", tri_effort_analyst="low")
     with pytest.raises(ValueError, match="TRI_EFFORT_ANALYST=low is not supported by claude-haiku"):
         resolve(s, Role.ANALYST)
+    # Haiku lists no levels: the analyst's default effort is dropped, not reported as an error.
     assert resolve(settings(tri_model_analyst="claude-haiku-4-5"), Role.ANALYST).effort is None
 
 
@@ -333,7 +337,7 @@ def test_streaming_without_fallbacks_is_the_model_itself():
 def test_eval_metadata_names_the_target_and_judge_models():
     assert eval_metadata(settings(), Role.ANALYST, judge=True) == {
         "model": "claude-opus-5",
-        "effort": None,
+        "effort": "medium",
         "judge_model": "claude-opus-5",
     }
     s = settings(tri_model_analyst="claude-sonnet-5", tri_effort_analyst="medium")

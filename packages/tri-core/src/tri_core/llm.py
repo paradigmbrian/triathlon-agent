@@ -70,7 +70,9 @@ def _spec(max_tokens: int = 16000) -> ModelSpec:
 # when that role's eval passes the gate in the spec's §7.2.
 DEFAULTS: dict[Role, ModelSpec] = {
     Role.COACH: _spec(),
-    Role.ANALYST: _spec(),
+    # analyst-opus5-med-bff86186 vs analyst-base-feb4d978 (2026-09-24): grounded 33% from 8%, the
+    # rest held at 100%. analyst-sonnet5-med-056519a8 failed the gate (feedback_quality 67%).
+    Role.ANALYST: ModelSpec(model="claude-opus-5", effort="medium", max_tokens=16000, fallbacks=()),
     Role.WELLNESS_CHAT: _spec(),
     Role.PLANNING_AGENT: _spec(),
     Role.PLANNING_DESIGN: _spec(),
@@ -131,7 +133,9 @@ def resolve(settings: Settings, role: Role) -> ModelSpec:
                 "output, which cannot use thinking"
             )
         if effort not in _effort_levels(model):
-            raise ValueError(f"TRI_EFFORT_{_env(role)}={effort} is not supported by {model}")
+            if role_effort is not None:
+                raise ValueError(f"TRI_EFFORT_{_env(role)}={effort} is not supported by {model}")
+            effort = None  # the role's default effort, on an overriding model that has no levels
     return ModelSpec(model=model, effort=effort, max_tokens=default.max_tokens, fallbacks=fallbacks)
 
 

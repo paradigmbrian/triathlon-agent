@@ -472,7 +472,7 @@ async def test_run_eval_uses_the_analyst_and_judge_roles(monkeypatch):
     assert captured["metadata"] == {
         "prompt_version": PROMPT_VERSION,
         "model": "claude-opus-5",
-        "effort": None,
+        "effort": "medium",
         "judge_model": "claude-opus-5",
     }
 
