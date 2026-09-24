@@ -4,8 +4,11 @@ from typing import Any
 import anthropic
 import httpx
 import pytest
+from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.errors import GraphBubbleUp
+from pydantic import BaseModel
 
+import tri_core.llm as llm
 from tri_core.config import Settings
 from tri_core.llm import (
     DEFAULTS,
@@ -15,8 +18,10 @@ from tri_core.llm import (
     fallbacks_of,
     make_model,
     resolve,
+    streaming,
+    structured,
 )
-from tri_core.testing import ScriptedChatModel
+from tri_core.testing import ScriptedChatModel, tool_call
 
 
 def settings(**kw: Any) -> Settings:
@@ -250,3 +255,75 @@ def test_claude_fallback_has_a_sync_hook_too():
 
     out = claude_fallback.wrap_model_call(FakeRequest(make_model(settings(), Role.COACH)), handler)
     assert out == "claude-opus-4-8"
+
+
+# structured and streaming
+
+
+class Verdict(BaseModel):
+    ok: bool
+
+
+class Raising(ScriptedChatModel):
+    """A fake that fails every call with `error` before producing anything."""
+
+    error: Any = None
+
+    def _generate(self, *a: Any, **k: Any) -> Any:
+        raise self.error
+
+    def _stream(self, *a: Any, **k: Any) -> Any:
+        raise self.error
+
+
+def with_fallbacks_to(monkeypatch, *fallbacks: Any) -> None:
+    monkeypatch.setattr(llm, "fallbacks_of", lambda model: list(fallbacks))
+
+
+async def test_structured_falls_back_on_a_retryable_error(monkeypatch):
+    backup = ScriptedChatModel(script=[tool_call("Verdict", {"ok": True})])
+    with_fallbacks_to(monkeypatch, backup)
+    runnable = structured(Raising(script=[], error=overloaded()), Verdict)
+    assert await runnable.ainvoke([HumanMessage("judge")]) == Verdict(ok=True)
+
+
+async def test_structured_does_not_fall_back_on_a_bad_request(monkeypatch):
+    backup = ScriptedChatModel(script=[tool_call("Verdict", {"ok": True})])
+    with_fallbacks_to(monkeypatch, backup)
+    with pytest.raises(anthropic.BadRequestError):
+        await structured(Raising(script=[], error=bad_request()), Verdict).ainvoke(
+            [HumanMessage("x")]
+        )
+    assert backup.calls == 0
+
+
+async def test_structured_raises_the_primary_error_when_every_model_fails(monkeypatch):
+    first = overloaded()
+    with_fallbacks_to(monkeypatch, Raising(script=[], error=overloaded()))
+    with pytest.raises(anthropic.OverloadedError) as info:
+        await structured(Raising(script=[], error=first), Verdict).ainvoke([HumanMessage("x")])
+    assert info.value is first
+
+
+def test_structured_without_fallbacks_is_the_plain_structured_model():
+    model = ScriptedChatModel(script=[tool_call("Verdict", {"ok": False})])
+    assert structured(model, Verdict).invoke([HumanMessage("x")]) == Verdict(ok=False)
+
+
+async def test_streaming_falls_back_before_the_first_chunk(monkeypatch):
+    with_fallbacks_to(monkeypatch, ScriptedChatModel(script=[AIMessage(content="from backup")]))
+    chunks = [c async for c in streaming(Raising(script=[], error=overloaded())).astream("hi")]
+    assert "".join(str(c.content) for c in chunks) == "from backup"
+
+
+async def test_streaming_does_not_fall_back_on_a_bad_request(monkeypatch):
+    backup = ScriptedChatModel(script=[AIMessage(content="x")])
+    with_fallbacks_to(monkeypatch, backup)
+    with pytest.raises(anthropic.BadRequestError):
+        [c async for c in streaming(Raising(script=[], error=bad_request())).astream("hi")]
+    assert backup.calls == 0
+
+
+def test_streaming_without_fallbacks_is_the_model_itself():
+    model = ScriptedChatModel(script=[])
+    assert streaming(model) is model

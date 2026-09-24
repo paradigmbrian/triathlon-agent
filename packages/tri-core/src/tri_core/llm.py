@@ -25,7 +25,9 @@ from anthropic import (
 )
 from langchain.agents.middleware import AgentMiddleware
 from langchain_anthropic import ChatAnthropic
-from langchain_core.language_models import BaseChatModel
+from langchain_core.language_models import BaseChatModel, LanguageModelInput
+from langchain_core.runnables import Runnable, RunnableLambda
+from pydantic import BaseModel
 
 from tri_core.config import Effort as Effort
 from tri_core.config import Settings
@@ -222,3 +224,38 @@ class ClaudeFallbackMiddleware(AgentMiddleware[Any, Any, Any]):
 
 
 claude_fallback = ClaudeFallbackMiddleware()
+
+
+def _noting(primary: BaseChatModel, fallback: ChatAnthropic) -> Runnable[Any, Any]:
+    """An identity step that logs the switch before the fallback runs."""
+
+    def note(value: Any) -> Any:
+        _note(primary, fallback, None)
+        return value
+
+    return RunnableLambda(note)
+
+
+def structured(model: BaseChatModel, schema: type[BaseModel]) -> Runnable[LanguageModelInput, Any]:
+    """`model.with_structured_output(schema)`, retried on the role's fallbacks for a RETRYABLE
+    error. When every model fails, the primary's error is raised."""
+    primary = model.with_structured_output(schema)
+    fallbacks = fallbacks_of(model)
+    if not fallbacks:
+        return primary
+    return primary.with_fallbacks(
+        [_noting(model, fb) | fb.with_structured_output(schema) for fb in fallbacks],
+        exceptions_to_handle=RETRYABLE,
+    )
+
+
+def streaming(model: BaseChatModel) -> Runnable[LanguageModelInput, Any]:
+    """`model`, retried on the role's fallbacks when a RETRYABLE error comes before the first
+    chunk. An error after the first chunk propagates. When every model fails, the primary's
+    error is raised."""
+    fallbacks = fallbacks_of(model)
+    if not fallbacks:
+        return model
+    return model.with_fallbacks(
+        [_noting(model, fb) | fb for fb in fallbacks], exceptions_to_handle=RETRYABLE
+    )
