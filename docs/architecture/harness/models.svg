@@ -1,0 +1,167 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" width="1000" height="600" role="img" aria-labelledby="models-title models-desc">
+  <title id="models-title">One model per role, with a Claude fallback chain</title>
+  <desc id="models-desc">CLIs, tri-web and the eval runners ask tri_core.llm.make_model for a role's model. resolve applies env overrides over DEFAULTS and returns a ModelSpec: model, effort, max_tokens and a fallback chain. The ChatAnthropic it builds carries the role and chain as metadata. Three carriers retry a RETRYABLE error on the next Claude model: the claude_fallback middleware in every agent, structured() for structured-output calls, and streaming() for the lab report. Today the analyst runs opus-5 at medium effort and nutrition_fuel runs sonnet-5; every other role runs opus-5 at default effort. Structured roles take no effort.</desc>
+  <style>
+    svg {
+      --surface: #F8FAF9; --ink: #16201E; --muted: #5A6A66; --rule: #C3CECB;
+      --acc: #0E6B66; --acc-tint: #DAEAE7; --acc-line: #8DBDB7; --w: #B4470F; --w-tint: #F6E4D8;
+      --sans: -apple-system, "Segoe UI", "Public Sans", Helvetica, Arial, sans-serif;
+      --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      svg {
+        --surface: #151D1C; --ink: #E2EAE8; --muted: #93A39F; --rule: #2C3836;
+        --acc: #5BBDB4; --acc-tint: #15302E; --acc-line: #2F6660; --w: #EE8C4E; --w-tint: #3A2518;
+      }
+    }
+    .bg { fill: var(--surface); }
+    .b-n { fill: var(--surface); stroke: var(--rule); stroke-width: 1; }
+    .b-layer { fill: var(--acc-tint); stroke: var(--acc-line); stroke-width: 1; }
+    .b-acc { fill: var(--acc-tint); stroke: var(--acc); stroke-width: 1.4; }
+    .b-accn { fill: var(--surface); stroke: var(--acc); stroke-width: 1.4; }
+    .b-w { fill: var(--w-tint); stroke: var(--w); stroke-width: 1.4; }
+    .ln { fill: none; stroke: var(--ink); stroke-width: 1.4; }
+    .ln-w { fill: none; stroke: var(--w); stroke-width: 1.6; }
+    .dash { stroke-dasharray: 5 4; }
+    .ah-ink { fill: var(--ink); }
+    .ah-w { fill: var(--w); }
+    .t { font: 600 13px var(--sans); fill: var(--ink); }
+    .s { font: 600 12px var(--sans); fill: var(--ink); }
+    .ss { font: 500 11px var(--sans); fill: var(--ink); }
+    .m { font: 400 11px var(--mono); fill: var(--muted); }
+    .mi { font: 400 11px var(--mono); fill: var(--ink); }
+    .m10 { font: 400 10px var(--mono); fill: var(--muted); }
+    .ma { font: 500 11px var(--mono); fill: var(--acc); }
+    .ma10 { font: 500 10px var(--mono); fill: var(--acc); }
+    .mw { font: 500 11px var(--mono); fill: var(--w); }
+    .lab { font: 600 10.5px var(--mono); letter-spacing: 0.08em; fill: var(--muted); }
+  </style>
+  <defs>
+    <marker id="models-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="ah-ink"/></marker>
+    <marker id="models-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="ah-w"/></marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1000" height="600"/>
+
+  <!-- callers -->
+  <text class="lab" x="20" y="34">CALLERS</text>
+  <rect class="b-n" x="20" y="44" width="200" height="54" rx="4"/>
+  <text class="s" x="120" y="66" text-anchor="middle">package CLIs</text>
+  <text class="m10" x="120" y="84" text-anchor="middle">make_model(settings, Role.X)</text>
+  <rect class="b-n" x="20" y="108" width="200" height="54" rx="4"/>
+  <text class="s" x="120" y="130" text-anchor="middle">tri-web · coach make_deps</text>
+  <text class="m10" x="120" y="148" text-anchor="middle">models: ModelProvider (role → model)</text>
+  <rect class="b-n" x="20" y="172" width="200" height="54" rx="4"/>
+  <text class="s" x="120" y="194" text-anchor="middle">evals run_eval</text>
+  <text class="m10" x="120" y="212" text-anchor="middle">target on its role · judge on JUDGE</text>
+
+  <path class="ln" d="M220 135 H257" marker-end="url(#models-a)"/>
+
+  <!-- tri_core.llm -->
+  <rect class="b-layer" x="260" y="20" width="460" height="250" rx="4"/>
+  <text class="t" x="276" y="44">tri_core.llm</text>
+  <text class="m" x="704" y="44" text-anchor="end">packages/tri-core/src/tri_core/llm.py</text>
+
+  <rect class="b-n" x="276" y="58" width="196" height="90" rx="3"/>
+  <text class="s" x="288" y="78">env overrides</text>
+  <text class="m10" x="288" y="96">TRI_MODEL (pins every role)</text>
+  <text class="m10" x="288" y="110">TRI_MODEL_&lt;ROLE&gt;</text>
+  <text class="m10" x="288" y="124">TRI_EFFORT_&lt;ROLE&gt;</text>
+  <text class="m10" x="288" y="138">TRI_MODEL_FALLBACKS</text>
+
+  <rect class="b-n" x="276" y="160" width="196" height="94" rx="3"/>
+  <text class="s" x="288" y="180">DEFAULTS</text>
+  <text class="m10" x="288" y="198">one ModelSpec per Role</text>
+  <text class="m10" x="288" y="212">changed one line at a time,</text>
+  <text class="m10" x="288" y="226">only after an eval passes</text>
+  <text class="m10" x="288" y="240">the §7.2 gate</text>
+
+  <path class="ln" d="M472 103 H505 V150" marker-end="url(#models-a)"/>
+  <path class="ln" d="M472 207 H505 V190" marker-end="url(#models-a)"/>
+  <text class="m10" x="478" y="97">override</text>
+  <text class="m10" x="478" y="222">else</text>
+
+  <rect class="b-acc" x="508" y="58" width="196" height="196" rx="3"/>
+  <text class="s" x="520" y="78">resolve(settings, role)</text>
+  <text class="m10" x="520" y="96">→ ModelSpec</text>
+  <text class="mi" x="532" y="114">model</text>
+  <text class="mi" x="532" y="130">effort · None = default</text>
+  <text class="mi" x="532" y="146">max_tokens · 16k, labs 32k</text>
+  <text class="mi" x="532" y="162">fallbacks · two others</text>
+  <text class="m10" x="520" y="186">make_model → ChatAnthropic</text>
+  <text class="m10" x="520" y="200">metadata: tri_role,</text>
+  <text class="m10" x="520" y="214">tri_fallbacks</text>
+  <text class="mw" x="520" y="238">bad override: ValueError</text>
+  <text class="m10" x="520" y="250">at startup, before any turn</text>
+
+  <!-- carriers -->
+  <path class="ln" d="M720 150 H757" marker-end="url(#models-a)"/>
+  <text class="lab" x="760" y="34">RETRIED ON THE NEXT CLAUDE MODEL</text>
+  <rect class="b-accn" x="760" y="44" width="220" height="62" rx="3"/>
+  <text class="s" x="772" y="63">claude_fallback</text>
+  <text class="ma10" x="772" y="80">harness.agents · every create_agent</text>
+  <text class="m10" x="772" y="96">middleware, just before caching</text>
+  <rect class="b-accn" x="760" y="116" width="220" height="62" rx="3"/>
+  <text class="s" x="772" y="135">structured(model, Schema)</text>
+  <text class="m10" x="772" y="152">planning design · nutrition fuel</text>
+  <text class="m10" x="772" y="168">lab extract · the three judges</text>
+  <rect class="b-accn" x="760" y="188" width="220" height="62" rx="3"/>
+  <text class="s" x="772" y="207">streaming(model)</text>
+  <text class="m10" x="772" y="224">lab report · falls back only</text>
+  <text class="m10" x="772" y="240">before the first chunk</text>
+
+  <!-- chain -->
+  <text class="lab" x="20" y="300">FALLBACK CHAIN · RETRYABLE ONLY</text>
+  <rect class="b-n" x="20" y="312" width="130" height="40" rx="20"/>
+  <text class="ss" x="85" y="337" text-anchor="middle">claude-opus-5</text>
+  <path class="ln-w" d="M150 332 H187" marker-end="url(#models-w)"/>
+  <rect class="b-n" x="190" y="312" width="130" height="40" rx="20"/>
+  <text class="ss" x="255" y="337" text-anchor="middle">claude-opus-4-8</text>
+  <path class="ln-w" d="M320 332 H357" marker-end="url(#models-w)"/>
+  <rect class="b-n" x="360" y="312" width="130" height="40" rx="20"/>
+  <text class="ss" x="425" y="337" text-anchor="middle">claude-sonnet-5</text>
+  <text class="m10" x="20" y="372">the first two that differ from the primary · 429, 529, 5xx, lost connection</text>
+  <text class="mw" x="20" y="388">never on 400, 401, 403, 404, 413</text>
+  <text class="m10" x="20" y="404">each hop logs WARNING tri_core.llm: &lt;role&gt; fell back from … to … · LangSmith run marked tri_fallback_from</text>
+
+  <text class="m10" x="520" y="300">effort on a fallback: the primary's when listed, else high (Opus 4.8), none for Haiku</text>
+  <text class="m10" x="520" y="316">and none for a structured role · a thread stays on one model, so the prompt cache holds</text>
+  <text class="m10" x="520" y="340">the SDK's own max_retries=2 runs first on the same model</text>
+  <text class="m10" x="520" y="356">a whole chain failing surfaces the same REPL / web error as before</text>
+
+  <!-- roles today -->
+  <text class="lab" x="20" y="440">ROLES AS OF 2026-09-24 · model / effort</text>
+  <rect class="b-acc" x="20" y="452" width="176" height="44" rx="3"/>
+  <text class="s" x="108" y="470" text-anchor="middle">analyst</text>
+  <text class="ma10" x="108" y="486" text-anchor="middle">opus-5 / medium · tuned</text>
+  <rect class="b-acc" x="212" y="452" width="176" height="44" rx="3"/>
+  <text class="s" x="300" y="470" text-anchor="middle">nutrition_fuel</text>
+  <text class="ma10" x="300" y="486" text-anchor="middle">sonnet-5 · tuned · structured</text>
+  <rect class="b-n" x="404" y="452" width="176" height="44" rx="3"/>
+  <text class="s" x="492" y="470" text-anchor="middle">coach</text>
+  <text class="m10" x="492" y="486" text-anchor="middle">opus-5 / default</text>
+  <rect class="b-n" x="596" y="452" width="176" height="44" rx="3"/>
+  <text class="s" x="684" y="470" text-anchor="middle">wellness_chat</text>
+  <text class="m10" x="684" y="486" text-anchor="middle">opus-5 / default</text>
+  <rect class="b-n" x="788" y="452" width="192" height="44" rx="3"/>
+  <text class="s" x="884" y="470" text-anchor="middle">planning_agent</text>
+  <text class="m10" x="884" y="486" text-anchor="middle">opus-5 / default</text>
+
+  <rect class="b-n" x="20" y="508" width="176" height="44" rx="3"/>
+  <text class="s" x="108" y="526" text-anchor="middle">nutrition_agent</text>
+  <text class="m10" x="108" y="542" text-anchor="middle">opus-5 / default</text>
+  <rect class="b-n" x="212" y="508" width="176" height="44" rx="3"/>
+  <text class="s" x="300" y="526" text-anchor="middle">planning_design</text>
+  <text class="m10" x="300" y="542" text-anchor="middle">opus-5 · structured</text>
+  <rect class="b-n" x="404" y="508" width="176" height="44" rx="3"/>
+  <text class="s" x="492" y="526" text-anchor="middle">lab_extract</text>
+  <text class="m10" x="492" y="542" text-anchor="middle">opus-5 · 32k · structured</text>
+  <rect class="b-n" x="596" y="508" width="176" height="44" rx="3"/>
+  <text class="s" x="684" y="526" text-anchor="middle">lab_report</text>
+  <text class="m10" x="684" y="542" text-anchor="middle">opus-5 / default · 32k</text>
+  <rect class="b-n" x="788" y="508" width="192" height="44" rx="3"/>
+  <text class="s" x="884" y="526" text-anchor="middle">judge</text>
+  <text class="m10" x="884" y="542" text-anchor="middle">opus-5 · structured · never tuned</text>
+
+  <text class="m10" x="20" y="580">structured = with_structured_output, which forces a tool call the API refuses alongside thinking, so these roles take no effort</text>
+</svg>

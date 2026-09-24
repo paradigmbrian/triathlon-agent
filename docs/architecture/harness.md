@@ -1,6 +1,6 @@
 # Coach harness
 
-LangGraph is the runtime. The harness is the layer this repo builds on top of it: how agents are built, how an agent runs as a tool, how a sub-agent hands control back to its parent graph, how state is persisted, and how a turn is streamed to a terminal or the browser. That layer lives in one place, `packages/tri-core/src/tri_core/harness/`. Each package keeps its own graphs, nodes, prompts, tools and domain dialogues, and imports the rest.
+LangGraph is the runtime. The harness is the layer this repo builds on top of it: how agents are built, how an agent runs as a tool, how a sub-agent hands control back to its parent graph, how state is persisted, how a turn is streamed to a terminal or the browser, and which model each role runs on. That layer lives in `packages/tri-core/src/tri_core/harness/` and `tri_core/llm.py`. Each package keeps its own graphs, nodes, prompts, tools and domain dialogues, and imports the rest.
 
 The diagrams below are SVG files in `docs/architecture/harness/`. They follow the reader's light or dark theme.
 
@@ -38,6 +38,7 @@ Dashed edges are tools that return `Command(graph=Command.PARENT)`, so a model's
 | `messages` | `text_of`, `last_ai_text` | Text out of LangChain messages. |
 | `persistence` | `open_checkpointer`, `open_store`, `make_serde`, `checkpointer_ready`, `store_ready`, `SETUP_HINT`, `STORE_SETUP_HINT` | Postgres checkpointer and Store, readiness checks and the setup hints. |
 | `turns` | `stream_turn`, `run_agent_turn`, `run_graph_turn`, `AgentTurnPrinter`, `GraphTurnPrinter`, `turn_config`, `format_failure`, `Out` | One stream loop for every REPL and for tri-web, and the error sentences a failed turn prints. |
+| `tri_core.llm` (beside the harness) | `Role`, `ModelSpec`, `DEFAULTS`, `resolve`, `make_model`, `fallbacks_of`, `claude_fallback`, `structured`, `streaming`, `eval_metadata` | The model, effort, output ceiling and Claude fallback chain for each role; see the next section. |
 
 Which harness modules each package's `src/` imports:
 
@@ -49,6 +50,17 @@ Which harness modules each package's `src/` imports:
 | tri-wellness | ● | | | ● | ● | ● |
 | tri-analyze | ● | | | ● | | ● |
 | tri-web | | | | ● | ● | |
+
+## One model per role
+
+![One model per role, with a Claude fallback chain](harness/models.svg)
+
+Read it left to right. Every model in the app comes from `tri_core.llm.make_model(settings, Role.<ROLE>)`; the coach's `make_deps`, tri-web and the eval runners take a `ModelProvider` (role → model) so one fake can stand in for every role in tests.
+
+- **Resolution.** `resolve` takes `TRI_MODEL_<ROLE>`, else `TRI_MODEL`, else the role's `DEFAULTS` entry; `TRI_EFFORT_<ROLE>` overrides effort; `TRI_MODEL_FALLBACKS` overrides the chain (empty disables it). The result is a `ModelSpec`, and the `ChatAnthropic` built from it carries `tri_role` and `tri_fallbacks` as metadata. A bad override raises `ValueError` when the CLI or server builds its models, before any turn.
+- **Three carriers.** `claude_fallback` is a middleware in every `create_agent` loop, just before prompt caching. `structured(model, Schema)` wraps every `with_structured_output` call (planning design, nutrition fuel, lab extraction, the three judges). `streaming(model)` wraps the lab report stream and falls back only before the first chunk. All three retry on `RETRYABLE` only (rate limit, overload, 5xx, lost connection), never on a 4xx, and each hop logs a warning naming the role and both models.
+- **The chain** is the first two of opus-5, opus-4-8, sonnet-5 that differ from the primary. A fallback keeps the primary's effort when its profile lists it, else runs at high (Opus 4.8), else none (Haiku); a structured role's fallbacks take no effort.
+- **Defaults are tuned by eval, one role per commit.** As of 2026-09-24: `analyst` on opus-5 / medium and `nutrition_fuel` on sonnet-5; every other role on opus-5 at default effort. `judge` is never tuned so experiments stay comparable. Structured roles (`planning_design`, `nutrition_fuel`, `lab_extract`, `judge`) refuse an effort: it turns thinking on, and the API rejects thinking with the forced tool call `with_structured_output` uses. The runs behind each adoption are in `docs/notes/`.
 
 ## Where each concern lives
 
@@ -62,6 +74,7 @@ Which harness modules each package's `src/` imports:
 | Orchestration | | `tri_coach/graph/graph.py` | The coach routes; planning and nutrition start fresh on every consult. |
 | Tool plane | | `tri_core/mcp/*`, `tri_core/db/sql_tool.py` | One session per MCP server; SQL is a single SELECT in a read-only transaction. |
 | Guardrails | | `review.py` → `apply.py`, `allowlist.py` | Models propose. Only `apply` writes. |
+| Model choice | `tri_core/llm.py` | `.env` overrides per role; `evals/run.py` per package | One model, effort and fallback chain per role; a default changes only after its eval passes the gate. |
 
 ## Rules to keep
 
