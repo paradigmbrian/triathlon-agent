@@ -13,6 +13,7 @@ from langchain_core.runnables.config import merge_configs
 from langgraph.store.base import BaseStore
 from pydantic import BaseModel
 
+from tri_core.llm import structured
 from tri_nutrition import plan_loader, repo
 from tri_nutrition import store as S
 from tri_nutrition.graph.deps import GraphDeps
@@ -60,8 +61,8 @@ class FuelPlanner:
     node and the LangSmith evaluation target, which has no database."""
 
     def __init__(self, model: BaseChatModel) -> None:
-        self._session: Runnable[LanguageModelInput, Any] = model.with_structured_output(SessionFuel)
-        self._race: Runnable[LanguageModelInput, Any] = model.with_structured_output(RaceFuelPlan)
+        self._session: Runnable[LanguageModelInput, Any] = structured(model, SessionFuel)
+        self._race: Runnable[LanguageModelInput, Any] = structured(model, RaceFuelPlan)
 
     @staticmethod
     async def _ask(
@@ -119,7 +120,7 @@ class FuelPlanner:
 
 
 def make_fuel_node(deps: GraphDeps) -> Any:
-    planner = FuelPlanner(deps.model)
+    planner = FuelPlanner(deps.fuel_model or deps.model)
 
     async def fuel(
         state: NutritionState, config: RunnableConfig, *, store: BaseStore

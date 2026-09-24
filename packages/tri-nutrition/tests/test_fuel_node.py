@@ -1,15 +1,26 @@
+import contextlib
 from datetime import timedelta
 
 import pytest
 from langgraph.graph import END, START, StateGraph
 
+import tri_nutrition.graph.nodes.fuel as fuel_node
 from tri_core.testing import ScriptedChatModel, tool_call
 from tri_nutrition import repo
 from tri_nutrition import store as S
+from tri_nutrition.config import NutritionSettings
+from tri_nutrition.graph.deps import GraphDeps
+from tri_nutrition.graph.deps import make_deps as real_make_deps
 from tri_nutrition.graph.nodes.fuel import make_fuel_node, qualifies, race_due
 from tri_nutrition.graph.nodes.targets import build_horizon
 from tri_nutrition.graph.state import NutritionState
-from tri_nutrition.nutrition.models import NutritionProfile, PlanContext, Session
+from tri_nutrition.nutrition.models import (
+    NutritionProfile,
+    PlanContext,
+    RaceFuelPlan,
+    Session,
+    SessionFuel,
+)
 from tri_nutrition.testing import (
     MONDAY,
     PROFILE_ARGS,
@@ -191,3 +202,31 @@ async def test_no_profile_is_a_no_op(ndb, mem_store, make_deps):
     graph = fuel_graph(make_deps(ScriptedChatModel(script=[])), mem_store)
     out = await graph.ainvoke({"pending_changes": [], "last_error": "x"}, CFG)
     assert out["pending_changes"] == [] and out["last_error"] == "x"
+
+
+def test_the_fuel_node_plans_with_the_fuel_model_when_one_is_set(monkeypatch):
+    seen = []
+
+    def spy(model, schema):
+        seen.append((model, schema))
+        return ScriptedChatModel(script=[])
+
+    monkeypatch.setattr(fuel_node, "structured", spy)
+    agent, fueler = ScriptedChatModel(script=[]), ScriptedChatModel(script=[])
+    deps = GraphDeps(model=agent, connect=lambda: contextlib.nullcontext(None), db_url="unused")
+    make_fuel_node(deps)
+    deps.fuel_model = fueler
+    make_fuel_node(deps)
+    assert seen == [
+        (agent, SessionFuel),
+        (agent, RaceFuelPlan),
+        (fueler, SessionFuel),
+        (fueler, RaceFuelPlan),
+    ]
+
+
+def test_make_deps_takes_an_optional_fuel_model():
+    agent, fueler = ScriptedChatModel(script=[]), ScriptedChatModel(script=[])
+    settings = NutritionSettings(_env_file=None)
+    assert real_make_deps(settings, agent, None).fuel_model is None
+    assert real_make_deps(settings, agent, None, None, fuel_model=fueler).fuel_model is fueler
