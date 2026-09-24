@@ -102,7 +102,7 @@ create unique index if not exists fuel_plans_kind_day_workout_title_idx
   on fuel_plans (kind, day, coalesce(tp_workout_id, ''), coalesce((payload->>'title'), ''));
 ```
 
-The data layer spec takes 007 and the hygiene spec 008 and 009.
+The data layer spec takes 007, the guardrails spec 008, and the hygiene spec 009 and 010.
 
 ## 4. Testing
 
