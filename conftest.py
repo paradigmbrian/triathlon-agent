@@ -12,6 +12,16 @@ os.environ["LANGCHAIN_TRACING_V2"] = "false"
 pytest_plugins = ["tri_core.testing.fixtures"]
 
 
+@pytest.fixture(autouse=True)
+def _restore_environ():
+    """A CLI callback under CliRunner loads the developer's .env into os.environ; without this,
+    every later test would see those variables (TRI_ATHLETE_SEX turned tri-web's labs on)."""
+    saved = dict(os.environ)
+    yield
+    os.environ.clear()
+    os.environ.update(saved)
+
+
 def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption(
         "--live", action="store_true", default=False, help="run tests that hit real MCP servers"
