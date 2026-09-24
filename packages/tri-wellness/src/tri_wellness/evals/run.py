@@ -10,6 +10,7 @@ from typing import Any
 from langchain_core.language_models import BaseChatModel
 from langsmith import Client, aevaluate
 
+from tri_core.llm import Role, resolve
 from tri_wellness.config import WellnessSettings
 from tri_wellness.evals.cases import CASES
 from tri_wellness.evals.evaluators import (
@@ -76,7 +77,7 @@ async def run_eval(
         metadata={
             "prompt_version": PROMPT_VERSION,
             "ranges_version": registry.version,
-            "model": settings.tri_model,
+            "model": resolve(settings, Role.LAB_REPORT).model,
         },
         client=client,
         max_concurrency=2,

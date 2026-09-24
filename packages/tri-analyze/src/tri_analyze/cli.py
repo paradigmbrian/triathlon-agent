@@ -57,13 +57,13 @@ async def _chat(*, no_live: bool) -> int:
     import psycopg
 
     from tri_analyze.agent import build_agent
-    from tri_analyze.llm import make_model
     from tri_analyze.prompts.analyst import render_system_prompt
     from tri_analyze.repl import chat_loop
     from tri_analyze.repo import AthleteContext, load_athlete_context
     from tri_analyze.tools.live import open_live_tools
     from tri_core.db.connection import connect
     from tri_core.db.sql_tool import make_query_tool
+    from tri_core.llm import Role, make_model
     from tri_core.sync.runner import run_sync
 
     settings = get_analyze_settings()
@@ -90,7 +90,7 @@ async def _chat(*, no_live: bool) -> int:
                 open_live_tools(settings, lambda m: _out(m + "\n"))
             )
         tools: list[BaseTool] = [make_query_tool(settings.database_url), *live_tools]
-        agent = build_agent(make_model(settings), tools)
+        agent = build_agent(make_model(settings, Role.ANALYST), tools)
 
         async def cmd_tools() -> str:
             return "\n".join(f"- {t.name}: {t.description.splitlines()[0]}" for t in tools)
@@ -140,7 +140,7 @@ def eval_cmd(
 
 async def _eval(*, prefix: str | None, recreate: bool) -> int:
     from tri_analyze.evals.run import run_eval
-    from tri_analyze.llm import make_model
+    from tri_core.llm import Role, make_model
 
     settings = get_analyze_settings()
     if not settings.langsmith_api_key:
@@ -151,7 +151,7 @@ async def _eval(*, prefix: str | None, recreate: bool) -> int:
         return 2
     rates, errors = await run_eval(
         settings,
-        make_model(settings),
+        make_model(settings, Role.ANALYST),
         prefix=prefix,
         recreate=recreate,
         log=lambda m: _out(m + "\n"),

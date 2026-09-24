@@ -19,6 +19,7 @@ from tri_coach.evals.evaluators import (
 from tri_coach.evals.target import make_target
 from tri_coach.prompts.coach import PROMPT_VERSION
 from tri_core.config import Settings
+from tri_core.llm import Role, resolve
 from tri_nutrition.evals.run import pass_rates
 
 DATASET_NAME = "tri_coach_routing"
@@ -68,7 +69,7 @@ async def run_eval(
         data=DATASET_NAME,
         evaluators=evaluators,
         experiment_prefix=prefix or f"coach-v{PROMPT_VERSION}",
-        metadata={"prompt_version": PROMPT_VERSION, "model": settings.tri_model},
+        metadata={"prompt_version": PROMPT_VERSION, "model": resolve(settings, Role.COACH).model},
         client=client,
         max_concurrency=2,
     )

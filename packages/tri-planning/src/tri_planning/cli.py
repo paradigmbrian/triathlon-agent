@@ -39,13 +39,13 @@ def _out(s: str) -> None:
 @asynccontextmanager
 async def _open_graph(*, no_live: bool) -> AsyncIterator[Any]:
     from tri_core.harness.persistence import SETUP_HINT, checkpointer_ready, open_checkpointer
+    from tri_core.llm import Role, make_model
     from tri_core.mcp.client import McpToolClient
     from tri_core.mcp.live_tools import open_live_tools
     from tri_core.mcp.servers import garmin_spec, trainingpeaks_spec
     from tri_planning.allowlist import GARMIN_LIVE_TOOLS
     from tri_planning.graph.deps import make_deps
     from tri_planning.graph.graph import build_graph
-    from tri_planning.graph.llm import make_model
     from tri_planning.graph.state import STATE_TYPES
 
     settings = get_planning_settings()
@@ -78,7 +78,12 @@ async def _open_graph(*, no_live: bool) -> AsyncIterator[Any]:
         saver = await stack.enter_async_context(
             open_checkpointer(settings.database_url, STATE_TYPES)
         )
-        deps = make_deps(settings, make_model(settings), tp)
+        deps = make_deps(
+            settings,
+            make_model(settings, Role.PLANNING_AGENT),
+            tp,
+            design_model=make_model(settings, Role.PLANNING_DESIGN),
+        )
         deps.garmin_tools = garmin_tools
         yield build_graph(deps, saver)
 

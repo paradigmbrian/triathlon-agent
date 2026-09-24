@@ -16,6 +16,7 @@ from tri_analyze.evals.cases import CASES
 from tri_analyze.evals.evaluators import make_judge, pulls_splits, states_window, uses_sql
 from tri_analyze.evals.target import make_target
 from tri_analyze.prompts.analyst import PROMPT_VERSION
+from tri_core.llm import Role, resolve
 
 DATASET_NAME = "tri_analyze_feedback"
 DATASET_DESCRIPTION = (
@@ -80,7 +81,7 @@ async def run_eval(
         data=DATASET_NAME,
         evaluators=evaluators,
         experiment_prefix=prefix or f"analyst-v{PROMPT_VERSION}",
-        metadata={"prompt_version": PROMPT_VERSION, "model": settings.tri_model},
+        metadata={"prompt_version": PROMPT_VERSION, "model": resolve(settings, Role.ANALYST).model},
         client=client,
         max_concurrency=2,
     )

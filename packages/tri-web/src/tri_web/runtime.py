@@ -50,14 +50,14 @@ async def open_runtime(
     settings: WebSettings, *, no_live: bool, log: Log, model: BaseChatModel | None = None
 ) -> AsyncIterator[Runtime]:
     """Readiness, then servers, checkpointer, store, deps, graph; everything closes with the
-    exit stack. `model` overrides make_model (tests)."""
+    exit stack. `model`, when given, replaces every role's model (tests)."""
     from tri_coach.cli import ready
     from tri_coach.graph.deps import make_deps
     from tri_coach.graph.graph import build_graph
-    from tri_coach.graph.llm import make_model
     from tri_coach.graph.state import STATE_TYPES
     from tri_coach.servers import open_servers
     from tri_core.harness.persistence import open_checkpointer, open_store
+    from tri_core.llm import Role, make_model
 
     problem = ready(settings)
     if problem is not None:
@@ -68,7 +68,11 @@ async def open_runtime(
             open_checkpointer(settings.database_url, STATE_TYPES)
         )
         store = await stack.enter_async_context(open_store(settings.database_url))
-        deps = make_deps(settings, model or make_model(settings), servers)
+
+        def models(role: Role) -> BaseChatModel:
+            return model if model is not None else make_model(settings, role)
+
+        deps = make_deps(settings, models, servers)
         yield Runtime(
             settings=settings,
             graph=build_graph(deps, saver, store),
