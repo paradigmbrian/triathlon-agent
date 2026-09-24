@@ -13,7 +13,7 @@ Read it top to bottom. Teal names are the harness module doing the work at that 
 - **Hosts.** The terminal REPL, tri-web and the eval target all run a turn. The REPL and tri-web go through `tri_coach.repl.run_turn`, which streams on `harness.turns.stream_turn` with thread `"coach"` and a recursion limit of 60. tri-web's `TurnEmitter` subclasses the coach `TurnPrinter` to turn stream events into SSE.
 - **Wiring.** `tri_web.runtime.open_runtime` (and the CLI's `_open_graph`) opens the MCP sessions, then the Postgres checkpointer and Store from `harness.persistence`, then builds the coach graph.
 - **Orchestration.** The coach `StateGraph` routes between the `coach` node, the embedded planning and nutrition graphs, `review` and `apply` (see the next diagram). Every super-step checkpoints to Postgres; the serializer only accepts the pydantic types listed in `tri_coach.graph.state.STATE_TYPES`.
-- **Inner loop.** The `coach` node renders a fresh prompt each turn and runs a `create_agent` loop built by `harness.agents.make_subagent`. Its middleware runs in a fixed order: `one_tool_call_at_a_time`, then prompt caching last.
+- **Inner loop.** The `coach` node renders a fresh prompt each turn and runs a `create_agent` loop built by `harness.agents.make_subagent`. Its middleware runs in a fixed order: `one_tool_call_at_a_time`, then `claude_fallback`, which retries an overloaded or unavailable call on the role's next Claude model, then prompt caching last.
 - **Tool plane.** Handoff tools leave the loop through `harness.handoff.handoff()`. `ask_analyst` and `ask_wellness` are `harness.agent_tool` tools: each call builds a fresh read-only agent and runs it on a throwaway thread. Writes to TrainingPeaks and Garmin never happen inside a model loop; only `apply` calls `ToolsCaller`, and only after the athlete approves.
 
 ## How the coach graph routes
@@ -32,7 +32,7 @@ Dashed edges are tools that return `Command(graph=Command.PARENT)`, so a model's
 
 | Module | Main names | What it does |
 |---|---|---|
-| `agents` | `make_subagent`, `build_chat_agent`, `one_tool_call_at_a_time` | Builds every `create_agent` loop. `make_subagent` has no checkpointer (the parent graph owns the messages); `build_chat_agent` keeps a thread per conversation. Prompt caching is always the last middleware. |
+| `agents` | `make_subagent`, `build_chat_agent`, `one_tool_call_at_a_time` | Builds every `create_agent` loop. `make_subagent` has no checkpointer (the parent graph owns the messages); `build_chat_agent` keeps a thread per conversation. Every agent ends with `claude_fallback` and then prompt caching, which is always last. |
 | `agent_tool` | `agent_tool`, `Invocation` | Exposes an agent as a one-question tool. `prepare()` runs inside the `try`, so a failure comes back as text; interrupts still propagate. |
 | `handoff` | `handoff`, `turn_messages`, `undelivered` | Leaves a sub-agent for another node of the parent graph with a valid history. |
 | `messages` | `text_of`, `last_ai_text` | Text out of LangChain messages. |
@@ -66,6 +66,7 @@ Which harness modules each package's `src/` imports:
 ## Rules to keep
 
 - **Only `tri_core/harness/agents.py` calls `create_agent`.** Build agents with `make_subagent` or `build_chat_agent`.
+- **Build models with `tri_core.llm.make_model(settings, Role.<ROLE>)`.** Each role has its own model, effort and fallback chain; `.env.example` lists the overrides. Structured-output calls go through `structured()`, the lab report stream through `streaming()`, so they fall back too. Roles that run structured output take no effort.
 - **Coach sub-agents pass `middleware=[one_tool_call_at_a_time]`.** A handoff unwinds the loop as soon as it runs, so a parallel sibling call would lose its result. `test_the_coach_node_disables_parallel_tool_calls` and `test_the_eval_target_disables_parallel_tool_calls` fail if the argument is dropped.
 - **A tool that jumps to another node returns `handoff(...)`,** never a hand-built `Command(graph=Command.PARENT)`.
 - **`ask_analyst` and `ask_wellness` descriptions are part of the prompt cache prefix.** `test_ask_tool_names_descriptions_and_schemas_are_unchanged` pins them.
