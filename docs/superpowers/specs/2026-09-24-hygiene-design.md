@@ -32,8 +32,8 @@
 
 ```
 .github/workflows/ci.yml                       NEW
-migrations/008_schema_migrations.sql           NEW: the tracking table (006 and 007 belong to the fixes and data layer specs)
-migrations/009_reader_role.sql                 NEW: tri_reader role and grants
+migrations/009_schema_migrations.sql           NEW: the tracking table (006 to 008 belong to the fixes, data layer and guardrails specs)
+migrations/010_reader_role.sql                 NEW: tri_reader role and grants
 packages/tri-core/src/tri_core/db/migrate.py   NEW: apply_migrations, pending, MigrationError
 packages/tri-core/src/tri_core/cli.py          adds `tri migrate [--test] [--dry-run]`
 packages/tri-core/src/tri_core/config.py       adds tri_readonly_database_url
@@ -67,9 +67,9 @@ def pending(conn: Conn, migrations: list[Migration]) -> list[Migration]: ...
 def apply_migrations(url: str, *, dry_run: bool = False, log: Callable[[str], None] = print) -> list[Migration]: ...
 ```
 
-`apply_migrations` opens one connection, creates `schema_migrations` if missing (the DDL is inline, so migration 008 is a no-op on a database that ran `tri migrate` first and a record on one migrated by hand), then for each pending migration in version order runs the file inside one transaction and inserts `(version, name, sha256, applied_at)`. An applied version whose stored sha differs from the file raises `MigrationError` naming the file: edited history is refused, not silently re-run. After the SQL files it ensures the LangGraph checkpointer and Store tables the way `scripts/setup_checkpointer.py` does today (`PostgresSaver.setup()` and `PostgresStore.setup()`, both idempotent). `dry_run` prints what would run and touches nothing.
+`apply_migrations` opens one connection, creates `schema_migrations` if missing (the DDL is inline, so migration 009 is a no-op on a database that ran `tri migrate` first and a record on one migrated by hand), then for each pending migration in version order runs the file inside one transaction and inserts `(version, name, sha256, applied_at)`. An applied version whose stored sha differs from the file raises `MigrationError` naming the file: edited history is refused, not silently re-run. After the SQL files it ensures the LangGraph checkpointer and Store tables the way `scripts/setup_checkpointer.py` does today (`PostgresSaver.setup()` and `PostgresStore.setup()`, both idempotent). `dry_run` prints what would run and touches nothing.
 
-The five files that exist today plus 006 (fixes) and 007 (data layer) are the hand-applied set; the back-fill in §5.1 covers whichever of them are present.
+The five files that exist today plus 006 (fixes), 007 (data layer) and 008 (guardrails) are the hand-applied set; the back-fill in §5.1 covers whichever of them are present.
 
 ### 4.2 `tri migrate`
 
@@ -116,15 +116,15 @@ The db-marked tests must run in CI, not skip: the `python` job ends with a step 
 
 ### 5.1 Migrations
 
-1. `discover` reads `migrations/*.sql`, requires each filename to start with a distinct integer, and sorts by it. 008 and 009 are ordinary files in that sequence.
-2. On a database migrated by hand, the first `tri migrate` creates `schema_migrations` and records the hand-applied files without re-running them: `apply_migrations` detects each by a probe listed in `migrate.py` (`workouts` for 001, `training_goals` for 002, the `plan_weeks.targets` column for 003, `nutrition_targets` for 004, `lab_panels` for 005, `lab_results.bound` for 006, `garmin_activities` for 007) and inserts the rows with the current file sha. Files after 007 are never back-filled; they run.
+1. `discover` reads `migrations/*.sql`, requires each filename to start with a distinct integer, and sorts by it. 009 and 010 are ordinary files in that sequence.
+2. On a database migrated by hand, the first `tri migrate` creates `schema_migrations` and records the hand-applied files without re-running them: `apply_migrations` detects each by a probe listed in `migrate.py` (`workouts` for 001, `training_goals` for 002, the `plan_weeks.targets` column for 003, `nutrition_targets` for 004, `lab_panels` for 005, `lab_results.bound` for 006, `garmin_activities` for 007, `plan_weeks.violations` for 008) and inserts the rows with the current file sha. Files after 008 are never back-filled; they run.
 3. Every later file runs inside its own transaction; a failing statement rolls that file back, leaves earlier ones recorded, and exits 1.
 4. The README's psql loop is replaced by `uv run tri migrate && uv run tri migrate --test`. The `db/README.md` "applied by hand" paragraph is rewritten; the read-only rule there stays.
 5. Package conftests keep their `to_regclass` probes; they are cheap and still the right skip when a developer forgets `--test`.
 
 ### 5.2 The reader role
 
-`009_reader_role.sql`:
+`010_reader_role.sql`:
 
 ```sql
 do $$ begin
@@ -140,7 +140,7 @@ alter role tri_reader set default_transaction_read_only = on;
 alter role tri_reader set statement_timeout = '5s';
 ```
 
-`pg_signal_backend` is not granted, so `pg_terminate_backend` and `pg_cancel_backend` on another role's backend fail with permission denied. Tables created later inherit SELECT through the default privileges, so migrations after 009 need nothing extra. The role is created in both databases by the same file.
+`pg_signal_backend` is not granted, so `pg_terminate_backend` and `pg_cancel_backend` on another role's backend fail with permission denied. Tables created later inherit SELECT through the default privileges, so migrations after 010 need nothing extra. The role is created in both databases by the same file.
 
 ### 5.3 MCP environment
 
@@ -154,14 +154,14 @@ The child gets the five passthrough keys when set and `spec.env`. `ANTHROPIC_API
 
 - `tri migrate` on an unreachable database prints the psycopg error and exits 1 before touching anything.
 - A sha mismatch exits 1 with `migrations/00N_x.sql was edited after it was applied (recorded <sha8>, file <sha8>)`.
-- The SQL tool on a database without 009 fails to connect as `tri_reader`; the tool returns `{"error": "sql error: ..."}` as it does for any connection failure, and the README's setup order (migrate before first run) prevents it.
+- The SQL tool on a database without 010 fails to connect as `tri_reader`; the tool returns `{"error": "sql error: ..."}` as it does for any connection failure, and the README's setup order (migrate before first run) prevents it.
 - A CI run whose Postgres service is down fails at the `tri migrate` step, not at a silent skip.
 
 ## 7. Testing
 
 - `packages/tri-core/tests/test_migrate.py` (db-marked, on the rolled-back test connection where possible; the apply path uses a scratch schema created and dropped inside the test): `discover` ordering and duplicate-version rejection; first run on a hand-migrated database back-fills 001 to 005 and runs the rest; second run is a no-op; an edited applied file raises `MigrationError`; `dry_run` changes nothing.
 - `test_cli.py` in tri-core: `tri migrate --dry-run` prints the pending list; exit 1 on `MigrationError` (stubbed).
-- `test_sql_tool.py` gains: connecting as `tri_reader`, `select` works, `pg_terminate_backend(pg_backend_pid())` inside a SELECT returns the permission-denied rejection, an `insert` inside a CTE is rejected by the role and not only by the transaction flag. These are db-marked and skip until 009 is applied to the test database (a `to_regclass`-style probe on `pg_roles`).
+- `test_sql_tool.py` gains: connecting as `tri_reader`, `select` works, `pg_terminate_backend(pg_backend_pid())` inside a SELECT returns the permission-denied rejection, an `insert` inside a CTE is rejected by the role and not only by the transaction flag. These are db-marked and skip until 010 is applied to the test database (a `to_regclass`-style probe on `pg_roles`).
 - `test_mcp_env.py`: `child_env` includes `PATH` and `HOME`, excludes `ANTHROPIC_API_KEY` and `DATABASE_URL` when they are set in `os.environ`, and `spec.env` wins over a passthrough key.
 - `test_config.py`: `readonly_url` derives the user swap and respects the explicit field.
 - CI is tested by the first green run on the PR that adds it; the workflow file itself has no unit test.
@@ -177,5 +177,5 @@ The child gets the five passthrough keys when set and `spec.env`. `ANTHROPIC_API
 
 ## 9. Rollout
 
-1. Plan 01: `migrate.py`, `tri migrate`, migrations 008 and 009, `readonly_url`, the SQL tool call sites, `child_env`, README and `.env.example` updates, `setup_checkpointer.py` deleted. Brian runs `uv run tri migrate && uv run tri migrate --test` after merge.
+1. Plan 01: `migrate.py`, `tri migrate`, migrations 009 and 010, `readonly_url`, the SQL tool call sites, `child_env`, README and `.env.example` updates, `setup_checkpointer.py` deleted. Brian runs `uv run tri migrate && uv run tri migrate --test` after merge.
 2. Plan 02: TypeScript strict and the resulting source fixes; `ci.yml`. The first PR with the workflow is the check that the service container and both `tri migrate` steps work.
