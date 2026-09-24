@@ -166,7 +166,7 @@ package documents itself in its own `README.md`.
   `docs/superpowers/plans/2026-09-07-tri-planning-0*.md`.
 - tri-planning milestones 2-4 (2026-09): targets, graph with review interrupt, adjust and
   check-in; design-prompt validator pass rate: not yet measured (run
-  `scripts/design_eval.py --prompt-version v1` and record the `validator_pass` mean here).
+  `uv run tri-planning eval` and record the `validator_pass` mean here).
 - tri-wellness milestone 1 (2026-09-11): ranges table, registry, normalize, evaluate, training context, lab tables; tracked in docs/superpowers/plans/2026-09-11-tri-wellness-0*.md.
 - tri-wellness milestone 2 (2026-09): PDF and export ingest with a checkpointed review; first real panel pending.
 - tri-wellness milestone 3 (2026-09): report, chat and panels commands; LangSmith report evaluators (pass rates in the package README).

@@ -7,7 +7,9 @@ from types import SimpleNamespace
 import pytest
 from langchain_core.messages import AIMessage
 
+import tri_analyze.evals.run as analyze_run
 from tri_analyze.allowlist import GARMIN_LIVE_TOOLS, TP_LIVE_TOOLS
+from tri_analyze.config import AnalyzeSettings
 from tri_analyze.evals.cases import (
     CASES,
     EXTRA_TOOLS,
@@ -34,9 +36,10 @@ from tri_analyze.evals.run import (
     render_pass_rates,
 )
 from tri_analyze.evals.target import Canned, athlete_from_inputs, make_target, stub_tools
-from tri_analyze.prompts.analyst import FEEDBACK_RULES
+from tri_analyze.prompts.analyst import FEEDBACK_RULES, PROMPT_VERSION
 from tri_analyze.repo import AthleteContext
 from tri_core.db.sql_tool import make_query_tool
+from tri_core.llm import Role
 from tri_core.testing import ScriptedChatModel, tool_call
 
 
@@ -416,3 +419,67 @@ def test_errored_counts_rows_whose_run_carries_an_error():
         {"run": SimpleNamespace(error="")},
     ]
     assert errored(rows) == 1 and errored([]) == 0
+
+
+class _FakeClient:
+    def __init__(self, **kw):
+        pass
+
+    def has_dataset(self, **kw):
+        return True
+
+
+class _FakeResults:
+    experiment_name = "exp"
+
+    def __aiter__(self):
+        async def rows():
+            return
+            yield
+
+        return rows()
+
+
+def _stub_langsmith(monkeypatch, run_module) -> dict:
+    captured: dict = {}
+
+    async def fake_aevaluate(target, **kw):
+        captured.update(kw)
+        return _FakeResults()
+
+    monkeypatch.setattr(run_module, "Client", _FakeClient)
+    monkeypatch.setattr(run_module, "aevaluate", fake_aevaluate)
+    return captured
+
+
+def _recording_models():
+    roles: list[Role] = []
+    fake = ScriptedChatModel(script=[])
+
+    def models(role: Role):
+        roles.append(role)
+        return fake
+
+    return models, roles
+
+
+async def test_run_eval_uses_the_analyst_and_judge_roles(monkeypatch):
+    captured = _stub_langsmith(monkeypatch, analyze_run)
+    models, roles = _recording_models()
+    settings = AnalyzeSettings(_env_file=None, langsmith_api_key="ls")
+    assert await analyze_run.run_eval(settings, models, log=lambda m: None) == ({}, 0)
+    assert sorted(roles) == sorted([Role.ANALYST, Role.JUDGE])
+    assert captured["metadata"] == {
+        "prompt_version": PROMPT_VERSION,
+        "model": "claude-opus-5",
+        "effort": None,
+        "judge_model": "claude-opus-5",
+    }
+
+
+async def test_run_eval_without_the_judge_records_no_judge_model(monkeypatch):
+    captured = _stub_langsmith(monkeypatch, analyze_run)
+    models, roles = _recording_models()
+    settings = AnalyzeSettings(_env_file=None, langsmith_api_key="ls")
+    await analyze_run.run_eval(settings, models, judge=False, log=lambda m: None)
+    assert roles == [Role.ANALYST] and "judge_model" not in captured["metadata"]

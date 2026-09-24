@@ -8,11 +8,10 @@ from collections import defaultdict
 from collections.abc import Callable
 from typing import Any
 
-from langchain_core.language_models import BaseChatModel
 from langsmith import Client, aevaluate
 
 from tri_core.config import Settings
-from tri_core.llm import Role, resolve
+from tri_core.llm import ModelProvider, Role, eval_metadata
 from tri_nutrition.evals.cases import CASES
 from tri_nutrition.evals.evaluators import (
     fuel_within_bounds,
@@ -59,7 +58,7 @@ def render_pass_rates(rates: dict[str, float], n: int) -> str:
 
 async def run_eval(
     settings: Settings,
-    model: BaseChatModel,
+    models: ModelProvider,
     *,
     judge: bool = True,
     prefix: str | None = None,
@@ -70,15 +69,15 @@ async def run_eval(
     ensure_dataset(client, recreate=recreate)
     evaluators: list[Any] = [targets_within_bounds, fuel_within_bounds]
     if judge:
-        evaluators.append(make_fuel_judge(model))
+        evaluators.append(make_fuel_judge(models(Role.JUDGE)))
     results = await aevaluate(
-        make_target(model),
+        make_target(models(Role.NUTRITION_FUEL)),
         data=DATASET_NAME,
         evaluators=evaluators,
         experiment_prefix=prefix or f"fuel-v{PROMPT_VERSION}",
         metadata={
             "prompt_version": PROMPT_VERSION,
-            "model": resolve(settings, Role.NUTRITION_FUEL).model,
+            **eval_metadata(settings, Role.NUTRITION_FUEL, judge=judge),
         },
         client=client,
         max_concurrency=2,

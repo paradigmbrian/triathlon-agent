@@ -140,7 +140,7 @@ def eval_cmd(
 
 async def _eval(*, prefix: str | None, recreate: bool) -> int:
     from tri_analyze.evals.run import run_eval
-    from tri_core.llm import Role, make_model
+    from tri_core.llm import make_model
 
     settings = get_analyze_settings()
     if not settings.langsmith_api_key:
@@ -151,7 +151,7 @@ async def _eval(*, prefix: str | None, recreate: bool) -> int:
         return 2
     rates, errors = await run_eval(
         settings,
-        make_model(settings, Role.ANALYST),
+        lambda role: make_model(settings, role),
         prefix=prefix,
         recreate=recreate,
         log=lambda m: _out(m + "\n"),

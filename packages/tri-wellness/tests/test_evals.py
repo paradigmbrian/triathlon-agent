@@ -1,6 +1,9 @@
 from langchain_core.messages import AIMessage
 
+import tri_wellness.evals.run as wellness_run
+from tri_core.llm import Role
 from tri_core.testing import ScriptedChatModel
+from tri_wellness.config import WellnessSettings
 from tri_wellness.evals.cases import CASES
 from tri_wellness.evals.evaluators import (
     cites_functional_ranges,
@@ -10,7 +13,7 @@ from tri_wellness.evals.evaluators import (
 from tri_wellness.evals.run import DATASET_NAME, case_examples, pass_rates, render_pass_rates
 from tri_wellness.evals.target import make_target, parse_inputs
 from tri_wellness.labs.evaluate import evaluate
-from tri_wellness.prompts.report import DISCLAIMER
+from tri_wellness.prompts.report import DISCLAIMER, PROMPT_VERSION
 from tri_wellness.ranges.registry import MARKERS_PATH, load_registry
 from tri_wellness.testing import REPORT_OK
 
@@ -109,3 +112,57 @@ def test_pass_rates_and_rendering():
     assert rates == {"cites_functional_ranges": 1.0, "has_required_sections": 0.5}
     text = render_pass_rates(rates, 2)
     assert "2 examples" in text and "has_required_sections" in text and "50%" in text
+
+
+class _FakeClient:
+    def __init__(self, **kw):
+        pass
+
+    def has_dataset(self, **kw):
+        return True
+
+
+class _FakeResults:
+    experiment_name = "exp"
+
+    def __aiter__(self):
+        async def rows():
+            return
+            yield
+
+        return rows()
+
+
+def _stub_langsmith(monkeypatch, run_module) -> dict:
+    captured: dict = {}
+
+    async def fake_aevaluate(target, **kw):
+        captured.update(kw)
+        return _FakeResults()
+
+    monkeypatch.setattr(run_module, "Client", _FakeClient)
+    monkeypatch.setattr(run_module, "aevaluate", fake_aevaluate)
+    return captured
+
+
+def _recording_models():
+    roles: list[Role] = []
+    fake = ScriptedChatModel(script=[])
+
+    def models(role: Role):
+        roles.append(role)
+        return fake
+
+    return models, roles
+
+
+async def test_run_eval_uses_the_lab_report_role_and_no_judge(monkeypatch):
+    captured = _stub_langsmith(monkeypatch, wellness_run)
+    models, roles = _recording_models()
+    settings = WellnessSettings(_env_file=None, tri_athlete_sex="male", langsmith_api_key="ls")
+    assert await wellness_run.run_eval(settings, models, log=lambda m: None) == {}
+    assert roles == [Role.LAB_REPORT]
+    meta = captured["metadata"]
+    assert meta["prompt_version"] == PROMPT_VERSION and "ranges_version" in meta
+    assert meta["model"] == "claude-opus-5" and meta["effort"] is None
+    assert "judge_model" not in meta

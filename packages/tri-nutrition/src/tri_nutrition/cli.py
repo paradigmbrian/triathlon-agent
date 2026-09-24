@@ -333,7 +333,7 @@ def eval_cmd(
 
 
 async def _eval(*, judge: bool, prefix: str | None, recreate: bool) -> int:
-    from tri_core.llm import Role, make_model
+    from tri_core.llm import make_model
     from tri_nutrition.evals.run import run_eval
 
     settings = get_nutrition_settings()
@@ -345,7 +345,7 @@ async def _eval(*, judge: bool, prefix: str | None, recreate: bool) -> int:
         return 2
     rates = await run_eval(
         settings,
-        make_model(settings, Role.NUTRITION_FUEL),
+        lambda role: make_model(settings, role),
         judge=judge,
         prefix=prefix,
         recreate=recreate,

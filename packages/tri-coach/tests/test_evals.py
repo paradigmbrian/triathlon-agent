@@ -5,6 +5,8 @@ from typing import Any
 
 from langchain_core.messages import AIMessage
 
+import tri_coach.evals.run as coach_run
+from tri_coach.config import CoachSettings
 from tri_coach.evals import target as target_module
 from tri_coach.evals.cases import CASES, ROUTES
 from tri_coach.evals.evaluators import (
@@ -14,10 +16,11 @@ from tri_coach.evals.evaluators import (
 )
 from tri_coach.evals.run import DATASET_NAME, case_examples, ensure_dataset, render_pass_rates
 from tri_coach.evals.target import classify, make_target, stub_tools
-from tri_coach.prompts.coach import CHECKIN_REQUEST
+from tri_coach.prompts.coach import CHECKIN_REQUEST, PROMPT_VERSION
 from tri_coach.tools.analyst import make_analyst_tool
 from tri_coach.tools.wellness import make_wellness_tool
 from tri_core.harness.agents import one_tool_call_at_a_time
+from tri_core.llm import Role
 from tri_core.testing import ScriptedChatModel, tool_call
 from tri_wellness.ranges.registry import load_registry
 
@@ -206,3 +209,59 @@ def test_render_pass_rates_names_the_prompt_version():
     text = render_pass_rates({"routing_accuracy": 0.75, "brief_quality": 1.0}, 13)
     assert text.startswith("pass rate over 13 examples (prompt version 3):")
     assert "routing_accuracy" in text and "75%" in text and "100%" in text
+
+
+class _FakeClient:
+    def __init__(self, **kw):
+        pass
+
+    def has_dataset(self, **kw):
+        return True
+
+
+class _FakeResults:
+    experiment_name = "exp"
+
+    def __aiter__(self):
+        async def rows():
+            return
+            yield
+
+        return rows()
+
+
+def _stub_langsmith(monkeypatch, run_module) -> dict:
+    captured: dict = {}
+
+    async def fake_aevaluate(target, **kw):
+        captured.update(kw)
+        return _FakeResults()
+
+    monkeypatch.setattr(run_module, "Client", _FakeClient)
+    monkeypatch.setattr(run_module, "aevaluate", fake_aevaluate)
+    return captured
+
+
+def _recording_models():
+    roles: list[Role] = []
+    fake = ScriptedChatModel(script=[])
+
+    def models(role: Role):
+        roles.append(role)
+        return fake
+
+    return models, roles
+
+
+async def test_run_eval_uses_the_coach_and_judge_roles(monkeypatch):
+    captured = _stub_langsmith(monkeypatch, coach_run)
+    models, roles = _recording_models()
+    settings = CoachSettings(_env_file=None, langsmith_api_key="ls")
+    assert await coach_run.run_eval(settings, models, log=lambda m: None) == {}
+    assert sorted(roles) == sorted([Role.COACH, Role.JUDGE])
+    assert captured["metadata"] == {
+        "prompt_version": PROMPT_VERSION,
+        "model": "claude-opus-5",
+        "effort": None,
+        "judge_model": "claude-opus-5",
+    }

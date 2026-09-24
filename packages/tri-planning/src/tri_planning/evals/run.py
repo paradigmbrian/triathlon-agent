@@ -1,36 +1,29 @@
-"""Create the LangSmith dataset from the cases and run an experiment over it. Needs
-LANGSMITH_API_KEY; the experiment is named by PROMPT_VERSION."""
+"""Create the LangSmith dataset of target weeks and run the design prompt over it. Needs
+LANGSMITH_API_KEY and ANTHROPIC_API_KEY. The dataset keeps the name the earlier script used, so
+experiments before and after this command compare. Each example costs one or two model calls."""
 
 from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable
+from contextlib import AbstractContextManager
+from datetime import date
 from typing import Any
 
 from langsmith import Client, aevaluate
 
+from tri_core.db.repo import Conn
 from tri_core.llm import ModelProvider, Role, eval_metadata
-from tri_wellness.config import WellnessSettings
-from tri_wellness.evals.cases import CASES
-from tri_wellness.evals.evaluators import (
-    cites_functional_ranges,
-    has_required_sections,
-    names_active_confounders,
-)
-from tri_wellness.evals.target import make_target
-from tri_wellness.prompts.report import PROMPT_VERSION
-from tri_wellness.ranges.registry import load_registry
+from tri_planning.config import PlanningSettings
+from tri_planning.evals.design_eval import build_examples, design_target, validator_pass
+from tri_planning.graph.deps import GraphDeps
 
-DATASET_NAME = "tri_wellness_reports"
-DATASET_DESCRIPTION = (
-    "Findings sets (LabResults, context, training, previous values) for the tri-wellness "
-    "report prompt. Evaluators: cites_functional_ranges, has_required_sections, "
-    "names_active_confounders."
-)
+DATASET_NAME = "tri-planning-design-weeks"
+DATASET_DESCRIPTION = "Target weeks for the tri-planning design prompt"
 
 
-def case_examples() -> list[dict[str, Any]]:
-    return [{"inputs": c.inputs(), "outputs": {}, "metadata": {"case": c.name}} for c in CASES]
+def case_examples(today: date) -> list[dict[str, Any]]:
+    return [{**e, "outputs": {}} for e in build_examples(today)]
 
 
 def ensure_dataset(client: Client, *, recreate: bool = False) -> None:
@@ -39,7 +32,7 @@ def ensure_dataset(client: Client, *, recreate: bool = False) -> None:
     if client.has_dataset(dataset_name=DATASET_NAME):
         return
     client.create_dataset(DATASET_NAME, description=DATASET_DESCRIPTION)
-    client.create_examples(dataset_name=DATASET_NAME, examples=case_examples())
+    client.create_examples(dataset_name=DATASET_NAME, examples=case_examples(date.today()))
 
 
 def pass_rates(rows: list[dict[str, Any]]) -> dict[str, float]:
@@ -52,32 +45,40 @@ def pass_rates(rows: list[dict[str, Any]]) -> dict[str, float]:
 
 
 def render_pass_rates(rates: dict[str, float], n: int) -> str:
-    lines = [f"pass rate over {n} examples (prompt version {PROMPT_VERSION}):"]
+    lines = [f"pass rate over {n} examples:"]
     lines += [f"  {key:26} {rate:.0%}" for key, rate in sorted(rates.items())]
     return "\n".join(lines)
 
 
+def _no_database() -> AbstractContextManager[Conn]:
+    raise RuntimeError("the design eval reads no database")
+
+
 async def run_eval(
-    settings: WellnessSettings,
+    settings: PlanningSettings,
     models: ModelProvider,
     *,
     prefix: str | None = None,
     recreate: bool = False,
     log: Callable[[str], None] = print,
 ) -> dict[str, float]:
+    """The pass rate per evaluator key. Weeks are designed on the planning_design role."""
     client = Client(api_key=settings.langsmith_api_key)
     ensure_dataset(client, recreate=recreate)
-    registry = load_registry(settings.tri_athlete_sex)
+    # design_week reads design_model; model is only the dataclass's required field.
+    designer = models(Role.PLANNING_DESIGN)
+    deps = GraphDeps(
+        model=designer,
+        connect=_no_database,
+        db_url=settings.database_url,
+        design_model=designer,
+    )
     results = await aevaluate(
-        make_target(models(Role.LAB_REPORT), registry),
+        design_target(deps),
         data=DATASET_NAME,
-        evaluators=[cites_functional_ranges, has_required_sections, names_active_confounders],
-        experiment_prefix=prefix or f"report-v{PROMPT_VERSION}",
-        metadata={
-            "prompt_version": PROMPT_VERSION,
-            "ranges_version": registry.version,
-            **eval_metadata(settings, Role.LAB_REPORT, judge=False),
-        },
+        evaluators=[validator_pass],
+        experiment_prefix=prefix or "design",
+        metadata=eval_metadata(settings, Role.PLANNING_DESIGN, judge=False),
         client=client,
         max_concurrency=2,
     )
