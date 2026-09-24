@@ -75,7 +75,10 @@ DEFAULTS: dict[Role, ModelSpec] = {
     Role.PLANNING_AGENT: _spec(),
     Role.PLANNING_DESIGN: _spec(),
     Role.NUTRITION_AGENT: _spec(),
-    Role.NUTRITION_FUEL: _spec(),
+    # fuel-sonnet5-e2de5e8a matched fuel-base-b432db9b (80/100/100 over 5) on 2026-09-24.
+    Role.NUTRITION_FUEL: ModelSpec(
+        model="claude-sonnet-5", effort=None, max_tokens=16000, fallbacks=()
+    ),
     Role.LAB_EXTRACT: _spec(32000),  # a 200-row panel is roughly 12k output tokens as JSON
     Role.LAB_REPORT: _spec(32000),  # reports are long
     Role.JUDGE: _spec(),

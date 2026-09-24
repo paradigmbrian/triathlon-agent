@@ -32,12 +32,12 @@ def settings(**kw: Any) -> Settings:
 # resolve
 
 
-def test_every_role_launches_on_opus_5_at_default_effort():
+def test_every_role_launches_on_its_default():
     assert set(DEFAULTS) == set(Role)
+    tuned = {Role.NUTRITION_FUEL: ("claude-sonnet-5", None)}
     for role in Role:
         spec = resolve(settings(), role)
-        assert spec.model == "claude-opus-5" and spec.effort is None
-        assert spec.fallbacks == ("claude-opus-4-8", "claude-sonnet-5")
+        assert (spec.model, spec.effort) == tuned.get(role, ("claude-opus-5", None))
     assert resolve(settings(), Role.LAB_EXTRACT).max_tokens == 32000
     assert resolve(settings(), Role.LAB_REPORT).max_tokens == 32000
     assert resolve(settings(), Role.COACH).max_tokens == 16000
@@ -154,7 +154,7 @@ def test_fallbacks_keep_the_primary_effort_when_listed_and_drop_it_for_haiku():
 
 def test_structured_roles_fall_back_without_effort():
     fbs = fallbacks_of(make_model(settings(), Role.NUTRITION_FUEL))
-    assert [f.model for f in fbs] == ["claude-opus-4-8", "claude-sonnet-5"]
+    assert [f.model for f in fbs] == ["claude-opus-5", "claude-opus-4-8"]
     assert all(f.effort is None for f in fbs)
 
 

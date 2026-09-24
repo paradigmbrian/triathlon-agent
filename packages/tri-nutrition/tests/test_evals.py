@@ -166,7 +166,7 @@ async def test_run_eval_uses_the_fuel_and_judge_roles(monkeypatch):
     assert sorted(roles) == sorted([Role.NUTRITION_FUEL, Role.JUDGE])
     assert captured["metadata"] == {
         "prompt_version": PROMPT_VERSION,
-        "model": "claude-opus-5",
+        "model": "claude-sonnet-5",
         "effort": None,
         "judge_model": "claude-opus-5",
     }
