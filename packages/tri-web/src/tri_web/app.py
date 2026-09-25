@@ -66,8 +66,9 @@ def create_app(
 
     @app.exception_handler(Exception)
     async def unexpected(request: Request, exc: Exception) -> JSONResponse:
-        # uvicorn's error log keeps the traceback; the body never does
-        return JSONResponse({"detail": f"{type(exc).__name__}: {exc}"}, status_code=500)
+        # the text goes to the log (uvicorn's error log keeps the traceback); the body is fixed
+        log(f"internal error on {request.method} {request.url.path}: {type(exc).__name__}: {exc}")
+        return JSONResponse({"detail": "internal error"}, status_code=500)
 
     if runtime is not None:
         _mount_frontend(app, Path(runtime.settings.tri_web_dist), log)
