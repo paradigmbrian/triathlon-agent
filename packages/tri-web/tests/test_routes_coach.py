@@ -186,3 +186,22 @@ async def test_route_errors_return_detail_only(runtime, client):
     async with client(rt) as c:
         r = await c.get("/api/coach/thread")
     assert r.status_code == 500 and r.json() == {"detail": "RuntimeError: psycopg went away"}
+
+
+async def test_a_turn_during_a_paused_review_is_409_and_keeps_the_review(
+    nocommit, runtime, client, parse_sse
+):
+    tp, kw = proposing(nocommit)
+    rt = runtime(**kw)
+    async with client(rt) as c:
+        await c.post("/api/coach/turns", json={"text": "my knee hurts"})
+        r = await c.post("/api/coach/turns", json={"text": "never mind"})
+        assert r.status_code == 409 and r.json() == {"reason": "paused"}
+        thread = (await c.get("/api/coach/thread")).json()
+        assert thread["paused"]["proposals"][0]["id"] == "p1"
+        assert [m["role"] for m in thread["messages"]].count("user") == 1
+        r = await c.post("/api/coach/review", json={"action": "reject"})
+        assert r.status_code == 200 and parse_sse(r.text)[-1][0] == "done"
+        assert (await c.get("/api/coach/thread")).json()["paused"] is None
+    assert tp.calls == []
+    assert not rt.lock.locked() and rt.running is None
