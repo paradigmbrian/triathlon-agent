@@ -43,6 +43,8 @@ def test_session_from_workout_maps_fields_and_skips_unknown_sports():
         "tempo",
         "w1",
     )
+    assert s.completed is False
+    assert L.session_from_workout({**row, "completed": True}).completed is True
     assert L.session_from_workout({**row, "sport": "rest"}) is None
     assert L.session_from_workout({**row, "planned_duration_sec": None}) is None
 

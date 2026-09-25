@@ -42,6 +42,11 @@ RACE_WINDOW_DAYS = 21
 
 
 def qualifies(session: Session) -> bool:
+    """Long or hard sessions get a fuel note — unless already completed: today's finished
+    workout still counts toward the day's energy target (in `targets.py`, over the same
+    `sessions` list) but gets no note proposed or written for a session that already happened."""
+    if session.completed:
+        return False
     return session.duration_min > LONG_SESSION_MIN or session.intensity in HARD_INTENSITIES
 
 
