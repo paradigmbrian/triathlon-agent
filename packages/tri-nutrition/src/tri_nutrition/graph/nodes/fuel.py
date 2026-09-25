@@ -163,6 +163,10 @@ def make_fuel_node(deps: GraphDeps) -> Any:
                     s.tp_workout_id,
                     plan.model_dump(mode="json"),
                     violations,
+                    # Only id-less sessions need the title in the conflict key (it's what keeps
+                    # two of them on the same day apart); an id'd session keys on tp_workout_id
+                    # alone, so a TP rename updates its row instead of adding a new one.
+                    title=s.title if s.tp_workout_id is None else None,
                 )
                 conn.commit()
             if s.tp_workout_id is None:
