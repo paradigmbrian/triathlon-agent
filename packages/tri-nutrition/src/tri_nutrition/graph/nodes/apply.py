@@ -192,6 +192,7 @@ def make_apply_node(deps: GraphDeps) -> Any:
         clean = r.error is None and not r.remaining
         return {
             "pending_changes": r.remaining,
+            "pending_violations": (state.get("pending_violations") or {}) if r.remaining else {},
             "pending_summary": state.get("pending_summary") if r.remaining else None,
             "last_error": r.error,
             "review_decision": None,

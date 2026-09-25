@@ -35,7 +35,7 @@ from tri_nutrition.nutrition.models import (
 from tri_nutrition.nutrition.tp_calls import race_note_change, race_note_title, session_note_change
 from tri_nutrition.prompts.fuel import FUEL_SYSTEM, render_session_prompt
 from tri_nutrition.prompts.race import RACE_SYSTEM, render_race_prompt
-from tri_nutrition.repl import render_fuel, render_race
+from tri_nutrition.repl import RACE_VIOLATIONS_KEY, render_fuel, render_race
 
 LONG_SESSION_MIN = 75
 RACE_WINDOW_DAYS = 21
@@ -183,6 +183,8 @@ def make_fuel_node(deps: GraphDeps) -> Any:
             cfg = merge_configs(config, {"tags": [f"day:{ctx.event_date}", "kind:race"]})
             target = targets.get(ctx.event_date)
             plan_r, rv = await planner.race(profile, library, fuel_log, ctx, target, cfg)
+            if rv:
+                violations_by_id[RACE_VIOLATIONS_KEY] = rv
             with deps.connect() as conn:
                 repo.upsert_fuel_plan(
                     conn, "race", ctx.event_date, None, plan_r.model_dump(mode="json"), rv
@@ -203,6 +205,10 @@ def make_fuel_node(deps: GraphDeps) -> Any:
         if race_text:
             block.append(race_text)
         summary = (state.get("pending_summary") or "") + "\n\n" + "\n".join(block)
-        return {"pending_changes": changes, "pending_summary": summary.strip()}
+        return {
+            "pending_changes": changes,
+            "pending_violations": violations_by_id,
+            "pending_summary": summary.strip(),
+        }
 
     return fuel

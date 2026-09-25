@@ -146,8 +146,10 @@ async def test_retries_once_and_keeps_violations(ndb, mem_store, make_deps):
     w2 = next(p for p in repo.list_fuel_plans(ndb, MONDAY, RACE) if p.tp_workout_id == "w2")
     assert any("Mystery" in v for v in w2.violations)
     assert "VIOLATIONS" in out["pending_summary"] and "Mystery" in out["pending_summary"]
-    # a session plan with violations is still proposed; the athlete decides at review
+    # a session plan with violations is still proposed; the athlete decides at review, and
+    # check-in --yes reads pending_violations to skip it
     assert [c.op for c in out["pending_changes"]].count("set_session_note") == 2
+    assert list(out["pending_violations"]) == ["w2"]
 
 
 async def test_unchanged_written_notes_are_not_reproposed(ndb, mem_store, make_deps):

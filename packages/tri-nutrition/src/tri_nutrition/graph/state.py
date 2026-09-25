@@ -22,6 +22,7 @@ class NutritionState(TypedDict, total=False):
     profile_overrides: dict[str, Any] | None  # from propose_target_changes; persisted on approve
     regenerate_from: Literal["intake", "checkin"] | None
     pending_changes: list[NutritionChange]
+    pending_violations: dict[str, list[str]]  # fuel violations by tp_workout_id; race under "race"
     pending_summary: str | None
     review_decision: ReviewDecision | None
     last_error: str | None

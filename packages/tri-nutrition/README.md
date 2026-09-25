@@ -104,8 +104,9 @@ regenerates targets; approve persists them, reject discards them.
   this each morning; the chat's review only ever proposes today's Garmin write too.
 - `tri-nutrition check-in [--yes] [--no-sync] [--no-live]`: runs `tri sync`, sends the fixed
   check-in request on the nutrition thread, prints the report and any proposed change set, and
-  exits 3 while it waits at review. `--yes` approves. Run it again (or `chat`) to resume a
-  paused review rather than start a second one.
+  exits 3 while it waits at review. `--yes` approves the changes that passed validation; a
+  note whose plan still has violations is skipped and printed, and the exit code is 1. A review
+  left by an earlier run is shown but never approved here (exit 3): answer it in `chat`.
 - `tri-nutrition eval [--judge/--no-judge] [--prefix NAME] [--recreate-dataset]`: creates the
   LangSmith dataset `tri_nutrition_fueling` from `evals/cases.py` when missing, runs the fueling
   prompts over it as experiment `fuel-v<PROMPT_VERSION>`, and prints the pass rate per

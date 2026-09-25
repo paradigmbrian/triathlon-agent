@@ -24,6 +24,7 @@ def review_node(state: NutritionState) -> dict[str, Any]:
         {
             "summary": state.get("pending_summary") or "",
             "changes": [c.model_dump(mode="json") for c in changes],
+            "violations": state.get("pending_violations") or {},
             "last_error": state.get("last_error"),
         }
     )
@@ -33,6 +34,7 @@ def review_node(state: NutritionState) -> dict[str, Any]:
         note = decision.note or "no note given"
         update["messages"] = [HumanMessage(f"Targets review rejected: {note}")]
         update["pending_changes"] = []
+        update["pending_violations"] = {}
         update["pending_summary"] = None
         update["profile_overrides"] = None
     elif decision.action == "edit" and decision.changes is not None:

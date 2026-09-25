@@ -212,14 +212,42 @@ async def chat_loop(
         pending = printer.interrupt
 
 
-PAUSED_HINT = (
-    "paused at review; run `tri-nutrition check-in --yes` to approve, or `tri-nutrition chat` "
-    "to answer approve / reject <note> / edit"
+PAUSED_HINT = "paused at review; run `tri-nutrition chat` to answer approve / reject <note> / edit"
+ALREADY_PAUSED_HINT = (
+    "a change set is already waiting at review; resolve it in `tri-nutrition chat` first"
 )
+RACE_VIOLATIONS_KEY = "race"  # the race plan's key in pending_violations (sessions use their id)
+
+
+def violations_for(change: NutritionChange, violations: dict[str, list[str]]) -> list[str]:
+    """The fuel violations behind one proposed note, from the review payload's `violations`."""
+    if change.op == "set_session_note":
+        return list(violations.get(change.target_key) or [])
+    if change.op == "set_race_note":
+        return list(violations.get(RACE_VIOLATIONS_KEY) or [])
+    return []
+
+
+def split_violating(
+    changes: list[NutritionChange], violations: dict[str, list[str]]
+) -> tuple[list[NutritionChange], list[tuple[NutritionChange, list[str]]]]:
+    """(the clean changes in order, [(violating change, its violations)])."""
+    clean: list[NutritionChange] = []
+    skipped: list[tuple[NutritionChange, list[str]]] = []
+    for c in changes:
+        v = violations_for(c, violations)
+        if v:
+            skipped.append((c, v))
+        else:
+            clean.append(c)
+    return clean, skipped
 
 
 async def checkin_run(graph: Any, *, thread_id: str, out: Out, approve: bool) -> int:
-    """One unattended check-in. 0: nothing pending or approved; 3: a change set waits at review."""
+    """One unattended check-in. 0: nothing pending, or approved in full; 1: approved with the
+    violating changes skipped (each is printed with its violations); 3: a change set waits at
+    review, either this run's without `approve`, or one an earlier run left, which is never
+    approved here."""
     cfg = {"configurable": {"thread_id": thread_id}}
     snap = await graph.aget_state(cfg)
     if snap.next == ("review",):
@@ -230,14 +258,24 @@ async def checkin_run(graph: Any, *, thread_id: str, out: Out, approve: bool) ->
             "last_error": values.get("last_error"),
         }
         out("a change set is already waiting at review:\n" + render_review(pending) + "\n")
-    else:
-        request = {"messages": [HumanMessage(CHECKIN_REQUEST)]}
-        printer = await run_turn(graph, request, thread_id, out)
-        if printer.interrupt is None:
-            return 0
-        out("\n" + render_review(printer.interrupt) + "\n")
+        out(ALREADY_PAUSED_HINT + "\n")
+        return 3
+    request = {"messages": [HumanMessage(CHECKIN_REQUEST)]}
+    printer = await run_turn(graph, request, thread_id, out)
+    if printer.interrupt is None:
+        return 0
+    out("\n" + render_review(printer.interrupt) + "\n")
     if not approve:
         out(PAUSED_HINT + "\n")
         return 3
-    printer = await run_turn(graph, Command(resume={"action": "approve"}), thread_id, out)
-    return 0 if printer.interrupt is None else 3
+    changes = [NutritionChange.model_validate(c) for c in printer.interrupt.get("changes", [])]
+    clean, skipped = split_violating(changes, printer.interrupt.get("violations") or {})
+    for change, reasons in skipped:
+        out(f"skipped {change.op} {change.target_key or change.day}: {'; '.join(reasons)}\n")
+    resume: dict[str, Any] = {"action": "approve"}
+    if skipped:
+        resume = {"action": "edit", "changes": [c.model_dump(mode="json") for c in clean]}
+    printer = await run_turn(graph, Command(resume=resume), thread_id, out)
+    if printer.interrupt is not None:
+        return 3
+    return 1 if skipped else 0

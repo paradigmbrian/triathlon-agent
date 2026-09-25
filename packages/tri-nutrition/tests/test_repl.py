@@ -13,6 +13,7 @@ from tri_nutrition.repl import (
     parse_decision,
     render_review,
     render_targets,
+    split_violating,
 )
 
 MONDAY = date(2026, 9, 14)
@@ -155,3 +156,15 @@ def test_render_fuel_and_race():
     text = render_race(plan, [])
     assert "-180" in text and "pre" in text and "bike" in text and "60 g/h" in text
     assert "If the gut turns" in text
+
+
+def test_split_violating_keeps_order_and_matches_notes_by_key():
+    note = NutritionChange(
+        op="set_session_note", target_key="w2", day=MONDAY, payload={}, reason="r"
+    )
+    race = NutritionChange(op="set_race_note", target_key="", day=MONDAY, payload={}, reason="r")
+    violations = {"w2": ["too much"], "race": ["no pre-race step"]}
+    clean, skipped = split_violating([change(), note, race], violations)
+    assert clean == [change()]
+    assert skipped == [(note, ["too much"]), (race, ["no pre-race step"])]
+    assert split_violating([note], {}) == ([note], [])
