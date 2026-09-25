@@ -389,3 +389,25 @@ async def test_checkin_run_yes_skips_violating_changes_and_exits_1(ndb, make_dep
     snap = await graph.aget_state(CFG)
     assert snap.next == () and snap.values["pending_changes"] == []
     assert snap.values["pending_violations"] == {}
+
+
+async def test_override_only_checkin_persists_the_override_and_leaves_state_clean(
+    ndb, make_deps, mem_store
+):
+    await S.put_profile(mem_store, NutritionProfile(**PROFILE_ARGS))
+    g = FakeGarmin()
+    script = [
+        *proposal_script({}, "extend horizon"),
+        *proposal_script({"scale_days_per_week": 5}, "weigh in more often"),
+    ]
+    graph = make_graph(make_deps, mem_store, ScriptedChatModel(script=script), g, horizon=3)
+    await graph.ainvoke({"messages": [HumanMessage("check in")]}, CFG)
+    await graph.ainvoke(APPROVE, CFG)  # today's target is now on Garmin
+    # scale_days_per_week changes no target, so the second proposal has no changes to review
+    out = await graph.ainvoke({"messages": [HumanMessage("check in again")]}, CFG)
+    assert "__interrupt__" not in out and len(g.calls) == 1
+    assert (await S.get_profile(mem_store)).scale_days_per_week == 5
+    assert out["profile_overrides"] is None and out["pending_changes"] == []
+    assert out["review_decision"] is None
+    assert "profile updated" in out["messages"][-1].content
+    assert (await graph.aget_state(CFG)).next == ()
