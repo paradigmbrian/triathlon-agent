@@ -91,9 +91,10 @@ It may call `get_training_readiness`, `get_hrv_data`, `tp_get_workouts`, `query_
 `design_next_week` (when fewer than two designed weeks remain) and finally
 `propose_calendar_changes`. Every proposal goes through the same review and apply as the first plan.
 `check-in` runs the same review with a fixed prompt; exit code 3 means it is waiting for you.
-Exit code 1 means the model call failed; nothing was changed.
-For a cron job: `uv run tri-planning check-in --yes` applies without asking; leave `--yes` off
-to review in the next `chat`.
+Exit code 1 means the model call failed (nothing was changed), the apply did not complete, or
+`--yes` wrote the other changes and skipped a designed week that still has validator violations.
+For a cron job: `uv run tri-planning check-in --yes` applies without asking, except a designed
+week with violations, which it skips and names; leave `--yes` off to review in the next `chat`.
 
 ## How a turn flows
 
