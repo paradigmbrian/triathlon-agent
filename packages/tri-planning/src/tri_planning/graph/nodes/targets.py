@@ -61,10 +61,8 @@ def _summary(targets: list[WeekTarget], source: str) -> str:
 
 
 def make_targets_node(deps: GraphDeps) -> Any:
-    async def _adopt_tp_plan(stored: StoredGoal, thread_id: str) -> dict[str, Any]:
-        assert deps.tp is not None and stored.goal.event_date is not None
-        start = next_monday(deps.today())
-        end = stored.goal.event_date + timedelta(days=7)
+    async def _planned_workouts(start: date, end: date) -> list[dict[str, Any]]:
+        assert deps.tp is not None
         result = await deps.tp.call_json(
             "tp_get_workouts",
             {
@@ -73,17 +71,38 @@ def make_targets_node(deps: GraphDeps) -> Any:
                 "workout_filter": "planned",
             },
         )
-        workouts = list((result or {}).get("workouts", []))
+        return list((result or {}).get("workouts", []))
+
+    async def _adopt_tp_plan(stored: StoredGoal, thread_id: str) -> dict[str, Any]:
+        assert deps.tp is not None and stored.goal.event_date is not None
+        assert stored.goal.tp_plan_id is not None
+        with deps.connect() as conn:
+            # The plan is on TrainingPeaks whatever the listing finds: never propose it again.
+            repo.set_goal_plan_applied(conn, stored.id)
+            before = set(repo.calendar_before(conn, stored.goal.tp_plan_id))
+            conn.commit()
+        start = next_monday(deps.today())
+        end = stored.goal.event_date + timedelta(days=7)
+        workouts = await _planned_workouts(start, end)
         targets = weekly_targets_from_workouts(workouts, start)
         if not targets:
             return {
                 "last_error": "no planned workouts found after applying the TrainingPeaks plan",
                 "tp_plan_applied": False,
+                "messages": [
+                    AIMessage(
+                        f"TrainingPeaks plan {stored.goal.tp_plan_id} was applied, but the "
+                        f"calendar from {start} has no planned workouts; nothing to adopt. "
+                        "Check the plan in TrainingPeaks and send another message to retry."
+                    )
+                ],
             }
         with deps.connect() as conn:
             plan_id = repo.insert_plan(conn, stored.id, "tp_plan", stored.goal.tp_plan_id, targets)
             for w in workouts:
                 wid = str(w["id"])
+                if wid in before:
+                    continue  # the athlete's own workout; the plan did not add it
                 change = CalendarChange(
                     op="apply_plan",
                     tp_workout_id=wid,
@@ -113,16 +132,25 @@ def make_targets_node(deps: GraphDeps) -> Any:
         goal = stored.goal
 
         if goal.tp_plan_id:
-            if state.get("tp_plan_applied"):
+            if state.get("tp_plan_applied") or stored.tp_plan_applied_at is not None:
                 return await _adopt_tp_plan(stored, thread_id)
             start = next_monday(deps.today())
+            before: list[str] = []
+            if deps.tp is not None and goal.event_date is not None:
+                # What is on the calendar now; the adoption owns only what the plan adds.
+                listed = await _planned_workouts(start, goal.event_date + timedelta(days=7))
+                before = [str(w["id"]) for w in listed]
             changes: list[CalendarChange] = []
             if goal.create_tp_event and stored.tp_event_id is None:
                 changes.append(event_change(goal))
             changes.append(
                 CalendarChange(
                     op="apply_plan",
-                    payload={"plan_id": goal.tp_plan_id, "start_date": start.isoformat()},
+                    payload={
+                        "plan_id": goal.tp_plan_id,
+                        "start_date": start.isoformat(),
+                        "calendar_before": before,
+                    },
                     reason=f"activate TrainingPeaks plan {goal.tp_plan_id} from {start}",
                 )
             )
@@ -130,6 +158,7 @@ def make_targets_node(deps: GraphDeps) -> Any:
                 "pending_changes": changes,
                 "changes_from": "targets",
                 "pending_summary": f"Apply bought plan {goal.tp_plan_id} starting {start}.",
+                "pending_violations": {},
             }
 
         if state.get("plan_id") is not None:

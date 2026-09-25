@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -115,6 +115,7 @@ class StoredGoal(BaseModel):
     goal: TrainingGoal
     status: str
     tp_event_id: str | None = None
+    tp_plan_applied_at: datetime | None = None  # set once the bought plan is on TrainingPeaks
 
 
 class StoredPlan(BaseModel):

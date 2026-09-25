@@ -53,6 +53,7 @@ def _goal(row: dict[str, Any]) -> StoredGoal:
         id=row["id"],
         status=row["status"],
         tp_event_id=row["tp_event_id"],
+        tp_plan_applied_at=row["tp_plan_applied_at"],
         goal=TrainingGoal(
             goal_type=row["goal_type"],
             event_name=row["event_name"],
@@ -84,6 +85,12 @@ def get_active_goal(conn: Conn) -> StoredGoal | None:
 
 def set_goal_event(conn: Conn, goal_id: int, tp_event_id: str) -> None:
     conn.execute("update training_goals set tp_event_id = %s where id = %s", (tp_event_id, goal_id))
+
+
+def set_goal_plan_applied(conn: Conn, goal_id: int) -> None:
+    """Record that the goal's bought plan is on TrainingPeaks, so it is never proposed again
+    even when the adoption that follows finds nothing to adopt."""
+    conn.execute("update training_goals set tp_plan_applied_at = now() where id = %s", (goal_id,))
 
 
 def insert_plan(
@@ -236,6 +243,20 @@ def owned_workout_ids(conn: Conn, plan_id: int) -> set[str]:
     created = {r["tp_workout_id"] for r in rows if r["operation"] in ("create", "apply_plan")}
     deleted = {r["tp_workout_id"] for r in rows if r["operation"] == "delete"}
     return created - deleted
+
+
+def calendar_before(conn: Conn, tp_plan_id: str) -> list[str]:
+    """Planned workout ids that were on the calendar when the latest apply_plan for
+    `tp_plan_id` was proposed (carried in its payload); empty when none was recorded."""
+    row = conn.execute(
+        "select payload from plan_changes where operation = 'apply_plan' "
+        "and payload->'payload'->>'plan_id' = %s order by applied_at desc, id desc limit 1",
+        (tp_plan_id,),
+    ).fetchone()
+    if row is None:
+        return []
+    inner = row["payload"].get("payload") or {}
+    return [str(i) for i in inner.get("calendar_before") or []]
 
 
 def abandon_active(conn: Conn) -> tuple[int, int]:

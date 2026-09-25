@@ -108,7 +108,7 @@ async def test_bought_plan_path(nocommit, make_deps):
             "duration_planned": 1.0,
         },
     ]
-    tp = FakeTp(responses={"tp_get_workouts": {"workouts": workouts, "count": 2}})
+    tp = FakeTp(listings=[[], workouts])  # empty before the plan is applied, two after
     args = {**GOAL_ARGS, "tp_plan_id": "p1"}
     model = ScriptedChatModel(
         script=[tool_call("set_training_goal", args), AIMessage(content="Goal saved.")]
@@ -117,7 +117,11 @@ async def test_bought_plan_path(nocommit, make_deps):
     out = await graph.ainvoke({"messages": [HumanMessage("use my bought plan p1")]}, CFG)
     assert out["__interrupt__"][0].value["changes"][0]["op"] == "apply_plan"
     out = await graph.ainvoke(APPROVE, CFG)
-    assert [c[0] for c in tp.calls] == ["tp_apply_training_plan", "tp_get_workouts"]
+    assert [c[0] for c in tp.calls] == [
+        "tp_get_workouts",
+        "tp_apply_training_plan",
+        "tp_get_workouts",
+    ]
     assert out["phase"] == "active" and out["plan_id"] is not None
     assert repo.owned_workout_ids(nocommit, out["plan_id"]) == {"w1", "w2"}
 

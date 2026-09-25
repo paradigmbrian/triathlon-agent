@@ -3,7 +3,8 @@
 START -> route -> route_start: pending changes -> review; intake | targets | adjust by the phase
             derived from the tables
 intake   -> targets (goal saved) | END
-targets  -> review (bought plan) | design (generated) | END (bought plan adopted)
+targets  -> review (bought plan) | design (generated) | END (bought plan adopted, or nothing
+            to adopt)
 design   -> review
 review   -> apply (approve/edit) | design or adjust (reject) | END (nothing to review, or
             rejected apply_plan)
@@ -45,7 +46,8 @@ def after_intake(state: PlanningState) -> str:
 def after_targets(state: PlanningState) -> str:
     if state.get("pending_changes"):
         return "review"
-    if state.get("phase") == "active":
+    if state.get("phase") == "active" or state.get("plan_id") is None:
+        # an adoption that found nothing leaves no plan, and there is nothing to design
         return END
     return "design"
 

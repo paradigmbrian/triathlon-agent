@@ -127,7 +127,8 @@ async def test_bought_plan_is_adopted_after_apply(nocommit, make_deps, mem_store
     workouts = [
         {"id": "w1", "date": MONDAY.isoformat(), "tss_planned": 60, "duration_planned": 1.0}
     ]
-    tp = FakeTp(responses={"tp_get_workouts": {"workouts": workouts, "count": 1}})
+    # empty before the plan is applied, so the adoption owns only what the plan added
+    tp = FakeTp(listings=[[], workouts])
     graph, models = graph_for(
         make_deps,
         mem_store,
@@ -141,13 +142,20 @@ async def test_bought_plan_is_adopted_after_apply(nocommit, make_deps, mem_store
     assert out["__interrupt__"][0].value["proposals"][0]["changes"][0]["op"] == "apply_plan"
     assert models["planning"].calls == 0  # targets proposes the apply_plan change without a model
     out = await graph.ainvoke(Command(resume={"action": "approve"}), CFG)
-    assert [c[0] for c in tp.calls] == ["tp_apply_training_plan", "tp_get_workouts"]
-    assert repo.derive_phase(nocommit)[0] == "active" and out["pending"] is None
+    assert [c[0] for c in tp.calls] == [
+        "tp_get_workouts",  # what was on the calendar before the plan
+        "tp_apply_training_plan",
+        "tp_get_workouts",
+    ]
+    phase, _, pid = repo.derive_phase(nocommit)
+    assert phase == "active" and out["pending"] is None
+    assert repo.owned_workout_ids(nocommit, pid) == {"w1"}
 
 
 async def test_a_failing_adopt_is_reported_not_raised(nocommit, make_deps, mem_store):
     repo.insert_goal(nocommit, TrainingGoal(**{**GOAL_ARGS, "tp_plan_id": "p1"}))
-    tp = FakeTp(fail_on_call=2)  # tp_apply_training_plan lands; the adopt's read blows up
+    # the listing and tp_apply_training_plan land; the adopt's read blows up
+    tp = FakeTp(fail_on_call=3)
     graph, _ = graph_for(
         make_deps,
         mem_store,
@@ -159,7 +167,11 @@ async def test_a_failing_adopt_is_reported_not_raised(nocommit, make_deps, mem_s
     )
     await graph.ainvoke({"messages": [HumanMessage("use my bought plan")]}, CFG)
     out = await graph.ainvoke(Command(resume={"action": "approve"}), CFG)
-    assert [c[0] for c in tp.calls] == ["tp_apply_training_plan", "tp_get_workouts"]
+    assert [c[0] for c in tp.calls] == [
+        "tp_get_workouts",
+        "tp_apply_training_plan",
+        "tp_get_workouts",
+    ]
     assert "boom" in out["last_error"] and "adopt" in out["last_error"]
     assert out["reports"][0].applied == 1 and out["pending"] is None
     assert (await graph.aget_state(CFG)).next == ()
