@@ -24,12 +24,13 @@ from tri_wellness.repl import (
 from tri_wellness.testing import load_extracted
 
 
-def lr(marker, value, unit, name=None, low=None, high=None, flag=None, note=None):
+def lr(marker, value, unit, name=None, low=None, high=None, flag=None, note=None, bound=None):
     return LabResult(
         marker=marker,
         value=value,
         unit=unit,
-        raw=RawResult(name=name or marker, value=str(value), unit=unit, flag=flag),
+        bound=bound,
+        raw=RawResult(name=name or marker, value=f"{bound or ''}{value}", unit=unit, flag=flag),
         lab_ref_low=low,
         lab_ref_high=high,
         note=note,
@@ -43,9 +44,7 @@ def payload(**over):
         "lab_name": "Quest",
         "results": [
             lr("ferritin", 42.0, "ng/mL", "Ferritin, Serum", 30.0, 400.0).model_dump(mode="json"),
-            lr(
-                "hs_crp", 0.3, "mg/L", "hs-CRP", None, 3.0, note="value '<0.3' stored as bound 0.3"
-            ).model_dump(mode="json"),
+            lr("hs_crp", 0.3, "mg/L", "hs-CRP", None, 3.0, bound="<").model_dump(mode="json"),
         ],
         "unmapped": [
             Unmapped(
@@ -74,6 +73,7 @@ def test_render_review_table_unmapped_duplicates_and_error():
     assert "/labs/aug.pdf" in text and "2026-08-20" in text and "Quest" in text
     assert "ferritin" in text and "42" in text and "ng/mL" in text and "30-400" in text
     assert "Ferritin, Serum" in text and "hs-CRP" in text and "-3" in text  # one-sided lab range
+    assert "<0.3" in text  # a bounded value shows its bound
     assert "[name" in text and "Sed Rate" in text
     assert "panel(s) 7" in text and "approve needs the panel context" in text
     assert "2 results, 1 unmapped (0 blocking)" in text
@@ -167,6 +167,9 @@ def test_yaml_round_trip_and_validation():
         review_from_yaml(text.replace("value: 0.3", "value: abc"), reg)
     with pytest.raises(ValueError, match="drawn_on"):
         review_from_yaml(text.replace("2026-08-20", "yesterday"), reg)
+    assert "bound: <" in text
+    with pytest.raises(ValueError, match=r"results\[1\].*bound"):
+        review_from_yaml(text.replace("bound: <", "bound: about"), reg)
 
 
 def test_yaml_parse_failure_raises_value_error():

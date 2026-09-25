@@ -13,6 +13,7 @@ from tri_wellness.labs.models import (
     LabResult,
     PanelContext,
     PanelSummary,
+    PreviousValue,
     RawResult,
     SourceKind,
     StoredPanel,
@@ -59,8 +60,8 @@ def insert_panel(
             cur.execute(
                 """
                 insert into lab_results (panel_id, marker, value, unit, raw_name, raw_value,
-                    raw_unit, lab_ref_low, lab_ref_high, flag)
-                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    raw_unit, lab_ref_low, lab_ref_high, flag, bound)
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     panel_id,
@@ -73,6 +74,7 @@ def insert_panel(
                     r.lab_ref_low,
                     r.lab_ref_high,
                     r.raw.flag,
+                    r.bound,
                 ),
             )
     return panel_id
@@ -148,6 +150,7 @@ def _result(row: dict[str, Any]) -> StoredResult:
         lab_ref_low=_f(row["lab_ref_low"]),
         lab_ref_high=_f(row["lab_ref_high"]),
         flag=row["flag"],
+        bound=row["bound"],
     )
 
 
@@ -175,6 +178,7 @@ def lab_results_for_panel(conn: Conn, panel_id: int) -> list[LabResult]:
                     ref_high=None if s.lab_ref_high is None else str(s.lab_ref_high),
                     flag=s.flag,
                 ),
+                bound=s.bound,
                 lab_ref_low=s.lab_ref_low,
                 lab_ref_high=s.lab_ref_high,
             )
@@ -182,13 +186,13 @@ def lab_results_for_panel(conn: Conn, panel_id: int) -> list[LabResult]:
     return out
 
 
-def previous_values(conn: Conn, panel_id: int) -> dict[str, tuple[date, float]]:
-    """Per marker, the value from the most recent panel strictly earlier than this one,
-    ordered by (drawn_on, id)."""
+def previous_values(conn: Conn, panel_id: int) -> dict[str, PreviousValue]:
+    """Per marker, the value and bound from the most recent panel strictly earlier than this
+    one, ordered by (drawn_on, id)."""
     rows = conn.execute(
         """
         with me as (select drawn_on, id from lab_panels where id = %s)
-        select distinct on (r.marker) r.marker, p.drawn_on, r.value
+        select distinct on (r.marker) r.marker, p.drawn_on, r.value, r.bound
         from lab_results r
         join lab_panels p on p.id = r.panel_id
         cross join me
@@ -197,7 +201,7 @@ def previous_values(conn: Conn, panel_id: int) -> dict[str, tuple[date, float]]:
         """,
         (panel_id,),
     ).fetchall()
-    return {r["marker"]: (r["drawn_on"], float(r["value"])) for r in rows}
+    return {r["marker"]: (r["drawn_on"], float(r["value"]), r["bound"]) for r in rows}
 
 
 def has_earlier_panel(conn: Conn, panel_id: int) -> bool:

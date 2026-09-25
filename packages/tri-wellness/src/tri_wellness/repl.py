@@ -6,7 +6,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import date, time
-from typing import Any
+from typing import Any, get_args
 
 import yaml
 from langgraph.types import Command
@@ -15,6 +15,7 @@ from tri_core.harness.turns import Out as Out
 from tri_core.harness.turns import run_agent_turn, stream_turn, turn_config
 from tri_wellness.labs.models import (
     BLOCKING_REASONS,
+    Bound,
     IngestDecision,
     LabResult,
     PanelContext,
@@ -58,8 +59,9 @@ def render_review(payload: dict[str, Any]) -> str:
     lines.append(f"{'marker':24} {'value':>10} {'unit':10} {'lab range':12} {'flag':4} raw name")
     for r in results:
         raw = r.get("raw") or {}
+        value = f"{r.get('bound') or ''}{float(r['value']):g}"
         lines.append(
-            f"{r['marker']:24} {float(r['value']):>10g} {r['unit']:10} "
+            f"{r['marker']:24} {value:>10} {r['unit']:10} "
             f"{_rng(r.get('lab_ref_low'), r.get('lab_ref_high')):12} {(raw.get('flag') or ''):4} "
             f"{raw.get('name') or ''}"
         )
@@ -140,6 +142,7 @@ def _result_row(r: dict[str, Any]) -> dict[str, Any]:
         "marker": r["marker"],
         "value": r["value"],
         "unit": r["unit"],
+        "bound": r.get("bound"),
         "raw_name": raw.get("name"),
         "raw_value": raw.get("value"),
         "raw_unit": raw.get("unit"),
@@ -202,11 +205,16 @@ def review_from_yaml(text: str, registry: MarkerRegistry) -> dict[str, Any]:
         except (KeyError, TypeError, ValueError):
             problems.append(f"results[{i}] ({marker}): value '{row.get('value')}' is not a number")
             continue
+        bound = row.get("bound")
+        if bound is not None and bound not in get_args(Bound):
+            problems.append(f"results[{i}] ({marker}): bound '{bound}' is not one of <, <=, >, >=")
+            continue
         results.append(
             LabResult(
                 marker=marker,
                 value=value,
                 unit=spec.unit,
+                bound=bound,
                 raw=RawResult(
                     name=str(row.get("raw_name") or spec.display),
                     value=str(row.get("raw_value") if row.get("raw_value") is not None else value),

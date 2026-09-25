@@ -5,18 +5,22 @@ Every threshold from the spec's confounder table is a constant here and nowhere 
 
 from __future__ import annotations
 
-from datetime import date, time
+import math
+from datetime import time
 from typing import Any, get_args
 
 from tri_wellness.labs.models import (
+    Bound,
     Confounder,
     ConventionalStatus,
     Finding,
     FunctionalStatus,
     LabResult,
     PanelContext,
+    PreviousValue,
     TrainingContext,
 )
+from tri_wellness.labs.normalize import bound_step
 from tri_wellness.ranges.registry import MarkerRegistry, MarkerSpec
 
 HARD_SESSION_TSS = 150.0  # a session above this in the 72 h before the draw
@@ -108,6 +112,44 @@ def active_confounders(
     return [c for c in CONFOUNDER_ORDER if c in fired]
 
 
+def _ends(value: float, bound: Bound | None, step: float) -> tuple[float, float]:
+    """The lowest and highest value a result can stand for: `<x` is [0, x), `>x` is (x, inf),
+    with the open end one printed unit (`step`) inside the bound. A plain value is its own ends."""
+    if bound is None:
+        return value, value
+    if bound == "<":
+        return 0.0, max(0.0, value - step)
+    if bound == "<=":
+        return 0.0, value
+    if bound == ">":
+        return value + step, math.inf
+    return value, math.inf
+
+
+def bounded_conventional_status(
+    value: float,
+    bound: Bound | None,
+    step: float,
+    lab_low: float | None,
+    lab_high: float | None,
+    spec: MarkerSpec,
+) -> ConventionalStatus:
+    """`conventional_status` at both ends of the interval when they agree, else indeterminate."""
+    lo, hi = _ends(value, bound, step)
+    at_lo = conventional_status(lo, lab_low, lab_high, spec)
+    at_hi = conventional_status(hi, lab_low, lab_high, spec)
+    return at_lo if at_lo == at_hi else "indeterminate"
+
+
+def bounded_functional_status(
+    value: float, bound: Bound | None, step: float, spec: MarkerSpec
+) -> FunctionalStatus:
+    """`functional_status` at both ends of the interval when they agree, else indeterminate."""
+    lo, hi = _ends(value, bound, step)
+    at_lo, at_hi = functional_status(lo, spec), functional_status(hi, spec)
+    return at_lo if at_lo == at_hi else "indeterminate"
+
+
 def _delta_pct(value: float, prev: float | None) -> float | None:
     if prev is None or prev == 0:
         return None
@@ -126,7 +168,7 @@ def _functional_range(spec: MarkerSpec) -> tuple[float | None, float | None]:
 def evaluate(
     results: list[LabResult],
     registry: MarkerRegistry,
-    previous: dict[str, tuple[date, float]],
+    previous: dict[str, PreviousValue],
     context: PanelContext,
     training: TrainingContext,
 ) -> list[Finding]:
@@ -135,6 +177,8 @@ def evaluate(
     for r in results:
         spec = registry.get(r.marker)
         prev = previous.get(r.marker)
+        step = bound_step(r.raw.value, r.value) if r.bound else 0.0
+        any_bounded = r.bound is not None or (prev is not None and prev[2] is not None)
         findings.append(
             Finding(
                 marker=r.marker,
@@ -142,13 +186,15 @@ def evaluate(
                 system=spec.system,
                 value=r.value,
                 unit=r.unit,
-                conventional_status=conventional_status(
-                    r.value, r.lab_ref_low, r.lab_ref_high, spec
+                bound=r.bound,
+                raw_value=r.raw.value.strip(),
+                conventional_status=bounded_conventional_status(
+                    r.value, r.bound, step, r.lab_ref_low, r.lab_ref_high, spec
                 ),
-                functional_status=functional_status(r.value, spec),
+                functional_status=bounded_functional_status(r.value, r.bound, step, spec),
                 functional_range=_functional_range(spec),
-                previous=prev,
-                delta_pct=_delta_pct(r.value, prev[1] if prev else None),
+                previous=(prev[0], prev[1]) if prev else None,
+                delta_pct=None if any_bounded else _delta_pct(r.value, prev[1] if prev else None),
                 active_confounders=[c for c in spec.confounders if c in panel_active],
                 athlete_note=spec.athlete_note,
             )

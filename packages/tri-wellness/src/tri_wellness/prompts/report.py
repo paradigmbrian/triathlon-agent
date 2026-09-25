@@ -7,6 +7,7 @@ from collections import defaultdict
 from typing import Any
 
 from tri_wellness.labs.models import Finding, PanelContext, TrainingContext
+from tri_wellness.labs.normalize import parse_value
 from tri_wellness.ranges.registry import MarkerRegistry
 
 PROMPT_VERSION = "1"  # bump when REPORT_SYSTEM or REPORT_RULES changes; names the eval experiment
@@ -149,9 +150,23 @@ def training_block(t: TrainingContext) -> str:
     return "\n".join(lines)
 
 
+def _shown(f: Finding) -> str:
+    """The value as the lab printed it: raw_value verbatim for a bounded row whose value was
+    not unit-converted, else '<bound><value>'; the plain value otherwise."""
+    if f.bound:
+        parsed = parse_value(f.raw_value)
+        if parsed is not None and parsed[0] == f.value:
+            return f.raw_value
+        return f"{f.bound}{_g(f.value)}"
+    return _g(f.value)
+
+
 def _finding_line(f: Finding) -> str:
+    status: str = f.functional_status
+    if status == "indeterminate":
+        status = f"indeterminate (reported as {f.raw_value})"
     line = (
-        f"- {f.display}: {_g(f.value)} {f.unit} — {f.functional_status} "
+        f"- {f.display}: {_shown(f)} {f.unit} — {status} "
         f"(functional {format_range(*f.functional_range)}; conventional {f.conventional_status})"
     )
     if f.previous is not None:
@@ -181,7 +196,7 @@ def findings_block(findings: list[Finding], registry: MarkerRegistry) -> str:
             lines.append(
                 "optimal: "
                 + ", ".join(
-                    f"{f.display} {_g(f.value)} {f.unit} ({format_range(*f.functional_range)})"
+                    f"{f.display} {_shown(f)} {f.unit} ({format_range(*f.functional_range)})"
                     for f in optimal
                 )
             )

@@ -7,8 +7,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-ConventionalStatus = Literal["low", "in_range", "high"]
-FunctionalStatus = Literal["low", "suboptimal_low", "optimal", "suboptimal_high", "high"]
+ConventionalStatus = Literal["low", "in_range", "high", "indeterminate"]
+FunctionalStatus = Literal[
+    "low", "suboptimal_low", "optimal", "suboptimal_high", "high", "indeterminate"
+]
+Bound = Literal["<", "<=", ">", ">="]  # the lab printed '<x' or '>x': the value is an interval
+PreviousValue = tuple[date, float, Bound | None]
 Confounder = Literal[
     "recent_hard_session",
     "high_acute_load",
@@ -40,6 +44,7 @@ class LabResult(BaseModel):
     value: float
     unit: str
     raw: RawResult
+    bound: Bound | None = None
     lab_ref_low: float | None = None
     lab_ref_high: float | None = None
     note: str | None = None
@@ -79,6 +84,8 @@ class Finding(BaseModel):
     system: str
     value: float
     unit: str
+    bound: Bound | None = None
+    raw_value: str = ""  # what the lab printed; shown for bounded rows
     conventional_status: ConventionalStatus
     functional_status: FunctionalStatus
     functional_range: tuple[float | None, float | None]
@@ -129,6 +136,7 @@ class StoredResult(BaseModel):
     lab_ref_low: float | None
     lab_ref_high: float | None
     flag: str | None
+    bound: Bound | None = None
 
 
 class StoredReport(BaseModel):

@@ -1,7 +1,7 @@
 import pytest
 
 from tri_wellness.labs.models import RawResult
-from tri_wellness.labs.normalize import normalize, parse_value
+from tri_wellness.labs.normalize import bound_step, normalize, parse_value
 from tri_wellness.ranges.registry import MARKERS_PATH, load_registry
 
 
@@ -22,11 +22,11 @@ def raw(name, value, unit=None, ref_low=None, ref_high=None, flag=None):
         ("42", (42.0, None)),
         (" 12.4 ", (12.4, None)),
         ("1,245", (1245.0, None)),
-        ("<5", (5.0, "value '<5' stored as bound 5")),
-        ("< 0.5", (0.5, "value '< 0.5' stored as bound 0.5")),
-        (">200", (200.0, "value '>200' stored as bound 200")),
-        ("<=3", (3.0, "value '<=3' stored as bound 3")),
-        ("≥ 60", (60.0, "value '≥ 60' stored as bound 60")),
+        ("<5", (5.0, "<")),
+        ("< 0.5", (0.5, "<")),
+        (">200", (200.0, ">")),
+        ("<=3", (3.0, "<=")),
+        ("≥ 60", (60.0, ">=")),
         ("Not detected", None),
         ("", None),
         ("12.4 ng/mL", None),
@@ -61,10 +61,32 @@ def test_unit_conversion_and_case_insensitive_units(reg):
     assert h.marker == "hemoglobin" and h.value == 15.0 and h.note == "converted from 150 g/l"
 
 
-def test_bounded_value_keeps_note_and_verbatim_raw(reg):
+def test_bounded_value_keeps_bound_and_verbatim_raw(reg):
     [r] = normalize([raw("hs-CRP", "<0.3", "mg/L", None, "3.0", None)], reg).results
-    assert r.value == 0.3 and r.note == "value '<0.3' stored as bound 0.3"
+    assert r.value == 0.3 and r.bound == "<" and r.note is None
     assert r.raw.value == "<0.3" and r.lab_ref_low is None and r.lab_ref_high == 3.0
+
+
+@pytest.mark.parametrize(
+    "text, value, step",
+    [
+        ("<1.0", 1.0, 0.1),
+        ("> 60", 60.0, 1.0),
+        ("<0.5", 5.0, 1.0),  # converted x10: the step scales with the value
+        ("<=3", 3.0, 1.0),
+        ("<1,000", 1000.0, 1.0),
+        ("abc", 1.0, 0.0),
+    ],
+)
+def test_bound_step(text, value, step):
+    assert bound_step(text, value) == pytest.approx(step)
+
+
+def test_lab_reference_converts_with_the_value(reg):
+    [g] = normalize([raw("Glucose", "5.2", "mmol/L", "3.9", "5.8")], reg).results
+    assert g.unit == "mg/dL" and g.value == pytest.approx(93.6946, abs=1e-4)
+    assert g.lab_ref_low == pytest.approx(70.271, abs=1e-3)
+    assert g.lab_ref_high == pytest.approx(104.5056, abs=1e-3)
 
 
 def test_bounded_lab_reference_is_parsed(reg):

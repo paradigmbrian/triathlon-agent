@@ -64,7 +64,7 @@ def findings(reg):
     return evaluate(
         results,
         reg,
-        {"ferritin": (date(2026, 3, 1), 35.0)},
+        {"ferritin": (date(2026, 3, 1), 35.0, None)},
         PanelContext(fasting=True, draw_time=time(7, 30)),
         training,
     ), training
@@ -148,3 +148,29 @@ def test_format_range():
     assert format_range(None, 1.0) == "up to 1"
     assert format_range(50.0, None) == "50 or above"
     assert format_range(None, None) == "no range"
+
+
+def test_findings_block_shows_bounded_values_as_printed(reg):
+    tg = LabResult(
+        marker="tg_ab",
+        value=1.0,
+        unit="IU/mL",
+        bound="<",
+        raw=RawResult(name="Thyroglobulin Antibody", value="<1.0", unit="IU/mL"),
+    )
+    fer = LabResult(
+        marker="ferritin",
+        value=50.0,
+        unit="ng/mL",
+        bound="<",
+        raw=RawResult(name="Ferritin", value="<50", unit="ng/mL"),
+        lab_ref_low=30.0,
+        lab_ref_high=100.0,
+    )
+    fs = evaluate([tg, fer], reg, {}, PanelContext(fasting=True), TrainingContext(drawn_on=D))
+    text = findings_block(fs, reg)
+    assert "optimal: Thyroglobulin antibodies <1.0 IU/mL (up to 0.9)" in text
+    assert (
+        "- Ferritin: <50 ng/mL — indeterminate (reported as <50) "
+        "(functional 50-150; conventional indeterminate)"
+    ) in text
