@@ -10,6 +10,7 @@ from langchain_core.runnables import RunnableConfig
 
 from tri_wellness.graph.deps import GraphDeps
 from tri_wellness.graph.state import IngestState
+from tri_wellness.labs.extract import file_sha256
 from tri_wellness.labs.extract.exports import extract_export_with_model, parse_export
 from tri_wellness.labs.extract.pdf import extract_pdf
 
@@ -31,6 +32,7 @@ def make_extract_node(deps: GraphDeps) -> Any:
         elif drawn_on is None:
             error = f"extraction found no draw date in {path.name}; rerun with --drawn-on"
         return {
+            "source_sha": file_sha256(path),
             "raw_results": panel.results,
             "drawn_on": drawn_on,
             "lab_name": panel.lab_name,

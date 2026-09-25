@@ -36,13 +36,15 @@ def insert_panel(
     context: PanelContext,
     raw_extract: list[RawResult],
     results: list[LabResult],
+    source_sha: str | None = None,
 ) -> int:
     """Insert the panel and its result rows. Runs inside the caller's transaction, so a
     failing result row leaves no panel behind."""
     row = conn.execute(
         """
-        insert into lab_panels (drawn_on, lab_name, source_file, source_kind, context, raw_extract)
-        values (%s, %s, %s, %s, %s, %s) returning id
+        insert into lab_panels (drawn_on, lab_name, source_file, source_kind, context,
+            raw_extract, source_sha)
+        values (%s, %s, %s, %s, %s, %s, %s) returning id
         """,
         (
             drawn_on,
@@ -51,6 +53,7 @@ def insert_panel(
             source_kind,
             Jsonb(context.model_dump(mode="json")),
             Jsonb([r.model_dump(mode="json") for r in raw_extract]),
+            source_sha,
         ),
     ).fetchone()
     assert row is not None
@@ -90,6 +93,7 @@ def _panel(row: dict[str, Any]) -> StoredPanel:
         context=PanelContext.model_validate(row["context"]),
         raw_extract=[RawResult.model_validate(r) for r in row["raw_extract"]],
         created_at=row["created_at"],
+        source_sha=row["source_sha"],
     )
 
 
@@ -127,6 +131,14 @@ def list_panels(conn: Conn) -> list[PanelSummary]:
         )
         for r in rows
     ]
+
+
+def panel_id_for_sha(conn: Conn, sha: str) -> int | None:
+    """The panel already stored from a file with these bytes, if any (lowest id)."""
+    row = conn.execute(
+        "select id from lab_panels where source_sha = %s order by id limit 1", (sha,)
+    ).fetchone()
+    return int(row["id"]) if row else None
 
 
 def find_duplicate_panels(conn: Conn, drawn_on: date, lab_name: str | None) -> list[int]:

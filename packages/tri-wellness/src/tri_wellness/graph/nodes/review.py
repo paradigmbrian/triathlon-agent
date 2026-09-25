@@ -27,10 +27,15 @@ def make_review_node(deps: GraphDeps) -> Any:
         drawn_on = state.get("drawn_on")
         context = state.get("context")
         unmapped = list(state.get("unmapped") or [])
+        sha = state.get("source_sha")
         duplicates: list[int] = []
-        if drawn_on is not None:
+        already_ingested: int | None = None
+        if drawn_on is not None or sha is not None:
             with deps.connect() as conn:
-                duplicates = repo.find_duplicate_panels(conn, drawn_on, state.get("lab_name"))
+                if drawn_on is not None:
+                    duplicates = repo.find_duplicate_panels(conn, drawn_on, state.get("lab_name"))
+                if sha is not None:
+                    already_ingested = repo.panel_id_for_sha(conn, sha)
         raw = interrupt(
             {
                 "source_path": state["source_path"],
@@ -40,6 +45,7 @@ def make_review_node(deps: GraphDeps) -> Any:
                 "unmapped": [u.model_dump(mode="json") for u in unmapped],
                 "context": context.model_dump(mode="json") if context else None,
                 "duplicates": duplicates,
+                "already_ingested": already_ingested,
                 "last_error": state.get("last_error"),
             }
         )
@@ -53,6 +59,11 @@ def make_review_node(deps: GraphDeps) -> Any:
                 if value is not None:
                     update[field] = value
             return update
+        if already_ingested is not None:
+            return {
+                "decision": None,
+                "last_error": f"already ingested as panel {already_ingested}",
+            }
         blocking = blocking_rows(unmapped)
         if blocking:
             names = ", ".join(u.raw.name for u in blocking)

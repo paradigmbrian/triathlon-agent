@@ -76,6 +76,8 @@ def test_render_review_table_unmapped_duplicates_and_error():
     assert "<0.3" in text  # a bounded value shows its bound
     assert "[name" in text and "Sed Rate" in text
     assert "panel(s) 7" in text and "approve needs the panel context" in text
+    assert "already ingested as panel 9" in render_review(payload(already_ingested=9))
+    assert "already ingested" not in text
     assert "2 results, 1 unmapped (0 blocking)" in text
     blocked = payload(
         unmapped=[

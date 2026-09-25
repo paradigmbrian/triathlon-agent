@@ -123,6 +123,7 @@ class StoredPanel(BaseModel):
     context: PanelContext
     raw_extract: list[RawResult]
     created_at: datetime
+    source_sha: str | None = None  # sha256 of the ingested file; None for manual panels
 
 
 class StoredResult(BaseModel):

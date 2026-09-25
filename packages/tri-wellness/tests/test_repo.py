@@ -43,6 +43,24 @@ def panel(conn, drawn_on, results, lab="Quest", extra_raw=()):
     )
 
 
+def test_source_sha_round_trips_and_finds_the_panel(wdb):
+    pid = repo.insert_panel(
+        wdb,
+        drawn_on=D1,
+        lab_name="Quest",
+        source_file="/labs/a.pdf",
+        source_kind="pdf",
+        context=CTX,
+        raw_extract=[],
+        results=[],
+        source_sha="a" * 64,
+    )
+    assert repo.get_panel(wdb, pid).source_sha == "a" * 64
+    assert repo.panel_id_for_sha(wdb, "a" * 64) == pid
+    assert repo.panel_id_for_sha(wdb, "b" * 64) is None
+    assert repo.get_panel(wdb, panel(wdb, D2, [lr("ferritin", 40.0)])).source_sha is None
+
+
 def test_insert_and_get_panel_roundtrip(wdb):
     pid = panel(
         wdb,

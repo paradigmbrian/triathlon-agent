@@ -49,7 +49,12 @@ def render_review(payload: dict[str, Any]) -> str:
         str(payload.get("source_path") or ""),
         f"drawn {payload.get('drawn_on') or '?'}  lab {payload.get('lab_name') or '?'}",
     ]
-    if payload.get("duplicates"):
+    if payload.get("already_ingested") is not None:
+        lines.append(
+            f"blocked: this file is already ingested as panel {payload['already_ingested']}; "
+            "reject to end"
+        )
+    elif payload.get("duplicates"):
         ids = ", ".join(str(i) for i in payload["duplicates"])
         lines.append(
             f"warning: panel(s) {ids} already stored for this date and lab; approve stores another"

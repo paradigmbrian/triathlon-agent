@@ -193,7 +193,7 @@ async def test_missing_draw_date_uses_hint_or_ends(nocommit, make_deps, tiny_pdf
     assert out["__interrupt__"][0].value["drawn_on"] == "2026-08-22"
 
 
-async def test_export_path_is_deterministic_and_warns_on_duplicate(nocommit, make_deps):
+async def test_export_path_is_deterministic_and_blocks_the_same_file(nocommit, make_deps, tmp_path):
     model = ScriptedChatModel(script=[])
     graph = build_ingest_graph(make_deps(model), InMemorySaver())
     c = cfg()
@@ -208,11 +208,26 @@ async def test_export_path_is_deterministic_and_warns_on_duplicate(nocommit, mak
         "vitamin_d",
     ]
     assert payload["lab_name"] == "Function Health"
+    assert payload["duplicates"] == [] and payload["already_ingested"] is None
     first = (await graph.ainvoke(APPROVE, c))["panel_id"]
+    assert repo.get_panel(nocommit, first).source_sha is not None
+    # the same bytes again (a re-download) are blocked at review
     c2 = cfg()
     out = await graph.ainvoke(src, c2)
-    assert out["__interrupt__"][0].value["duplicates"] == [first]
-    second = (await graph.ainvoke(APPROVE, c2))["panel_id"]
+    payload = out["__interrupt__"][0].value
+    assert payload["duplicates"] == [first] and payload["already_ingested"] == first
+    out = await graph.ainvoke(APPROVE, c2)
+    again = out["__interrupt__"][0].value
+    assert again["last_error"] == f"already ingested as panel {first}"
+    assert (await graph.aget_state(c2)).next == ("review",)
+    # different bytes for the same date and lab: a warning, and approve stores another
+    other = tmp_path / "generic-2.csv"
+    other.write_text((FIX / "exports" / "generic.csv").read_text().replace(",42,", ",43,"))
+    c3 = cfg()
+    out = await graph.ainvoke({"source_path": str(other), "source_kind": "export"}, c3)
+    payload = out["__interrupt__"][0].value
+    assert payload["duplicates"] == [first] and payload["already_ingested"] is None
+    second = (await graph.ainvoke(APPROVE, c3))["panel_id"]
     assert second != first  # a second panel, not a merge
 
 

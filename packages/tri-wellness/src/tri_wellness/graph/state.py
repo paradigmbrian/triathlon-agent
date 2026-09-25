@@ -16,6 +16,7 @@ STATE_TYPES: tuple[type, ...] = (RawResult, LabResult, Unmapped, PanelContext)
 class IngestState(TypedDict, total=False):
     source_path: str
     source_kind: IngestKind
+    source_sha: str | None  # sha256 of the file; set by extract, checked at review, stored
     drawn_on_hint: date | None
     page_count: int | None
     raw_results: list[RawResult]
