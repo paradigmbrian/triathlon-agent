@@ -118,4 +118,4 @@ Every row above names its test. Beyond those: the full suite, `ruff` and `mypy` 
 
 ## 6. Rollout
 
-One plan, one branch, one commit per package section (2.1 to 2.6) plus the migration. Brian runs migration 006 on both databases before merging. The order inside the plan is 2.1, 2.2, 2.3, 2.5, 2.4, 2.6 so the two evals that change are re-baselined last.
+One plan, one branch, one commit per package section (2.1 to 2.6) plus the migration. Brian runs migration 006 on both databases at merge time, not before: the old code breaks once the fuel index it drops is gone, and the new code breaks without it, so the migration and the merge land together. The order inside the plan is 2.1, 2.2, 2.3, 2.5, 2.4, 2.6 so the two evals that change are re-baselined last.
