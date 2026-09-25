@@ -122,6 +122,39 @@ def test_load_horizon_from_tp_calendar_when_no_designed_weeks(pdb):
     assert [s.tp_workout_id for s in sessions] == ["w1"]  # completed and out-of-window rows dropped
 
 
+def test_load_horizon_keeps_todays_completed_workout(pdb):
+    # an afternoon regenerate must not drop the session already done today and lower the target
+    seed_goal_and_plan(pdb, MONDAY, [("base", None)])
+    seed_workouts(
+        pdb,
+        [
+            {
+                "tp_workout_id": "done-today",
+                "workout_date": MONDAY,
+                "sport": "bike",
+                "planned_duration_sec": 5400,
+                "completed": True,
+            },
+            {
+                "tp_workout_id": "done-later",
+                "workout_date": MONDAY + timedelta(days=1),
+                "sport": "run",
+                "planned_duration_sec": 2400,
+                "completed": True,
+            },
+            {
+                "tp_workout_id": "w3",
+                "workout_date": MONDAY + timedelta(days=2),
+                "sport": "run",
+                "planned_duration_sec": 2400,
+            },
+        ],
+    )
+    sessions, ctx = L.load_horizon(pdb, MONDAY, 14)
+    assert ctx.source == "tp_calendar"
+    assert [s.tp_workout_id for s in sessions] == ["done-today", "w3"]
+
+
 def test_load_horizon_profile_hours_fallback(pdb):
     seed_goal_and_plan(pdb, MONDAY, [("base", None)], weekly_hours=9)
     sessions, ctx = L.load_horizon(pdb, MONDAY, 14)

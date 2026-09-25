@@ -117,11 +117,14 @@ def _active_plan_weeks(conn: Conn, goal_id: int) -> list[dict[str, Any]]:
 
 
 def _planned_workouts(conn: Conn, start: date, end: date) -> list[dict[str, Any]]:
+    """Workouts in [start, end]. A completed one is dropped unless it is dated `start` (today):
+    an afternoon regenerate must not lower today's target."""
     return conn.execute(
         "select tp_workout_id, workout_date, sport, title, planned_duration_sec, "
         "planned_distance_m, planned_tss, planned_if from workouts "
-        "where not completed and workout_date between %s and %s order by workout_date",
-        (start, end),
+        "where (not completed or workout_date = %s) and workout_date between %s and %s "
+        "order by workout_date",
+        (start, start, end),
     ).fetchall()
 
 
