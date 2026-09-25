@@ -190,3 +190,19 @@ def test_findings_block_shows_bounded_values_as_printed(reg):
         "- Ferritin: <50 ng/mL — indeterminate (reported as <50) "
         "(functional 50-150; conventional indeterminate)"
     ) in text
+
+
+def test_findings_block_shows_the_raw_unit_when_a_bounded_value_was_unit_converted(reg):
+    # insulin's canonical unit is uIU/mL; a pmol/L reading here converts, and its raw text
+    # ("<50") reads as canonical unless the raw unit is carried along.
+    insulin = LabResult(
+        marker="insulin",
+        value=7.205,
+        unit="uIU/mL",
+        bound="<",
+        raw=RawResult(name="Insulin", value="<50", unit="pmol/L"),
+    )
+    fs = evaluate([insulin], reg, {}, PanelContext(fasting=True), TrainingContext(drawn_on=D))
+    assert fs[0].functional_status == "indeterminate"
+    text = findings_block(fs, reg)
+    assert "indeterminate (reported as <50 pmol/L)" in text

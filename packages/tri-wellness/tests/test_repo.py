@@ -186,6 +186,19 @@ def test_previous_values_carry_the_bound(wdb):
     assert repo.previous_values(wdb, p1) == {}
 
 
+def test_bound_is_inferred_from_raw_value_when_the_column_is_null(wdb):
+    """Migration 006 left `bound` NULL on rows stored before it; the raw text still carries it,
+    so a pre-migration `<1.0` row is not silently read back as the point value 1.0."""
+    tg = lr("tg_ab", 1.0, "IU/mL", raw=raw("Thyroglobulin Antibody", "<1.0", "IU/mL"))
+    p1 = panel(wdb, D1, [tg])
+    stored = repo.list_results(wdb, p1)
+    assert stored[0].bound == "<"  # inferred from raw_value, not the NULL column
+    rebuilt = repo.lab_results_for_panel(wdb, p1)
+    assert rebuilt[0].bound == "<"
+    p2 = panel(wdb, D2, [lr("tg_ab", 1.2, "IU/mL")])
+    assert repo.previous_values(wdb, p2) == {"tg_ab": (D1, 1.0, "<")}
+
+
 def test_has_earlier_panel(wdb):
     p1 = panel(wdb, D1, [lr("ferritin", 35.0)])
     p2 = panel(wdb, D2, [lr("ferritin", 40.0)])

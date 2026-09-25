@@ -86,6 +86,7 @@ class Finding(BaseModel):
     unit: str
     bound: Bound | None = None
     raw_value: str = ""  # what the lab printed; shown for bounded rows
+    raw_unit: str | None = None  # the raw row's unit; shown when it differs from `unit`
     conventional_status: ConventionalStatus
     functional_status: FunctionalStatus
     functional_range: tuple[float | None, float | None]

@@ -9,6 +9,7 @@ from psycopg.types.json import Jsonb
 
 from tri_core.db.repo import Conn
 from tri_wellness.labs.models import (
+    Bound,
     Finding,
     LabResult,
     PanelContext,
@@ -20,10 +21,18 @@ from tri_wellness.labs.models import (
     StoredReport,
     StoredResult,
 )
+from tri_wellness.labs.normalize import parse_value
 
 
 def _f(v: Any) -> float | None:
     return None if v is None else float(v)
+
+
+def _bound_of(raw_value: str) -> Bound | None:
+    """The bound `parse_value` reads off a raw printed value, for a row stored before migration
+    006 added the `bound` column (left NULL, with no backfill)."""
+    parsed = parse_value(raw_value)
+    return parsed[1] if parsed else None
 
 
 def insert_panel(
@@ -162,7 +171,7 @@ def _result(row: dict[str, Any]) -> StoredResult:
         lab_ref_low=_f(row["lab_ref_low"]),
         lab_ref_high=_f(row["lab_ref_high"]),
         flag=row["flag"],
-        bound=row["bound"],
+        bound=row["bound"] or _bound_of(row["raw_value"]),
     )
 
 
@@ -204,7 +213,7 @@ def previous_values(conn: Conn, panel_id: int) -> dict[str, PreviousValue]:
     rows = conn.execute(
         """
         with me as (select drawn_on, id from lab_panels where id = %s)
-        select distinct on (r.marker) r.marker, p.drawn_on, r.value, r.bound
+        select distinct on (r.marker) r.marker, p.drawn_on, r.value, r.bound, r.raw_value
         from lab_results r
         join lab_panels p on p.id = r.panel_id
         cross join me
@@ -213,7 +222,10 @@ def previous_values(conn: Conn, panel_id: int) -> dict[str, PreviousValue]:
         """,
         (panel_id,),
     ).fetchall()
-    return {r["marker"]: (r["drawn_on"], float(r["value"]), r["bound"]) for r in rows}
+    return {
+        r["marker"]: (r["drawn_on"], float(r["value"]), r["bound"] or _bound_of(r["raw_value"]))
+        for r in rows
+    }
 
 
 def has_earlier_panel(conn: Conn, panel_id: int) -> bool:

@@ -188,6 +188,7 @@ def evaluate(
                 unit=r.unit,
                 bound=r.bound,
                 raw_value=r.raw.value.strip(),
+                raw_unit=r.raw.unit,
                 conventional_status=bounded_conventional_status(
                     r.value, r.bound, step, r.lab_ref_low, r.lab_ref_high, spec
                 ),

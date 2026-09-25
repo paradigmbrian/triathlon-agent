@@ -174,7 +174,12 @@ def _shown(f: Finding) -> str:
 def _finding_line(f: Finding) -> str:
     status: str = f.functional_status
     if status == "indeterminate":
-        status = f"indeterminate (reported as {f.raw_value})"
+        reported = f.raw_value
+        parsed = parse_value(f.raw_value)
+        converted = parsed is not None and parsed[0] != f.value
+        if converted and f.raw_unit:
+            reported += f" {f.raw_unit}"
+        status = f"indeterminate (reported as {reported})"
     line = (
         f"- {f.display}: {_shown(f)} {f.unit} — {status} "
         f"(functional {format_range(*f.functional_range)}; conventional {f.conventional_status})"
