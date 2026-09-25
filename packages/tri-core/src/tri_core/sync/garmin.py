@@ -93,8 +93,8 @@ def parse_readiness(payload: Any) -> tuple[date, int] | None:
     ]
     if not scored:
         return None
-    best = max(scored, key=lambda e: float(e["score"]))
-    return _date(best["date"]), int(round(float(best["score"])))
+    latest = max(scored, key=lambda e: str(e.get("timestamp") or ""))
+    return _date(latest["date"]), int(round(float(latest["score"])))
 
 
 def parse_activity_list(payload: dict[str, Any]) -> list[GarminActivity]:

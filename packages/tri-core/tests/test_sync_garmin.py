@@ -63,10 +63,14 @@ def test_parse_stats():
     assert (r.resting_hr, r.stress_avg, r.body_battery_high, r.body_battery_low) == (46, 31, 92, 20)
 
 
-def test_parse_readiness_picks_highest_score():
+def test_parse_readiness_keeps_the_latest_entry_by_timestamp():
+    # Garmin recomputes readiness through the day; the last word wins, not the best one
     assert parse_readiness(
-        [{"date": "2026-09-01", "score": 55}, {"date": "2026-09-01", "score": 68}]
-    ) == (date(2026, 9, 1), 68)
+        [
+            {"date": "2026-09-01", "timestamp": "2026-09-01T09:40:00.0", "score": 55},
+            {"date": "2026-09-01", "timestamp": "2026-09-01T04:18:29.0", "score": 68},
+        ]
+    ) == (date(2026, 9, 1), 55)
     assert parse_readiness([]) is None
     assert parse_readiness({"date": "2026-09-01", "score": 70}) == (date(2026, 9, 1), 70)
 
