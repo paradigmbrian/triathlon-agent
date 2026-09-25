@@ -8,6 +8,7 @@ model can't read.
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 from typing import Any
 
 import psycopg
@@ -91,6 +92,8 @@ def validate_select(sql: str) -> str:
 def _json_safe(v: Any) -> Any:
     if isinstance(v, int | float | str | bool) or v is None:
         return v
+    if isinstance(v, Decimal):
+        return float(v)  # numeric columns (ctl, atl, tsb) are numbers to the model, not text
     if isinstance(v, list | dict):
         return json.loads(json.dumps(v, default=str))
     return str(v)
