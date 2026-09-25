@@ -47,15 +47,26 @@ def session_kcal(session: Session, profile: NutritionProfile, ftp_watts: int | N
     if session.sport == "brick":
         legs = session.legs
         if legs is None:
+            # The bike leg gets its share of the brick's TSS; the run leg is priced by duration
+            # and intensity. Neither leg inherits the whole brick's distance.
             bike_min = round(session.duration_min * C.BRICK_BIKE_FRACTION)
+            tss = session.planned_tss
             legs = [
                 session.model_copy(
-                    update={"sport": "bike", "duration_min": bike_min, "legs": None}
+                    update={
+                        "sport": "bike",
+                        "duration_min": bike_min,
+                        "planned_tss": tss * C.BRICK_BIKE_FRACTION if tss is not None else None,
+                        "distance_km": None,
+                        "legs": None,
+                    }
                 ),
                 session.model_copy(
                     update={
                         "sport": "run",
                         "duration_min": session.duration_min - bike_min,
+                        "planned_tss": None,
+                        "distance_km": None,
                         "legs": None,
                     }
                 ),
