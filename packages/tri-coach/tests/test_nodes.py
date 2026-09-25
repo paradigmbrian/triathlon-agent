@@ -16,8 +16,9 @@ from tri_coach.graph.nodes.nutrition import (
     make_nutrition_node,
     proposal_from_regenerate,
 )
-from tri_coach.graph.nodes.planning import make_planning_node
+from tri_coach.graph.nodes.planning import make_planning_node, proposal_from_planning
 from tri_coach.models import ApplyReport, Brief
+from tri_planning.planning.models import CalendarChange
 
 CONFIG = {"configurable": {"thread_id": "coach"}}
 
@@ -188,3 +189,21 @@ async def test_consultations_carry_a_domain_tag():
     out = await node({"brief": brief, "proposals": []}, CONFIG)
     assert "domain:planning" in graph.configs[0]["tags"]
     assert out["messages"][0].id == "m1" and out["proposals"][0].question == "Which day?"
+
+
+def test_planning_violations_of_designed_weeks_reach_the_proposal():
+    out = {
+        "pending_changes": [CalendarChange(op="delete", tp_workout_id="w1", reason="sick")],
+        "pending_summary": "s",
+        "pending_violations": {
+            "2026-09-28": ["week over target by 12%"],
+            "2026-09-21": ["hard sessions on consecutive days", "no rest day"],
+        },
+        "last_error": "TrainingPeaks server unavailable",
+    }
+    assert proposal_from_planning(out, "p1").violations == [
+        "TrainingPeaks server unavailable",
+        "week of 2026-09-21: hard sessions on consecutive days",
+        "week of 2026-09-21: no rest day",
+        "week of 2026-09-28: week over target by 12%",
+    ]
