@@ -185,7 +185,7 @@ async def test_route_errors_return_detail_only(runtime, client):
     rt.graph.aget_state = boom  # type: ignore[method-assign]
     async with client(rt) as c:
         r = await c.get("/api/coach/thread")
-    assert r.status_code == 500 and r.json() == {"detail": "RuntimeError: psycopg went away"}
+    assert r.status_code == 500 and r.json() == {"detail": "internal error"}
 
 
 async def test_a_turn_during_a_paused_review_is_409_and_keeps_the_review(
