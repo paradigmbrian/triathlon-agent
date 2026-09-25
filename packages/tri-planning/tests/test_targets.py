@@ -93,9 +93,27 @@ def test_recovery_every_fourth_week_in_base_and_build_only():
 
 
 def test_ironman_build_recovers_every_third_week():
-    phases, _ = targets.allocate_phases("ironman", 24)  # 8 base, 8 build
+    phases, _ = targets.allocate_phases("ironman", 24)  # 8 base, 8 build, 4 peak
     flags = targets.recovery_flags("ironman", phases)
-    assert [i for i, f in enumerate(flags) if f] == [3, 7, 10, 13]
+    assert [i for i, f in enumerate(flags) if f] == [3, 7, 10, 13, 19]
+
+
+def test_peak_block_has_a_recovery_week_at_sixty_percent():
+    phases, _ = targets.allocate_phases("ironman", 24)
+    flags = targets.recovery_flags("ironman", phases)
+    peak = [i for i, p in enumerate(phases) if p == "peak"]
+    assert [i for i in peak if flags[i]] == [peak[-1]]
+    weeks = targets.build(race_goal("ironman", 24), FIT, MONDAY)
+    rec, full = weeks[peak[-1]], weeks[peak[0]]
+    assert rec.is_recovery and not full.is_recovery
+    assert rec.target_tss == pytest.approx(full.target_tss * 0.6, abs=1)
+
+
+def test_recovery_count_resets_at_a_phase_change():
+    phases, _ = targets.allocate_phases("ironman", 22)  # 6 base, 8 build, 4 peak
+    flags = targets.recovery_flags("ironman", phases)
+    assert not flags[phases.index("build")]  # base ended two weeks after its recovery week
+    assert [i for i, f in enumerate(flags) if f] == [3, 8, 11, 17]
 
 
 def test_week1_fallback_chain():
@@ -134,7 +152,7 @@ def test_peak_taper_race_factors():
     for w in weeks:
         by_phase.setdefault(w.phase, []).append(w)
     peak = by_phase["peak"][0].target_tss
-    assert all(w.target_tss == peak for w in by_phase["peak"])
+    assert all(w.target_tss == peak for w in by_phase["peak"] if not w.is_recovery)
     assert [w.target_tss for w in by_phase["taper"]] == [
         pytest.approx(peak * f, abs=1) for f in (0.80, 0.60, 0.45)
     ]

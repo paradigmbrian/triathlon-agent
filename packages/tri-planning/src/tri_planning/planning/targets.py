@@ -65,12 +65,17 @@ def allocate_phases(goal_type: GoalType, total_weeks: int) -> tuple[list[Phase],
 
 
 def recovery_flags(goal_type: GoalType, phases: list[Phase]) -> list[bool]:
+    """Every Nth week of a loading phase (base, build, peak) is a recovery week; the count
+    restarts at each phase change so a new block never opens on a recovery week."""
     flags: list[bool] = []
     since = 0
+    prev: Phase | None = None
     for phase in phases:
-        if phase not in ("base", "build"):
-            flags.append(False)
+        if phase != prev:
             since = 0
+            prev = phase
+        if phase not in ("base", "build", "peak"):
+            flags.append(False)
             continue
         since += 1
         cadence = (
@@ -153,7 +158,7 @@ def build(goal: TrainingGoal, fitness: FitnessSnapshot, start: date) -> list[Wee
             if peak_load is None:
                 peak_load = last_load if last_load is not None else w1
             if phase == "peak":
-                tss = peak_load
+                tss = peak_load * P.RECOVERY_WEEK_FACTOR if is_rec else peak_load
             elif phase == "taper":
                 tss = peak_load * P.TAPER_FACTORS[min(taper_i, len(P.TAPER_FACTORS) - 1)]
                 taper_i += 1
