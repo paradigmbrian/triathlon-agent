@@ -14,7 +14,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from tri_web.events import Busy
 from tri_web.routes import coach, jobs, memory, system, today
 from tri_web.runtime import Runtime
-from tri_web.schemas import EditRejected, NoReview
+from tri_web.schemas import EditRejected, NoReview, Paused
 
 
 def runtime_of(request: Request) -> Runtime:
@@ -52,6 +52,10 @@ def create_app(
     @app.exception_handler(NoReview)
     async def no_review(request: Request, exc: NoReview) -> JSONResponse:
         return JSONResponse({"reason": "no_review"}, status_code=409)
+
+    @app.exception_handler(Paused)
+    async def paused(request: Request, exc: Paused) -> JSONResponse:
+        return JSONResponse({"reason": "paused"}, status_code=409)
 
     @app.exception_handler(EditRejected)
     async def edit_rejected(request: Request, exc: EditRejected) -> JSONResponse:

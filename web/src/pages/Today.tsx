@@ -22,7 +22,7 @@ export default function Today() {
     // column left of the chat and each side scrolls on its own.
     <div className="flex flex-col md:min-h-0 md:flex-1 md:flex-row">
       <Strip today={today.data} />
-      <Chat thread={thread.data} stream={stream} gate={gate} />
+      <Chat thread={thread.data} stream={stream} gate={gate} paused={paused != null} />
     </div>
   );
 }

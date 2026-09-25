@@ -201,3 +201,14 @@ describe("catching up with a run the page did not start", () => {
     expect(result.current.state).toMatchObject({ status: "idle", busyWith: null, lost: false });
   });
 });
+
+test("a 409 with reason paused says to answer the review first", async () => {
+  const client = new QueryClient();
+  const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue();
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ reason: "paused" }), { status: 409 }));
+  const { result } = renderHook(() => useTurnStream(), { wrapper: wrapper(client) });
+  await act(() => result.current.send("never mind"));
+  expect(result.current.state.status).toBe("idle");
+  expect(result.current.state.error).toBe("answer the review first");
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ["thread"] });
+});
