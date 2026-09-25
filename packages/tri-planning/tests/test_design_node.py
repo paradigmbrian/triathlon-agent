@@ -7,6 +7,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 import tri_planning.graph.nodes.design as design_node
 from tri_core.testing import ScriptedChatModel, tool_call
 from tri_planning import repo
+from tri_planning.checkin import changes_without_violations
 from tri_planning.config import PlanningSettings
 from tri_planning.graph.deps import GraphDeps
 from tri_planning.graph.deps import make_deps as real_make_deps
@@ -216,3 +217,65 @@ async def test_a_reply_without_a_week_is_retried_once_then_reported(nocommit, ma
     out = await node_out(make_deps(model), gid, pid)
     assert model.calls == 2 and out["pending_changes"] == []
     assert "VIOLATIONS" in out["pending_summary"] and "no week" in out["pending_summary"]
+
+
+def review_payload(out) -> dict:
+    """The review interrupt's payload, as the review node builds it from the node's output."""
+    return {
+        "changes": [c.model_dump(mode="json") for c in out["pending_changes"]],
+        "violations": out["pending_violations"],
+    }
+
+
+async def test_a_flagged_week_is_keyed_in_pending_violations_and_filtered(nocommit, make_deps):
+    gid, pid, targets = seed(nocommit)
+    bad = week_json(MONDAY, targets[0].target_tss, hard_on_consecutive_days=True)
+    clean = week_json(MONDAY + timedelta(weeks=1), targets[1].target_tss)
+    model = ScriptedChatModel(script=[structured(bad), structured(bad), structured(clean)])
+    out = await node_out(make_deps(model, horizon=2), gid, pid)
+    assert list(out["pending_violations"]) == [MONDAY.isoformat()]
+    assert any("consecutive" in v for v in out["pending_violations"][MONDAY.isoformat()])
+    kept, skipped = changes_without_violations(review_payload(out))
+    assert skipped == [MONDAY.isoformat()]
+    assert [c.workout_date.isoformat() for c in kept] == [s["date"] for s in clean["sessions"]]
+
+
+async def test_a_stray_session_in_the_next_week_goes_with_its_flagged_design(nocommit, make_deps):
+    # The stray lands in the next week, which has its own clean design: the stray is left out
+    # with the rest of its design, and the next week's sessions stay.
+    gid, pid, targets = seed(nocommit)
+    stray = week_json(MONDAY, targets[0].target_tss)
+    stray["sessions"][2]["date"] = (MONDAY + timedelta(days=8)).isoformat()
+    clean = week_json(MONDAY + timedelta(weeks=1), targets[1].target_tss)
+    model = ScriptedChatModel(script=[structured(stray), structured(stray), structured(clean)])
+    out = await node_out(make_deps(model, horizon=2), gid, pid)
+    assert any("outside the week" in v for v in out["pending_violations"][MONDAY.isoformat()])
+    kept, _ = changes_without_violations(review_payload(out))
+    assert sorted(c.workout_date.isoformat() for c in kept) == sorted(
+        s["date"] for s in clean["sessions"]
+    )
+
+
+async def test_a_design_for_the_wrong_week_is_left_out_entirely(nocommit, make_deps):
+    gid, pid, targets = seed(nocommit)
+    wrong = week_json(MONDAY + timedelta(weeks=1), targets[0].target_tss)
+    model = ScriptedChatModel(script=[structured(wrong), structured(wrong)])
+    out = await node_out(make_deps(model), gid, pid)
+    assert any("does not match" in v for v in out["pending_violations"][MONDAY.isoformat()])
+    assert len(out["pending_changes"]) == 3
+    kept, skipped = changes_without_violations(review_payload(out))
+    assert kept == [] and skipped == [MONDAY.isoformat()]
+
+
+async def test_a_violation_retry_without_a_week_keeps_the_first_design_and_its_violations(
+    nocommit, make_deps
+):
+    gid, pid, targets = seed(nocommit)
+    bad = week_json(MONDAY, targets[0].target_tss, hard_on_consecutive_days=True)
+    model = ScriptedChatModel(script=[structured(bad), AIMessage(content="I can't fix that.")])
+    out = await node_out(make_deps(model), gid, pid)
+    assert model.calls == 2 and "consecutive" in out["pending_summary"]
+    assert [c.workout.title for c in out["pending_changes"]] == [
+        s["title"] for s in bad["sessions"]
+    ]
+    assert any("consecutive" in v for v in out["pending_violations"][MONDAY.isoformat()])

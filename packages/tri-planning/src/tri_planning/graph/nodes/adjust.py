@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
+from datetime import date
 from typing import Any
 
 from langchain_core.messages import AnyMessage, ToolMessage
@@ -34,7 +35,8 @@ def changes_from_messages(
     """Changes from the last `propose_calendar_changes` result plus the last `design_next_week`
     result per week, in week order of first appearance; the proposal's summary, or a generated
     one when only designed weeks were added; and the validator violations of each designed
-    week that has any, keyed by week_start ISO date.
+    week that has any, keyed by week_start ISO date. Each designed change carries that week as
+    its `design_week`, so a session the design dated in another week goes with its design.
 
     A week designed twice in one turn would otherwise be created twice, so a repeat replaces
     the earlier result (and its violations) instead of adding to it.
@@ -52,7 +54,8 @@ def changes_from_messages(
         changes = [CalendarChange.model_validate(c) for c in data["changes"]]
         if msg.name == "design_next_week":
             week = str(data.get("week_start"))
-            designed[week] = changes
+            origin = date.fromisoformat(week)
+            designed[week] = [c.model_copy(update={"design_week": origin}) for c in changes]
             violations.pop(week, None)
             if data.get("violations"):
                 violations[week] = [str(v) for v in data["violations"]]

@@ -1,3 +1,4 @@
+from datetime import date
 from types import SimpleNamespace
 
 import anthropic
@@ -5,7 +6,7 @@ import httpx
 from langchain_core.messages import AIMessage
 from langgraph.types import Command, Interrupt
 
-from tri_planning.checkin import run_checkin
+from tri_planning.checkin import changes_without_violations, run_checkin
 from tri_planning.planning.models import CalendarChange
 from tri_planning.prompts.checkin import CHECKIN_PROMPT
 
@@ -167,3 +168,37 @@ async def test_checkin_yes_skips_weeks_with_violations_and_exits_one():
     assert resume["action"] == "edit" and [c["op"] for c in resume["changes"]] == ["delete"]
     text = "".join(buf)
     assert "skipping week of 2026-09-21: hard sessions on consecutive days" in text
+
+
+def create(day: str, design_week: str | None = None) -> dict:
+    change = {"op": "create", "workout_date": day, "reason": "designed"}
+    return change if design_week is None else {**change, "design_week": design_week}
+
+
+def test_the_filter_drops_every_change_a_flagged_design_produced_whatever_its_date():
+    # The design of 2026-09-28 put a session on 10-06, in the next week; the next week's own
+    # design is clean. The flagged design goes entirely and the clean one stays.
+    payload = {
+        "changes": [
+            create("2026-09-29", "2026-09-28"),
+            create("2026-10-06", "2026-09-28"),
+            create("2026-10-06", "2026-10-05"),
+            {"op": "delete", "tp_workout_id": "w1", "reason": "sick"},
+        ],
+        "violations": {"2026-09-28": ["2026-10-06 run: outside the week starting 2026-09-28"]},
+    }
+    kept, skipped = changes_without_violations(payload)
+    assert [(c.op, c.design_week) for c in kept] == [
+        ("create", date(2026, 10, 5)),
+        ("delete", None),
+    ]
+    assert skipped == ["2026-09-28"]
+
+
+def test_the_filter_still_drops_an_undesigned_change_dated_in_a_flagged_week():
+    payload = {
+        "changes": [create("2026-09-29"), create("2026-10-06")],
+        "violations": {"2026-09-28": ["hard sessions on consecutive days"]},
+    }
+    kept, _ = changes_without_violations(payload)
+    assert [c.workout_date for c in kept] == [date(2026, 10, 6)]

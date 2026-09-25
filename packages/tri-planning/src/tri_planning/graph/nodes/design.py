@@ -75,13 +75,15 @@ async def design_week(
     return week, violations
 
 
-def session_changes(week: PlannedWeek, phase: str) -> list[CalendarChange]:
+def session_changes(week: PlannedWeek, target: WeekTarget) -> list[CalendarChange]:
+    """One create per non-rest session, each carrying the target week it was designed for."""
     return [
         CalendarChange(
             op="create",
             workout_date=s.date,
             workout=s,
-            reason=f"{phase} week of {week.week_start}: {week.coach_note}",
+            reason=f"{target.phase} week of {week.week_start}: {week.coach_note}",
+            design_week=target.week_start,
         )
         for s in week.sessions
         if s.sport != "rest"
@@ -113,6 +115,7 @@ def make_design_node(deps: GraphDeps) -> Any:
         )
         changes: list[CalendarChange] = []
         notes: list[str] = []
+        flagged: dict[str, list[str]] = {}
         for row in todo:
             target = next(t for t in plan.targets if t.week_start == row.week_start)
             week, violations = await design_week(
@@ -121,13 +124,14 @@ def make_design_node(deps: GraphDeps) -> Any:
             with deps.connect() as conn:
                 repo.set_week_designed(conn, plan_id, row.week_start, week)
                 conn.commit()
-            changes.extend(session_changes(week, target.phase))
+            changes.extend(session_changes(week, target))
             line = (
                 f"{row.week_start} ({target.phase}, target {target.target_tss:.0f} TSS): "
                 f"{len(week.sessions)} sessions, {week.total_tss:.0f} TSS, {week.total_hours:.1f} h"
             )
             if violations:
                 line += "\n  VIOLATIONS: " + "; ".join(violations)
+                flagged[row.week_start.isoformat()] = violations
             notes.append(line)
             previous = week
 
@@ -137,7 +141,7 @@ def make_design_node(deps: GraphDeps) -> Any:
         return {
             "pending_changes": changes,
             "pending_summary": summary,
-            "pending_violations": {},
+            "pending_violations": flagged,
             "changes_from": "design",
             "review_decision": None,
         }

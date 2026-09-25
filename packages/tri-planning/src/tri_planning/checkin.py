@@ -6,6 +6,7 @@ for validator violations under --yes, 2 no active plan, 3 paused at review.
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 from langchain_core.messages import HumanMessage
@@ -22,13 +23,21 @@ EXIT_OK, EXIT_ERROR, EXIT_NO_PLAN, EXIT_PAUSED = 0, 1, 2, 3
 def changes_without_violations(
     payload: dict[str, Any],
 ) -> tuple[list[CalendarChange], list[str]]:
-    """The review payload's changes minus every change dated inside a week that has validator
-    violations, and those weeks (ISO Mondays, sorted). A change without a date is kept."""
+    """The review payload's changes minus every change a flagged week covers, and those weeks (ISO
+    Mondays, sorted). A designed change belongs to the week it was designed for, wherever it is
+    dated, so a flagged design goes whole; any other change to the week it is dated in. A change
+    with neither is kept."""
     violations: dict[str, list[str]] = payload.get("violations") or {}
+
+    def week_of(c: CalendarChange) -> date | None:
+        if c.design_week is not None:
+            return c.design_week
+        return week_monday(c.workout_date) if c.workout_date is not None else None
+
     kept = [
         c
         for c in (CalendarChange.model_validate(x) for x in payload.get("changes", []))
-        if c.workout_date is None or week_monday(c.workout_date).isoformat() not in violations
+        if (week := week_of(c)) is None or week.isoformat() not in violations
     ]
     return kept, sorted(violations)
 

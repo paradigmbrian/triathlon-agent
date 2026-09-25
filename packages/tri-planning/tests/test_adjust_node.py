@@ -7,6 +7,7 @@ from langchain_core.tools import tool
 
 from tri_core.testing import ScriptedChatModel, tool_call
 from tri_planning import repo
+from tri_planning.checkin import changes_without_violations
 from tri_planning.graph.nodes import adjust as adjust_node
 from tri_planning.graph.nodes.adjust import changes_from_messages, make_adjust_node
 from tri_planning.planning.models import (
@@ -319,3 +320,19 @@ async def test_design_violations_become_pending_violations(nocommit, make_deps):
     assert list(out["pending_violations"]) == ["2026-09-21"]
     assert any("consecutive" in v for v in out["pending_violations"]["2026-09-21"])
     assert len(out["pending_changes"]) == 3
+
+
+def test_a_designed_week_keeps_its_origin_so_a_stray_session_is_filtered_with_it():
+    stray = design_result(violations=["2026-09-29 swim: outside the week starting 2026-09-21"])
+    moved = {**stray["changes"][0], "workout_date": "2026-09-29"}
+    stray["changes"].append(moved)
+    msgs = [
+        ToolMessage(content=json.dumps(stray), name="design_next_week", tool_call_id="1"),
+        design_message(week_start="2026-09-28", title="clean", call_id="2"),
+    ]
+    changes, _, violations = changes_from_messages(msgs)
+    assert [str(c.design_week) for c in changes] == ["2026-09-21", "2026-09-21", "2026-09-28"]
+    kept, skipped = changes_without_violations(
+        {"changes": [c.model_dump(mode="json") for c in changes], "violations": violations}
+    )
+    assert [c.workout.title for c in kept] == ["clean"] and skipped == ["2026-09-21"]

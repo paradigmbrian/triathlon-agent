@@ -1,5 +1,5 @@
 import logging
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 import pytest
@@ -8,6 +8,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 
 from tri_coach import memory as M
+from tri_coach.checkin import run_checkin
 from tri_coach.graph import nodes
 from tri_coach.graph.graph import after_review, build_graph
 from tri_coach.graph.state import STATE_TYPES
@@ -16,7 +17,9 @@ from tri_coach.testing import CFG, consult, move_call, propose, seed_active_plan
 from tri_core.harness.agents import one_tool_call_at_a_time
 from tri_core.harness.persistence import make_serde
 from tri_core.testing import ScriptedChatModel, tool_call
-from tri_planning.testing import FakeTp
+from tri_planning import repo
+from tri_planning.planning.models import TrainingGoal, WeekTarget
+from tri_planning.testing import GOAL_ARGS, MONDAY, FakeTp, week_json
 from tri_wellness.testing import seed_panel
 
 pytestmark = pytest.mark.db
@@ -350,3 +353,46 @@ async def test_the_coach_node_disables_parallel_tool_calls(
     graph, _ = graph_for(make_deps, mem_store, coach=[AIMessage(content="Hello.")])
     await graph.ainvoke({"messages": [HumanMessage("hi")]}, CFG)
     assert captured == [[one_tool_call_at_a_time]]
+
+
+async def test_checkin_yes_leaves_out_a_designed_week_with_violations(
+    nocommit, make_deps, mem_store
+):
+    # A plan still in its planning phase: the consult goes targets -> design. Week 1's design
+    # keeps a session in week 2 through its retry; week 2's and week 3's designs are clean.
+    # --yes writes weeks 2 and 3 and nothing week 1's design produced, the stray included.
+    gid = repo.insert_goal(nocommit, TrainingGoal(**GOAL_ARGS))
+    targets = [
+        WeekTarget(
+            week_start=MONDAY + timedelta(weeks=i), phase="build", target_tss=300, target_hours=6
+        )
+        for i in range(3)
+    ]
+    pid = repo.insert_plan(nocommit, gid, "generated", None, targets)
+    stray = week_json(MONDAY, 300)
+    stray["sessions"][2]["date"] = (MONDAY + timedelta(days=8)).isoformat()
+    week2, week3 = (week_json(MONDAY + timedelta(weeks=i), 300) for i in (1, 2))
+    tp = FakeTp()
+    graph, _ = graph_for(
+        make_deps,
+        mem_store,
+        tp=tp,
+        coach=[
+            consult("planning", "Fewer than two designed weeks remain; design the next ones."),
+            propose("Your next three weeks.", ["p1"]),
+        ],
+        planning=[
+            tool_call("PlannedWeek", stray),
+            tool_call("PlannedWeek", stray),  # the retry keeps the stray
+            tool_call("PlannedWeek", week2),
+            tool_call("PlannedWeek", week3),
+        ],
+    )
+    buf: list[str] = []
+    code = await run_checkin(graph, has_plan=True, has_profile=False, yes=True, out=buf.append)
+    text = "".join(buf)
+    assert code == 1, text
+    assert f"skipping p1 week of {MONDAY}: " in text and "outside the week" in text
+    written = sorted(args["date"][:10] for tool, args in tp.calls if tool == "tp_create_workout")
+    assert written == sorted(s["date"] for s in week2["sessions"] + week3["sessions"])
+    assert [w.written_to_tp for w in repo.list_weeks(nocommit, pid)] == [False, True, True]

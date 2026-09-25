@@ -72,6 +72,25 @@ async def test_applies_all_records_rows_marks_designed_weeks_and_activates(nocom
     assert "applied 2" in out["messages"][0].content
 
 
+async def test_a_stray_session_does_not_mark_another_designed_week_written(nocommit, make_deps):
+    # Week 1's design put a session in week 2. Approving it writes week 1's design only; week 2's
+    # own design is still unwritten, so the design node must still pick it up.
+    gid, pid = seed(nocommit)
+    for i in range(2):
+        week = MONDAY + timedelta(weeks=i)
+        repo.set_week_designed(
+            nocommit, pid, week, PlannedWeek(week_start=week, sessions=[], coach_note="n")
+        )
+    changes = [
+        create(0).model_copy(update={"design_week": MONDAY}),
+        create(8, "Stray").model_copy(update={"design_week": MONDAY}),
+    ]
+    node = make_apply_node(make_deps(ScriptedChatModel(script=[]), tp=FakeTp()))
+    out = await node(state(gid, pid, changes), CFG)
+    assert out["pending_changes"] == [] and out["last_error"] is None
+    assert [w.written_to_tp for w in repo.list_weeks(nocommit, pid)] == [True, False]
+
+
 async def test_mid_batch_failure_keeps_remainder_pending(nocommit, make_deps):
     gid, pid = seed(nocommit)
     tp = FakeTp(fail_on_call=2)

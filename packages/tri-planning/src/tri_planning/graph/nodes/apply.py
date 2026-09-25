@@ -123,7 +123,8 @@ async def apply_changes(
         applied.append(change)
         remaining.remove(change)
         if change.op == "create" and change.workout_date is not None:
-            written.add(week_monday(change.workout_date))
+            # a designed session writes the week it was designed for, not the one it is dated in
+            written.add(change.design_week or week_monday(change.workout_date))
         if change.op == "apply_plan":
             tp_plan_applied = True
 
