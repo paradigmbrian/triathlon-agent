@@ -73,7 +73,8 @@ async def test_a_proposing_coach_streams_the_interrupt_and_pauses(
         # approve resumes the run and streams the apply report
         r = await c.post("/api/coach/review", json={"action": "approve"})
         events = parse_sse(r.text)
-        assert ("report", {"text": "planning: applied 1"}) in events
+        reports = [d["text"] for n, d in events if n == "report"]
+        assert reports and reports[0].startswith("planning: applied 1\n  applied: move w1 -> ")
         assert events[-1][1]["paused"] is False
         assert (await c.get("/api/coach/thread")).json()["paused"] is None
     assert [call[0] for call in tp.calls] == ["tp_update_workout"]
@@ -119,7 +120,8 @@ async def test_edit_is_validated_and_resumes_with_typed_proposals(
         edited[0]["changes"][0]["new_date"] = "2026-09-19"
         r = await c.post("/api/coach/review", json={"action": "edit", "proposals": edited})
         assert r.status_code == 200
-        assert ("report", {"text": "planning: applied 1"}) in parse_sse(r.text)
+        reports = [d["text"] for n, d in parse_sse(r.text) if n == "report"]
+        assert reports[0].startswith("planning: applied 1\n  applied: move w1 -> 2026-09-19")
     assert tp.calls[0][0] == "tp_update_workout"
     assert "2026-09-19" in str(tp.calls[0][1])  # the moved date reached TrainingPeaks
 

@@ -84,6 +84,12 @@ async def test_edit_replaces_the_change_set_before_apply(nocommit, make_deps, me
         )
     ]
     assert out["pending"] is None
+    friday = (MONDAY + timedelta(days=5)).isoformat()
+    # the coach's history holds what was written, not the proposal the athlete edited
+    assert out["messages"][-1].content == (
+        f"planning: applied 1\n  applied: move w1 -> {friday}: rest day"
+    )
+    assert (MONDAY + timedelta(days=4)).isoformat() not in out["messages"][-1].content
 
 
 async def test_nutrition_handoff_proposes_and_apply_persists_overrides(ndb, make_deps, mem_store):
@@ -119,7 +125,9 @@ async def test_nutrition_handoff_proposes_and_apply_persists_overrides(ndb, make
     rows = ndb.execute("select thread_id from nutrition_changes").fetchall()
     assert [r["thread_id"] for r in rows] == ["coach"]
     assert out["reports"][0].domain == "nutrition" and out["reports"][0].applied == 1
-    assert out["messages"][-1].content == "nutrition: applied 1"
+    assert out["messages"][-1].content.startswith(
+        "nutrition: applied 1\n  applied: set_day_targets "
+    )
 
 
 async def test_bought_plan_is_adopted_after_apply(nocommit, make_deps, mem_store):
