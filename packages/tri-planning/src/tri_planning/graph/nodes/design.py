@@ -27,7 +27,11 @@ from tri_planning.prompts.design import DESIGN_SYSTEM, render_design_prompt
 
 
 def window_weeks(weeks: list[PlanWeekRow], today: date, horizon: int) -> list[PlanWeekRow]:
-    first = week_monday(today)
+    """The next `horizon` unwritten plan weeks from this week on. A plan that starts next
+    Monday gets its full horizon; a week before the plan is not a plan week."""
+    if not weeks:
+        return []
+    first = max(week_monday(today), weeks[0].week_start)
     last = first + timedelta(weeks=horizon - 1)
     return [w for w in weeks if first <= w.week_start <= last and not w.written_to_tp]
 
