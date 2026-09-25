@@ -176,6 +176,13 @@ def test_fuel_fluid_and_sodium():
     assert any("sodium" in v for v in vf(fuel(sodium_mg_per_h=1501)))
 
 
+def test_fuel_sodium_zero_means_none_and_is_valid():
+    # a 40-minute endurance run: nothing during the session is a valid plan
+    assert vf(fuel(sodium_mg_per_h=0, fluid_ml_per_h=0)) == []
+    assert any("sodium" in v for v in vf(fuel(sodium_mg_per_h=100)))
+    assert vf(fuel(sodium_mg_per_h=300)) == []
+
+
 def test_fuel_caffeine_rules():
     assert any("caffeine" in v for v in vf(fuel(caffeine_mg=50), profile(caffeine_mg_per_day=0)))
     assert vf(fuel(caffeine_mg=100)) == []

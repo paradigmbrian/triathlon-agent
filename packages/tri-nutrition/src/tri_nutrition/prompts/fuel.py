@@ -14,7 +14,7 @@ from tri_nutrition.nutrition.models import (
     SessionFuel,
 )
 
-PROMPT_VERSION = "3"  # bump when FUEL_SYSTEM or RACE_SYSTEM changes; names the eval experiment
+PROMPT_VERSION = "4"  # bump when FUEL_SYSTEM or RACE_SYSTEM changes; names the eval experiment
 
 FUEL_SYSTEM = f"""\
 You are an endurance sports nutritionist writing the fueling plan for one training session of
@@ -32,8 +32,8 @@ Hard rules (a validator rejects the plan otherwise):
   {C.FUEL_CARBS_TIER_1} g/h; above {C.FUEL_CARBS_TIER_2} needs one at or above
   {C.FUEL_CARBS_TIER_2}; never above {C.FUEL_CARBS_MAX}. The fuel log is given; when it is empty
   stay at or below {C.FUEL_CARBS_TIER_1}.
-- fluid_ml_per_h at most {C.FUEL_FLUID_MAX_ML_PER_H}; sodium_mg_per_h between
-  {C.FUEL_SODIUM_MIN_MG_PER_H} and {C.FUEL_SODIUM_MAX_MG_PER_H}.
+- fluid_ml_per_h at most {C.FUEL_FLUID_MAX_ML_PER_H}; sodium_mg_per_h 0 when none is needed,
+  otherwise between {C.FUEL_SODIUM_MIN_MG_PER_H} and {C.FUEL_SODIUM_MAX_MG_PER_H}.
 - No caffeine when the athlete takes none; total caffeine for the day at most
   {C.CAFFEINE_MAX_MG_PER_KG_DAY:g} mg per kg.
 - Only products from the library. Name them exactly.
