@@ -3,7 +3,9 @@
 make_judge, an LLM judge for grounding and feedback quality. A check that does not apply to a
 case scores None, which the pass rate leaves out. A bare month name only counts as a stated
 window when it carries a day, a year, or an adjacent from/to/since/between/until word, so "in
-May" does not count but "June 2026" and "from June to August" do."""
+May" does not count but "June 2026" and "from June to August" do; a month is a whole word or
+its standard abbreviation, so "decoupling 5%" is not "Dec 5". Text that repeats the question
+is not the answer's window and is ignored."""
 
 from __future__ import annotations
 
@@ -20,7 +22,10 @@ from tri_analyze.evals.target import athlete_from_inputs, stub_tools
 from tri_analyze.prompts.analyst import render_system_prompt
 from tri_core.llm import structured
 
-_MONTH = r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*"
+_MONTH = (
+    r"(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?"
+    r"|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)"
+)
 _DAY = r"\d{1,2}(?:st|nd|rd|th)?"
 _FRAME = r"(?:from|to|since|between|until)"
 _WORD_NUM = r"(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)"
@@ -74,10 +79,15 @@ def pulls_splits(
     }
 
 
-def states_window(outputs: dict[str, Any], reference_outputs: dict[str, Any]) -> dict[str, Any]:
+def states_window(
+    inputs: dict[str, Any], outputs: dict[str, Any], reference_outputs: dict[str, Any]
+) -> dict[str, Any]:
     if not reference_outputs.get("expects_window"):
         return {"key": "states_window", "score": None, "comment": "no window expected"}
     answer = str(outputs.get("answer") or "")
+    question = str(inputs.get("question") or "").strip()
+    if question:
+        answer = re.sub(re.escape(question), " ", answer, flags=re.IGNORECASE)
     hit: str | None = None
     for pattern in WINDOW_PATTERNS:
         match = pattern.search(answer)
