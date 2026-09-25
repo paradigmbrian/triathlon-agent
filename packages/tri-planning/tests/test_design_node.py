@@ -61,6 +61,15 @@ async def test_designs_window_weeks_and_proposes_creates(nocommit, make_deps):
     assert weeks[2].designed is None
 
 
+async def test_design_node_clears_pending_violations(nocommit, make_deps):
+    # A later review on the persistent planning thread must not show stale violations from an
+    # earlier adjust run; the design node always starts the set clean.
+    gid, pid, targets = seed(nocommit)
+    model = ScriptedChatModel(script=[structured(week_json(MONDAY, targets[0].target_tss))])
+    out = await node_out(make_deps(model, horizon=1), gid, pid)
+    assert out["pending_violations"] == {}
+
+
 async def test_retries_once_on_violation_and_reports_if_still_bad(nocommit, make_deps):
     gid, pid, targets = seed(nocommit)
     bad = week_json(MONDAY, targets[0].target_tss, hard_on_consecutive_days=True)

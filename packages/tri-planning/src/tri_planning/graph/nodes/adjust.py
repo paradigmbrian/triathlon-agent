@@ -30,15 +30,17 @@ def _json(msg: ToolMessage) -> dict[str, Any] | None:
 
 def changes_from_messages(
     messages: Sequence[AnyMessage],
-) -> tuple[list[CalendarChange], str | None]:
+) -> tuple[list[CalendarChange], str | None, dict[str, list[str]]]:
     """Changes from the last `propose_calendar_changes` result plus the last `design_next_week`
     result per week, in week order of first appearance; the proposal's summary, or a generated
-    one when only designed weeks were added.
+    one when only designed weeks were added; and the validator violations of each designed
+    week that has any, keyed by week_start ISO date.
 
     A week designed twice in one turn would otherwise be created twice, so a repeat replaces
-    the earlier result instead of adding to it.
+    the earlier result (and its violations) instead of adding to it.
     """
     designed: dict[str, list[CalendarChange]] = {}
+    violations: dict[str, list[str]] = {}
     proposed: list[CalendarChange] = []
     summary: str | None = None
     for msg in messages:
@@ -49,7 +51,11 @@ def changes_from_messages(
             continue
         changes = [CalendarChange.model_validate(c) for c in data["changes"]]
         if msg.name == "design_next_week":
-            designed[str(data.get("week_start"))] = changes
+            week = str(data.get("week_start"))
+            designed[week] = changes
+            violations.pop(week, None)
+            if data.get("violations"):
+                violations[week] = [str(v) for v in data["violations"]]
         elif msg.name == "propose_calendar_changes":
             proposed = changes
             summary = data.get("summary") or None
@@ -59,7 +65,7 @@ def changes_from_messages(
         summary = (
             "Designed week(s) " + ", ".join(designed_weeks) + " added to the calendar proposal."
         )
-    return all_changes, summary
+    return all_changes, summary, violations
 
 
 def make_adjust_node(deps: GraphDeps) -> Any:
@@ -78,12 +84,13 @@ def make_adjust_node(deps: GraphDeps) -> Any:
         before = state.get("messages", [])
         result = await agent.ainvoke({"messages": before}, config)
         new = result["messages"][len(before) :]
-        changes, summary = changes_from_messages(new)
+        changes, summary, violations = changes_from_messages(new)
         if changes:
             return {
                 "messages": new,
                 "pending_changes": changes,
                 "pending_summary": summary,
+                "pending_violations": violations,
                 "changes_from": "adjust",
                 "review_decision": None,
             }
@@ -93,6 +100,7 @@ def make_adjust_node(deps: GraphDeps) -> Any:
             "messages": new,
             "pending_changes": [],
             "pending_summary": None,
+            "pending_violations": {},
             "changes_from": None,
             "review_decision": None,
         }

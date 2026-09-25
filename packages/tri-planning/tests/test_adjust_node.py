@@ -49,11 +49,11 @@ def seed(conn):
     return gid, pid, targets
 
 
-def design_result(week_start="2026-09-21", title="S"):
+def design_result(week_start="2026-09-21", title="S", violations=()):
     return {
         "week_start": week_start,
         "coach_note": "n",
-        "violations": [],
+        "violations": list(violations),
         "changes": [
             {
                 "op": "create",
@@ -73,9 +73,9 @@ def design_result(week_start="2026-09-21", title="S"):
     }
 
 
-def design_message(week_start="2026-09-21", title="S", call_id="1"):
+def design_message(week_start="2026-09-21", title="S", call_id="1", violations=()):
     return ToolMessage(
-        content=json.dumps(design_result(week_start, title)),
+        content=json.dumps(design_result(week_start, title, violations)),
         name="design_next_week",
         tool_call_id=call_id,
     )
@@ -93,9 +93,10 @@ def test_changes_from_messages_merges_tool_results():
         ),
         AIMessage(content="done"),
     ]
-    changes, summary = changes_from_messages(msgs)
+    changes, summary, violations = changes_from_messages(msgs)
     assert [c.op for c in changes] == ["create", "delete"] and summary == "lighter"
-    assert changes_from_messages([AIMessage(content="no changes")]) == ([], None)
+    assert violations == {}
+    assert changes_from_messages([AIMessage(content="no changes")]) == ([], None, {})
 
 
 def test_changes_from_messages_keeps_only_the_last_design_of_a_week():
@@ -105,7 +106,7 @@ def test_changes_from_messages_keeps_only_the_last_design_of_a_week():
         design_message(week_start="2026-09-28", title="week after", call_id="3"),
         AIMessage(content="done"),
     ]
-    changes, summary = changes_from_messages(msgs)
+    changes, summary, _ = changes_from_messages(msgs)
     assert [c.workout.title for c in changes] == ["second try", "week after"]
     assert summary.count("2026-09-21") == 1 and "2026-09-28" in summary
 
@@ -121,7 +122,7 @@ def test_changes_from_messages_notes_designed_weeks_when_the_proposal_has_no_sum
             content=json.dumps(proposal), name="propose_calendar_changes", tool_call_id="2"
         ),
     ]
-    changes, summary = changes_from_messages(msgs)
+    changes, summary, _ = changes_from_messages(msgs)
     assert [c.op for c in changes] == ["create", "delete"]
     assert summary is not None and "2026-09-21" in summary
 
@@ -141,6 +142,7 @@ async def test_turn_without_proposal_clears_pending_changes(nocommit, make_deps)
     )
     assert out["pending_changes"] == [] and out["changes_from"] is None
     assert out["pending_summary"] is None and out["review_decision"] is None
+    assert out["pending_violations"] == {}
     assert out["messages"][-1].content.startswith("All on track")
 
 
@@ -280,3 +282,40 @@ async def test_directed_brief_ends_on_the_proposal_and_merges_the_designed_week(
     assert out["changes_from"] == "adjust" and out["pending_summary"] == "drop tempo"
     assert [c.op for c in out["pending_changes"]] == ["create", "create", "create", "delete"]
     assert repo.list_weeks(nocommit, pid)[1].designed is not None
+
+
+def test_changes_from_messages_keys_violations_by_week_and_drops_them_on_redesign():
+    msgs = [
+        design_message(violations=["hard sessions on consecutive days"], call_id="1"),
+        design_message(week_start="2026-09-28", title="clean", call_id="2"),
+        AIMessage(content="done"),
+    ]
+    _, _, violations = changes_from_messages(msgs)
+    assert violations == {"2026-09-21": ["hard sessions on consecutive days"]}
+    redesigned = [*msgs[:1], design_message(title="second try", call_id="3")]
+    assert changes_from_messages(redesigned)[2] == {}
+
+
+async def test_design_violations_become_pending_violations(nocommit, make_deps):
+    gid, pid, targets = seed(nocommit)
+    bad = week_json(
+        MONDAY + timedelta(weeks=1), targets[1].target_tss, hard_on_consecutive_days=True
+    )
+    model = ScriptedChatModel(
+        script=[
+            tool_call("design_next_week", {}),
+            tool_call("PlannedWeek", bad),
+            tool_call("PlannedWeek", bad),  # the retry is as bad
+            AIMessage(content="Next week designed."),
+        ]
+    )
+    node = make_adjust_node(
+        make_deps(model, tp=FakeTp(), today=MONDAY + timedelta(days=3), horizon=3)
+    )
+    out = await node(
+        {"goal_id": gid, "plan_id": pid, "phase": "active", "messages": [HumanMessage("check in")]},
+        CFG,
+    )
+    assert list(out["pending_violations"]) == ["2026-09-21"]
+    assert any("consecutive" in v for v in out["pending_violations"]["2026-09-21"])
+    assert len(out["pending_changes"]) == 3

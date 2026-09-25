@@ -136,3 +136,34 @@ async def test_checkin_yes_reports_a_failed_apply():
     buf = []
     assert await run_checkin(g, phase="active", yes=True, out=buf.append) == 1
     assert "apply did not complete: TrainingPeaks server unavailable" in "".join(buf)
+
+
+VIOLATING = (
+    (),
+    "updates",
+    {
+        "__interrupt__": (
+            Interrupt(
+                value={
+                    "summary": "s",
+                    "changes": [
+                        {"op": "create", "workout_date": "2026-09-22", "reason": "next week"},
+                        {"op": "delete", "tp_workout_id": "w1", "reason": "sick"},
+                    ],
+                    "violations": {"2026-09-21": ["hard sessions on consecutive days"]},
+                    "last_error": None,
+                }
+            ),
+        )
+    },
+)
+
+
+async def test_checkin_yes_skips_weeks_with_violations_and_exits_one():
+    g = StubGraph([[VIOLATING], [APPLIED]])
+    buf = []
+    assert await run_checkin(g, phase="active", yes=True, out=buf.append) == 1
+    resume = g.inputs[1].resume
+    assert resume["action"] == "edit" and [c["op"] for c in resume["changes"]] == ["delete"]
+    text = "".join(buf)
+    assert "skipping week of 2026-09-21: hard sessions on consecutive days" in text

@@ -125,6 +125,7 @@ def make_design_node(deps: GraphDeps) -> Any:
         return {
             "pending_changes": changes,
             "pending_summary": summary,
+            "pending_violations": {},
             "changes_from": "design",
             "review_decision": None,
         }
