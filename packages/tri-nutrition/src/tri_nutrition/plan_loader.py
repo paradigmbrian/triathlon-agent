@@ -88,13 +88,14 @@ def attach_workout_ids(sessions: list[Session], rows: list[dict[str, Any]]) -> l
             continue
         wid = str(pool[0]["tp_workout_id"])
         used.add(wid)
-        out.append(s.model_copy(update={"tp_workout_id": wid}))
+        completed = bool(pool[0].get("completed", False))
+        out.append(s.model_copy(update={"tp_workout_id": wid, "completed": completed}))
     return out
 
 
 def _workouts_between(conn: Conn, start: date, end: date) -> list[dict[str, Any]]:
     return conn.execute(
-        "select tp_workout_id, workout_date, sport, title from workouts "
+        "select tp_workout_id, workout_date, sport, title, completed from workouts "
         "where workout_date between %s and %s order by workout_date, tp_workout_id",
         (start, end),
     ).fetchall()
