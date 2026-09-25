@@ -43,6 +43,10 @@ def athlete_profile(conn: Conn) -> dict[str, Any] | None:
     ).fetchone()
 
 
+class ReportTruncated(Exception):
+    """The stream stopped at the model's output limit; the text is not a whole report."""
+
+
 class ReportWriter:
     """One streaming call. Shared by the command and the evaluation target."""
 
@@ -51,6 +55,7 @@ class ReportWriter:
 
     async def write(self, prompt: str, out: Out, tags: list[str]) -> str:
         parts: list[str] = []
+        stop_reason: str | None = None
         async for chunk in streaming(self.model).astream(
             [SystemMessage(REPORT_SYSTEM), HumanMessage(prompt)], config={"tags": tags}
         ):
@@ -58,6 +63,9 @@ class ReportWriter:
             if text:
                 out(text)
                 parts.append(text)
+            stop_reason = chunk.response_metadata.get("stop_reason") or stop_reason
+        if stop_reason == "max_tokens":
+            raise ReportTruncated("the report hit the output limit (stop_reason max_tokens)")
         return "".join(parts)
 
 
@@ -98,6 +106,9 @@ async def run_report(
     tags = [f"panel_id:{pid}", f"ranges_version:{registry.version}"]
     try:
         text = await ReportWriter(model).write(prompt, out, tags)
+    except ReportTruncated as exc:
+        out(f"\n[{exc}; not saved. Rerun.]\n")
+        return 1
     except anthropic.RateLimitError as exc:
         out(f"\n[rate limited: {exc}. Wait a moment and rerun.]\n")
         return 1

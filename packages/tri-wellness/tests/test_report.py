@@ -4,13 +4,14 @@ from typing import Any
 import anthropic
 import httpx
 import pytest
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, AIMessageChunk
+from langchain_core.outputs import ChatGenerationChunk
 
 import tri_core.llm as llm
 from tri_core.testing import ScriptedChatModel
 from tri_wellness import repo
 from tri_wellness.ranges.registry import MARKERS_PATH, load_registry
-from tri_wellness.report import ReportWriter, run_report
+from tri_wellness.report import ReportTruncated, ReportWriter, run_report
 from tri_wellness.testing import REPORT_OK, seed_daily_metrics, seed_panel
 
 pytestmark = pytest.mark.db
@@ -102,3 +103,31 @@ async def test_writer_falls_back_when_the_report_model_is_overloaded(monkeypatch
     chunks: list[str] = []
     text = await ReportWriter(Overloaded(script=[])).write("prompt", chunks.append, ["panel_id:1"])
     assert text == "from the backup" and "".join(chunks) == "from the backup"
+
+
+class Truncating(ScriptedChatModel):
+    """Streams half a report, then the final chunk Anthropic sends when max_tokens is hit."""
+
+    def _stream(self, *a: Any, **k: Any) -> Any:
+        yield ChatGenerationChunk(message=AIMessageChunk(content="## Draw conditions\nhalf a"))
+        yield ChatGenerationChunk(
+            message=AIMessageChunk(content="", response_metadata={"stop_reason": "max_tokens"})
+        )
+
+
+async def test_writer_raises_when_the_stream_stops_at_max_tokens():
+    chunks: list[str] = []
+    with pytest.raises(ReportTruncated, match="max_tokens"):
+        await ReportWriter(Truncating(script=[])).write("prompt", chunks.append, ["panel_id:1"])
+    assert "".join(chunks) == "## Draw conditions\nhalf a"  # what streamed is still shown
+
+
+async def test_run_report_does_not_save_a_truncated_report(nocommit, reg):
+    pid = seed_panel(nocommit, D1, [("ferritin", 42.0, "ng/mL")])
+    out = []
+    code = await run_report(
+        Truncating(script=[]), connect_factory(nocommit), reg, pid, out.append, None
+    )
+    assert code == 1
+    assert repo.latest_report_for_panel(nocommit, pid) is None
+    assert any("not saved" in s and "max_tokens" in s for s in out)
