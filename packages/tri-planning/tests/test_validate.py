@@ -121,3 +121,24 @@ def test_structure_must_match_duration_within_five_minutes():
 def test_session_outside_week():
     out = validate.week(week(session(7, tss=300)), target(), goal())
     assert any("outside" in v for v in out)
+
+
+def test_week_start_must_match_the_target():
+    shifted = PlannedWeek(
+        week_start=MON + timedelta(days=7), sessions=[session(7, tss=300)], coach_note=""
+    )
+    out = validate.week(shifted, target(), goal())
+    assert any("does not match" in v and "2026-09-14" in v for v in out)
+    assert any("outside the week starting 2026-09-14" in v for v in out)
+
+
+def test_structure_step_without_duration_is_a_violation_not_an_error():
+    structure = {
+        "primaryIntensityMetric": "percentOfFtp",
+        "steps": [
+            {"name": "swim", "distance_meters": 400, "intensity_min": 80, "intensity_max": 90}
+        ],
+    }
+    assert validate.structure_seconds(structure) is None
+    out = validate.week(week(session(0, tss=300, structure=structure)), target(), goal())
+    assert any("duration_seconds" in v for v in out)
