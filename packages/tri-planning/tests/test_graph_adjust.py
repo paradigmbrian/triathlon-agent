@@ -9,7 +9,7 @@ from tri_core.testing import ScriptedChatModel, tool_call
 from tri_planning import repo
 from tri_planning.graph.graph import after_adjust, build_graph
 from tri_planning.planning.models import CalendarChange, PlannedSession, TrainingGoal, WeekTarget
-from tri_planning.testing import GOAL_ARGS, MONDAY, FakeTp
+from tri_planning.testing import GOAL_ARGS, MONDAY, FakeTp, week_json
 
 pytestmark = pytest.mark.db
 CFG = {"configurable": {"thread_id": "planning"}}
@@ -137,3 +137,24 @@ async def test_embedded_adjust_ends_with_pending_changes_and_no_interrupt(nocomm
     assert [c.op for c in out["pending_changes"]] == ["move"]
     assert out["pending_summary"] == "move it" and out["changes_from"] == "adjust"
     assert tp.calls == []
+
+
+async def test_review_payload_carries_the_designed_weeks_violations(nocommit, make_deps):
+    seed_active(nocommit)
+    bad = week_json(MONDAY + timedelta(weeks=1), 300, hard_on_consecutive_days=True)
+    model = ScriptedChatModel(
+        script=[
+            tool_call("design_next_week", {}),
+            tool_call("PlannedWeek", bad),
+            tool_call("PlannedWeek", bad),
+            AIMessage(content="Next week designed."),
+        ]
+    )
+    graph = build_graph(
+        make_deps(model, tp=FakeTp(), today=MONDAY + timedelta(days=1), horizon=3),
+        InMemorySaver(),
+    )
+    out = await graph.ainvoke({"messages": [HumanMessage("check in")]}, CFG)
+    payload = out["__interrupt__"][0].value
+    assert list(payload["violations"]) == ["2026-09-21"]
+    assert "consecutive" in payload["violations"]["2026-09-21"][0]
