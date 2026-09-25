@@ -36,7 +36,7 @@ def make_intake_node(deps: GraphDeps) -> Any:
         make_query_tool(deps.db_url),
         make_plan_tool(deps.connect, deps.today, deps.horizon_days),
         *make_garmin_read_tools(deps.garmin, deps.today, only=INTAKE_READ_TOOLS),
-        *make_profile_tools(),
+        *make_profile_tools(deps.today),
     ]
     agent = make_subagent(deps.model, tools, render_intake_prompt(deps.today()))
 

@@ -226,3 +226,37 @@ def test_build_ignores_sessions_outside_horizon():
     far = session(day=MONDAY + timedelta(days=30), duration_min=200)
     out = targets.build(profile(), [far], ctx(), MONDAY, 7)
     assert all(t.day_type == "rest" for t in out)
+
+
+# --- target_date ---
+
+
+def test_weekly_change_pct_needed():
+    p = profile(goal="lose", target_weight_kg=75, target_date=MONDAY + timedelta(days=70))
+    assert targets.weekly_change_pct_needed(p, MONDAY) == pytest.approx(0.625)  # 6.25 % in 10 wk
+    assert targets.weekly_change_pct_needed(profile(), MONDAY) is None
+    past = profile(goal="lose", target_weight_kg=75, target_date=MONDAY)
+    assert targets.weekly_change_pct_needed(past, MONDAY) is None
+
+
+def test_deficit_follows_target_date_and_the_cap_wins():
+    far = profile(goal="lose", target_weight_kg=75, target_date=MONDAY + timedelta(days=140))
+    slow = round(0.3125 / 100 * 80 * C.KCAL_PER_KG_BODY_MASS / 7)  # 275/day
+    assert targets.daily_deficit_kcal(far, MONDAY) == slow
+    near = profile(goal="lose", target_weight_kg=75, target_date=MONDAY + timedelta(days=70))
+    capped = round(0.5 / 100 * 80 * C.KCAL_PER_KG_BODY_MASS / 7)  # 440/day
+    assert targets.daily_deficit_kcal(near, MONDAY) == capped
+    assert targets.daily_deficit_kcal(near) == capped  # no today: the cap rate, as before
+    adj, notes = targets.goal_adjust(near, "easy", "base", MONDAY)
+    assert adj == -capped and notes == [C.NOTE_DEFICIT, C.NOTE_RATE_CAPPED]
+    assert targets.goal_adjust(far, "easy", "base", MONDAY)[1] == [C.NOTE_DEFICIT]
+    note = targets.rate_note(near, MONDAY)
+    assert note is not None and "capped at 0.5" in note and "2026-11-23" in note
+    assert targets.rate_note(far, MONDAY) is None
+
+
+def test_build_uses_target_date():
+    far = profile(goal="lose", target_weight_kg=75, target_date=MONDAY + timedelta(days=140))
+    t = targets.build(far, [], ctx(), MONDAY, 1)[0]
+    assert t.goal_adjust_kcal == -targets.daily_deficit_kcal(far, MONDAY)
+    assert t.goal_adjust_kcal > -targets.daily_deficit_kcal(far)

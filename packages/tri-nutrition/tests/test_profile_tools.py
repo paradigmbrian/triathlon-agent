@@ -1,4 +1,5 @@
 import json
+from datetime import date
 from typing import Any, TypedDict
 
 from langchain_core.tools import BaseTool
@@ -69,3 +70,13 @@ async def test_lose_refused_with_disordered_eating_flag(mem_store):
     out = json.loads(await run_tool_in_graph(mem_store, tools()["save_nutrition_profile"], args))
     assert out["error"] == REFERRAL_MESSAGE
     assert await S.get_profile(mem_store) is None
+
+
+async def test_save_reports_a_capped_rate(mem_store):
+    made = {t.name: t for t in make_profile_tools(lambda: date(2026, 9, 14))}
+    args = {**PROFILE_ARGS, "goal": "lose", "target_weight_kg": 75, "target_date": "2026-11-23"}
+    out = json.loads(await run_tool_in_graph(mem_store, made["save_nutrition_profile"], args))
+    assert out["saved"] is True and "capped at 0.5" in out["rate_note"]
+    slow = {**args, "target_date": "2027-02-01"}
+    out = json.loads(await run_tool_in_graph(mem_store, made["save_nutrition_profile"], slow))
+    assert out["saved"] is True and "rate_note" not in out
