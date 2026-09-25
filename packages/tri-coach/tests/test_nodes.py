@@ -18,6 +18,7 @@ from tri_coach.graph.nodes.nutrition import (
 )
 from tri_coach.graph.nodes.planning import make_planning_node
 from tri_coach.models import ApplyReport, Brief
+from tri_coach.repl import render_review
 
 CONFIG = {"configurable": {"thread_id": "coach"}}
 
@@ -188,3 +189,57 @@ async def test_the_follow_on_after_an_apply_is_not_numbered_p1_again():
     out = await node({"brief": brief, "proposals": [], "next_proposal_id": 2}, CONFIG)
     assert out["proposals"][0].id == "p2" and out["next_proposal_id"] == 3
     assert "call propose_changes with p2" in out["messages"][0].content
+
+
+async def test_a_consultation_carries_the_planning_violations_by_week():
+    create = {"op": "create", "workout_date": "2026-09-22", "reason": "next week"}
+    graph = Recorder(
+        {
+            "pending_changes": [create],
+            "pending_summary": "Designed week(s) 2026-09-21 added to the calendar proposal.",
+            "pending_violations": {"2026-09-21": ["hard sessions on consecutive days"]},
+            "last_error": None,
+        }
+    )
+    brief = Brief(domain="planning", instruction="x", tool_call_id="c1", message_id="m1")
+    out = await make_planning_node(graph)({"brief": brief, "proposals": []}, CONFIG)
+    p = out["proposals"][0]
+    assert p.pending_violations == {"2026-09-21": ["hard sessions on consecutive days"]}
+    assert p.violations == ["week of 2026-09-21: hard sessions on consecutive days"]
+    # the coach reads them in the tool result; the athlete reads them at review
+    line = "violations: week of 2026-09-21: hard sessions on consecutive days"
+    assert line in out["messages"][0].content
+    assert line in render_review({"narration": "n", "proposals": [p.model_dump(mode="json")]})
+
+
+async def test_nutrition_proposals_carry_fuel_violations_by_session_and_race():
+    note = {
+        "op": "set_session_note",
+        "target_key": "w2",
+        "day": "2026-09-15",
+        "payload": {},
+        "reason": "long ride",
+    }
+    graph = Recorder(
+        {
+            "pending_changes": [note],
+            "pending_summary": "Fuel",
+            "pending_violations": {
+                "w2": ["carbs 95 g/h above the 90 g/h ceiling"],
+                "race": ["no sodium"],
+            },
+            "last_error": None,
+        }
+    )
+    node = make_nutrition_node(graph)
+    regenerate = Brief(domain="nutrition", instruction="regenerate", regenerate=True)
+    follow_on = (await node({"brief": regenerate, "proposals": []}, CONFIG))["proposals"][0]
+    assert follow_on.pending_violations["w2"] == ["carbs 95 g/h above the 90 g/h ceiling"]
+    assert follow_on.violations == [
+        "race note: no sodium",
+        "session w2: carbs 95 g/h above the 90 g/h ceiling",
+    ]
+    consult = Brief(domain="nutrition", instruction="x", tool_call_id="c1", message_id="m1")
+    p = (await node({"brief": consult, "proposals": []}, CONFIG))["proposals"][0]
+    assert p.pending_violations == follow_on.pending_violations
+    assert p.violations == follow_on.violations

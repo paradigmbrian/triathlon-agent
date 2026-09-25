@@ -14,18 +14,24 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.runnables.config import merge_configs
 from langgraph.errors import GraphBubbleUp
 
-from tri_coach.graph.nodes.planning import result_message
+from tri_coach.graph.nodes.planning import keyed_violations, result_message
 from tri_coach.graph.state import CoachState
 from tri_coach.models import Proposal
 from tri_core.harness.messages import last_ai_text
 from tri_nutrition.prompts.checkin import BRIEF_PREFIX
+from tri_nutrition.repl import RACE_VIOLATIONS_KEY
 
 FOLLOW_ON = "[follow-on]"
 
 
+def fuel_where(key: str) -> str:
+    """The note a fuel violation belongs to: the race plan's, or a session's by tp_workout_id."""
+    return "race note" if key == RACE_VIOLATIONS_KEY else f"session {key}"
+
+
 def proposal_from_nutrition(out: dict[str, Any], pid: str) -> Proposal:
     changes = list(out.get("pending_changes") or [])
-    violations = [out["last_error"]] if out.get("last_error") else []
+    violations, keyed = keyed_violations(out, fuel_where)
     overrides = out.get("profile_overrides") or None
     if not changes:
         return Proposal(
@@ -41,6 +47,7 @@ def proposal_from_nutrition(out: dict[str, Any], pid: str) -> Proposal:
         summary=out.get("pending_summary") or "",
         changes=changes,
         violations=violations,
+        pending_violations=keyed,
         overrides=overrides,
     )
 
@@ -48,12 +55,14 @@ def proposal_from_nutrition(out: dict[str, Any], pid: str) -> Proposal:
 def proposal_from_regenerate(out: dict[str, Any], pid: str) -> Proposal:
     """No sub-agent ran, so there is never a question: changes, or nothing, or violations."""
     error = out.get("last_error")
+    violations, keyed = keyed_violations(out, fuel_where)
     return Proposal(
         id=pid,
         domain="nutrition",
         summary=out.get("pending_summary") or error or "",
         changes=list(out.get("pending_changes") or []),
-        violations=[error] if error else [],
+        violations=violations,
+        pending_violations=keyed,
     )
 
 

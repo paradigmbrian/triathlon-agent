@@ -9,7 +9,7 @@ set for approval. Nothing is written to Garmin or TrainingPeaks until the athlet
 
 ```
 uv run tri-coach chat [--no-live]              # the conversation; /status /memory /pending /tools /prompt /sync /quit
-uv run tri-coach check-in [--yes] [--no-sync] [--no-live]   # sync, the weekly checklist, one change set; exit 3 when paused
+uv run tri-coach check-in [--yes] [--no-sync] [--no-live]   # sync, the weekly checklist, one change set; exit 3 when paused, 1 on a model error or a change --yes skipped for violations
 uv run tri-coach eval [--judge/--no-judge] [--prefix P] [--recreate-dataset]   # the LangSmith routing eval
 uv run tri-coach memory [--forget ID]          # print the coach's athlete memory, or remove one entry
 uv run tri-coach reset [--yes] [--forget-memory]   # clear the coach thread (and optionally its memory)
@@ -112,10 +112,12 @@ tagged `checkin`. The prompt's checklist reads through the analyst: planned vers
 and feeling, readiness and HRV against baseline, TSB, designed weeks, logged intake against
 targets, weight trend, and targets remaining. It writes a `checkin` memory entry that lasts two
 weeks, then proposes or reports a clean week. Exit codes match `tri-planning check-in`: 0 done,
-1 a model error or an incomplete apply, 2 neither an active plan nor a nutrition profile, and
-3 paused, or refused while a review or a held change set is pending or the thread stopped mid-run.
-`--yes` approves the change set and its nutrition follow-on, at most two gates; a second gate that
-is not the nutrition follow-on pauses.
+1 a model error, an incomplete apply, or a change `--yes` skipped for validator violations,
+2 neither an active plan nor a nutrition profile, and 3 paused, or refused while a review or a
+held change set is pending or the thread stopped mid-run. `--yes` approves the change set and
+its nutrition follow-on, at most two gates, and never a change a validator flagged — a designed
+week with violations, or a fuel note with violations; those changes are left out, the rest go
+through as an edit, and the run exits 1. A second gate that is not the nutrition follow-on pauses.
 
 ## Evaluation
 
