@@ -1,3 +1,4 @@
+import asyncio
 import json
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
@@ -130,5 +131,45 @@ async def test_a_failing_initialize_closes_the_stack_and_reraises(monkeypatch):
     with pytest.raises(RuntimeError, match="handshake failed"):
         async with client:
             pass
+    assert closed == ["session", "transport"]
+    assert client._stack is None and client._session is None
+
+
+async def test_a_cancelled_initialize_also_closes_the_stack(monkeypatch):
+    closed: list[str] = []
+
+    @asynccontextmanager
+    async def fake_stdio_client(params):
+        try:
+            yield ("read", "write")
+        finally:
+            closed.append("transport")
+
+    class FakeSession:
+        def __init__(self, read, write) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            closed.append("session")
+
+        async def initialize(self):
+            await asyncio.Event().wait()  # never set: blocks until cancelled
+
+    monkeypatch.setattr("tri_core.mcp.client.stdio_client", fake_stdio_client)
+    monkeypatch.setattr("tri_core.mcp.client.ClientSession", FakeSession)
+    client = McpToolClient(ServerSpec(name="fake", command="x", args=[]))
+
+    async def enter():
+        async with client:
+            pass
+
+    task = asyncio.create_task(enter())
+    await asyncio.sleep(0.01)  # let it reach the blocked initialize()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
     assert closed == ["session", "transport"]
     assert client._stack is None and client._session is None
