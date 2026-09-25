@@ -110,3 +110,10 @@ def test_make_query_tool_extra_doc_is_appended():
     extended = make_query_tool("postgresql://x/y", extra_doc="lab_panels: id, drawn_on")
     assert extended.description.endswith("lab_panels: id, drawn_on")
     assert SCHEMA_DOC in extended.description
+
+
+@pytest.mark.db
+def test_run_query_returns_numeric_as_float(url):
+    out = run_readonly_query(url, "select 1.5::numeric as x, 2::numeric as n, 40.0::numeric as ctl")
+    assert out["rows"][0] == [1.5, 2.0, 40.0]
+    assert all(isinstance(v, float) for v in out["rows"][0])
