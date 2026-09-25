@@ -4,6 +4,7 @@ import pytest
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
 from tri_coach.allowlist import ANALYST_GARMIN_TOOLS, ANALYST_TP_TOOLS, GARMIN_TOOLS, TP_TOOLS
+from tri_coach.graph.nodes.apply import describe
 from tri_coach.graph.state import STATE_TYPES
 from tri_coach.models import ApplyReport, Brief, ChangeSet, Proposal, ReviewDecision
 from tri_core.harness.persistence import make_serde
@@ -130,3 +131,23 @@ def test_serde_round_trips_state_types():
     kind, data = serde.dumps_typed(cs)
     back = serde.loads_typed((kind, data))
     assert isinstance(back, ChangeSet) and back.proposals[0].changes[0].day == date(2026, 9, 14)
+
+
+def test_apply_report_lists_each_applied_change():
+    moved = CalendarChange.model_validate(
+        {"op": "move", "tp_workout_id": "w1", "new_date": "2026-09-19", "reason": "rest day"}
+    )
+    assert describe(moved) == "move w1 -> 2026-09-19: rest day"
+    assert describe(CalendarChange.model_validate(planning_change())) == "delete w1: knee pain"
+    nutrition = NutritionChange.model_validate(nutrition_change())
+    assert describe(nutrition) == "set_day_targets 2026-09-14: extend horizon"
+    r = ApplyReport(
+        domain="planning",
+        applied=1,
+        skipped=[],
+        remaining=0,
+        error=None,
+        sessions_changed=True,
+        applied_changes=[describe(moved)],
+    )
+    assert r.line() == "planning: applied 1\n  applied: move w1 -> 2026-09-19: rest day"

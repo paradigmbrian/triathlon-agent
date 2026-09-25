@@ -74,6 +74,7 @@ class ApplyReport(BaseModel):
     remaining: int
     error: str | None
     sessions_changed: bool  # planning: any create/update/delete/move applied
+    applied_changes: list[str] = Field(default_factory=list)  # one line per change as written
 
     def line(self) -> str:
         parts = [f"applied {self.applied}"]
@@ -84,4 +85,4 @@ class ApplyReport(BaseModel):
         text = f"{self.domain}: " + ", ".join(parts)
         if self.error:
             text += f"; stopped: {self.error}"
-        return text
+        return "\n".join([text, *(f"  applied: {c}" for c in self.applied_changes)])

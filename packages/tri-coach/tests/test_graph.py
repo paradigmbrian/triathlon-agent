@@ -278,7 +278,7 @@ async def test_approve_dispatches_planning_apply_with_thread_coach(nocommit, mak
         "select thread_id from plan_changes where plan_id = %s and operation = 'move'", (pid,)
     ).fetchall()
     assert [r["thread_id"] for r in rows] == ["coach"]
-    assert out["messages"][-1].content == "planning: applied 1"
+    assert out["messages"][-1].content.startswith("planning: applied 1\n  applied: move w1 -> ")
     assert (await graph.aget_state(CFG)).next == ()
 
 
