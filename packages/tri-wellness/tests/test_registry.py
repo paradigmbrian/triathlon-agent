@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from tri_wellness.ranges.registry import (
+    MARKERS_PATH,
     Range,
     RegistryError,
     load_registry,
@@ -17,9 +18,10 @@ FIX = Path(__file__).parent / "fixtures" / "ranges"
     [
         ("Ferritin", "ferritin"),
         ("Ferritin, Serum", "ferritin serum"),
-        ("  Vitamin D (25-Hydroxy)  ", "vitamin d"),
+        ("  Vitamin D (25-Hydroxy)  ", "vitamin d 25 hydroxy"),
         ("hs-CRP", "hs crp"),
-        ("Testosterone,Free (Direct)", "testosterone free"),
+        ("Testosterone,Free (Direct)", "testosterone free direct"),
+        ("Testosterone (Free)", "testosterone free"),
         ("HDL   Cholesterol", "hdl cholesterol"),
         ("Hemoglobin A1c", "hemoglobin a1c"),
     ],
@@ -58,8 +60,9 @@ def test_lookup_uses_normalized_aliases():
     reg = load_registry("male", FIX / "good_sexed.yaml")
     assert reg.lookup("FERRITIN, Serum").key == "ferritin"
     assert reg.lookup("C-Reactive Protein, High Sensitivity").key == "hs_crp"
-    assert reg.lookup("CRP (hs)") is None  # 'crp' alone is not an alias
-    assert reg.lookup("Ferritin (serum)").key == "ferritin"  # qualifier stripped
+    assert reg.lookup("CRP (hs)").key == "hs_crp"  # 'crp hs' is an alias; the qualifier counts
+    assert reg.lookup("Ferritin (serum)").key == "ferritin"  # 'ferritin serum' is an alias
+    assert reg.lookup("Ferritin (Kit)") is None  # an unknown qualifier is not dropped
     assert reg.lookup("Vitamin D") is None
 
 
@@ -106,3 +109,67 @@ def test_unknown_system_is_an_error(tmp_path):
     )
     with pytest.raises(RegistryError, match="x.*system"):
         load_registry("male", p)
+
+
+# 40 labels as LabCorp and Quest print them, with the marker each must resolve to.
+GOLDEN = [
+    ("WBC", "wbc"),
+    ("RBC", "rbc"),
+    ("Hemoglobin", "hemoglobin"),
+    ("Hematocrit", "hematocrit"),
+    ("MCV", "mcv"),
+    ("Platelets", "platelets"),
+    ("Neutrophils", "neutrophils_pct"),
+    ("Lymphs", "lymphocytes_pct"),
+    ("Glucose", "glucose"),
+    ("BUN", "bun"),
+    ("Creatinine", "creatinine"),
+    ("eGFR", "egfr"),
+    ("BUN/Creatinine Ratio", "bun_creatinine_ratio"),
+    ("Sodium", "sodium"),
+    ("Potassium", "potassium"),
+    ("Carbon Dioxide, Total", "co2"),
+    ("Protein, Total", "total_protein"),
+    ("Bilirubin, Total", "bilirubin_total"),
+    ("AST (SGOT)", "ast"),
+    ("ALT (SGPT)", "alt"),
+    ("Cholesterol, Total", "total_cholesterol"),
+    ("HDL Cholesterol", "hdl"),
+    ("LDL Chol Calc (NIH)", "ldl"),
+    ("TSH", "tsh"),
+    ("T4, Free", "free_t4"),
+    ("T3, Free", "free_t3"),
+    ("Ferritin, Serum", "ferritin"),
+    ("Iron, Serum", "iron_serum"),
+    ("Iron Bind.Cap.(TIBC)", "tibc"),
+    ("Iron Saturation", "transferrin_saturation"),
+    ("C-Reactive Protein, Cardiac", "hs_crp"),
+    ("Homocyst(e)ine", "homocysteine"),
+    ("Vitamin D, 25-Hydroxy", "vitamin_d"),
+    ("Vitamin B12", "b12"),
+    ("Folate (Folic Acid), Serum", "folate"),
+    ("Magnesium, RBC", "rbc_magnesium"),
+    ("Testosterone (Free)", "testosterone_free"),
+    ("Testosterone (Total)", "testosterone_total"),
+    ("Cortisol (AM)", "cortisol_am"),
+    ("DHEA-Sulfate", "dhea_s"),
+]
+
+
+def test_qualified_labels_resolve_to_the_qualified_marker():
+    reg = load_registry("male", MARKERS_PATH)
+    assert reg.lookup("Testosterone (Free)").key == "testosterone_free"
+    assert reg.lookup("Testosterone (Total)").key == "testosterone_total"
+    assert reg.lookup("Vitamin D (25-OH)").key == "vitamin_d"
+    assert reg.lookup("Vitamin B12 (Total)").key == "b12"
+    assert reg.lookup("Cortisol (PM)") is None  # no PM cortisol marker: a review line, not AM
+    assert reg.lookup("B12 (Active)") is None  # holotranscobalamin is not serum B12
+
+
+def test_golden_lab_labels_resolve_without_collision():
+    reg = load_registry("male", MARKERS_PATH)
+    assert len(GOLDEN) == 40
+    assert len({normalize_alias(label) for label, _ in GOLDEN}) == 40
+    for label, key in GOLDEN:
+        found = reg.lookup(label)
+        assert found is not None and found.key == key, label
