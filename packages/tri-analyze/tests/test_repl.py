@@ -156,3 +156,19 @@ async def test_run_turn_prints_the_exact_rate_limit_line():
     buf, out = _capture()
     assert await run_turn(RaisingAgent(), "hi", "t", out, context=CTX) == ""
     assert buf == ["\n[rate limited: slow down. Wait a moment and try again.]\n"]
+
+
+async def test_chat_loop_a_bare_slash_lists_the_commands():
+    fake = FakeAgent()
+    inputs = iter(["/", "/  ", "/quit"])
+
+    async def read():
+        return next(inputs, None)
+
+    async def tools_cmd():
+        return "tools: add"
+
+    buf, out = _capture()
+    await chat_loop(fake, read=read, out=out, context=lambda: CTX, commands={"tools": tools_cmd})
+    assert buf.count("commands: /quit, /tools\n") == 2
+    assert fake.calls == []

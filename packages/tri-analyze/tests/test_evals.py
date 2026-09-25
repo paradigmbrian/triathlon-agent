@@ -230,6 +230,7 @@ def test_pulls_splits_pass_fail_and_not_applicable():
 
 
 def test_states_window_accepts_iso_month_day_and_relative_windows():
+    inputs = case("weekly_tss_8w").inputs()
     ref = case("weekly_tss_8w").outputs()
 
     def answer(text: str) -> dict:
@@ -250,17 +251,25 @@ def test_states_window_accepts_iso_month_day_and_relative_windows():
         "September 13th was the best day.",  # month + ordinal day
         "Across 9/2 to 9/15 sleep tracked HRV.",  # slash dates
         "Weight fell from 75.4 kg on 9/13/2026 to 74.0 kg.",
+        "Sept. 3 was the hardest day.",  # abbreviation with a period
+        # the question is ignored, the answer's own window counts
+        "Show my weekly TSS for the last 8 weeks. Over the past 8 weeks it rose from 388 to 470.",
     ):
-        assert states_window(answer(text), ref)["score"] == 1, text
+        assert states_window(inputs, answer(text), ref)["score"] == 1, text
     for text in (
         "TSS averaged 412 with one recovery week.",
         "Here is a weekly summary of your training.",
         "I don't have data for this session.",
         "May I suggest an easier week?",  # bare month name, no day/year/framing word
+        "Aerobic decoupling 5% on the long ride.",  # a month prefix inside a word
+        "Marathon 4 hours; augmented 2 reps; a decent 3 watts up.",
+        # echoes the question
+        "Show my weekly TSS for the last 8 weeks. Here they are: 388, 402, 470.",
     ):
-        r = states_window(answer(text), ref)
+        r = states_window(inputs, answer(text), ref)
         assert r["score"] == 0 and r["key"] == "states_window", text
-    assert states_window(answer("anything"), case("last_z2_ride").outputs())["score"] is None
+    plain = case("last_z2_ride")
+    assert states_window(plain.inputs(), answer("anything"), plain.outputs())["score"] is None
 
 
 def verdict(**over) -> dict:

@@ -91,9 +91,11 @@ export function useTurnStream() {
               setState((s) => ({ ...s, status: "busy", busyWith: running, bubbles: [], draft: lastText != null ? { id: nextId(), text: lastText } : s.draft }));
               return;
             }
-            // A 409 without `running` (e.g. { reason: "no_review" }) means nothing is waiting
-            // for review, not that something else is running: stay idle, surface the message.
-            setState((s) => ({ ...s, status: "idle", error: "nothing is waiting for review" }));
+            // A 409 without `running` is about the gate, not another run: { reason: "paused" }
+            // refused a turn because a review is waiting; { reason: "no_review" } refused a
+            // decision because nothing is. Stay idle, surface the message.
+            const reason = (e.body as { reason?: string } | null)?.reason;
+            setState((s) => ({ ...s, status: "idle", error: reason === "paused" ? "answer the review first" : "nothing is waiting for review" }));
             await Promise.all([qc.invalidateQueries({ queryKey: keys.thread }), qc.invalidateQueries({ queryKey: keys.today })]);
             return;
           }

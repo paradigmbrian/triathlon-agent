@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
+from pydantic.json_schema import SkipJsonSchema
 
 GoalType = Literal[
     "sprint", "olympic", "half_ironman", "ironman", "maintenance", "build", "recovery"
@@ -97,6 +98,10 @@ class CalendarChange(BaseModel):
     payload: dict[str, Any] | None = None
     reason: str
     athlete_requested: bool = False
+    # A designed session's target week, which may differ from the week it is dated in: check-in
+    # --yes leaves out every change of a design with violations by it, and apply marks it written.
+    # Set by the design code only, so it is not in the edit form's schema.
+    design_week: SkipJsonSchema[date | None] = None
 
 
 class ReviewDecision(BaseModel):
@@ -115,6 +120,7 @@ class StoredGoal(BaseModel):
     goal: TrainingGoal
     status: str
     tp_event_id: str | None = None
+    tp_plan_applied_at: datetime | None = None  # set once the bought plan is on TrainingPeaks
 
 
 class StoredPlan(BaseModel):

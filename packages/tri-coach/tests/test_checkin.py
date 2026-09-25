@@ -197,3 +197,61 @@ async def test_yes_with_an_incomplete_apply_exits_1():
 async def test_a_model_error_exits_1():
     code, text = await run(Graph(["boom"], [IDLE]))
     assert code == EXIT_ERROR and "model down" in text
+
+
+def flagged(pid: str, domain: str, changes: list[dict[str, Any]], violations: dict) -> tuple:
+    p = Proposal.model_validate(
+        {
+            "id": pid,
+            "domain": domain,
+            "summary": "s",
+            "changes": changes,
+            "pending_violations": violations,
+        }
+    )
+    value = {"narration": f"{domain} gate", "proposals": [p.model_dump(mode="json")]}
+    return ((), "updates", {"__interrupt__": (Interrupt(value=value),)})
+
+
+FLAGGED_WEEK = flagged(
+    "p1",
+    "planning",
+    [
+        {"op": "create", "workout_date": "2026-09-22", "reason": "next week"},
+        {"op": "move", "tp_workout_id": "w1", "new_date": "2026-09-18", "reason": "knee"},
+    ],
+    {"2026-09-21": ["hard sessions on consecutive days"]},
+)
+FLAGGED_NOTE = flagged(
+    "p2",
+    "nutrition",
+    [
+        {
+            "op": "set_day_targets",
+            "target_key": "2026-09-14",
+            "day": "2026-09-14",
+            "payload": {"calorie_goal": 2800},
+            "reason": "easy day",
+        },
+        {
+            "op": "set_session_note",
+            "target_key": "w2",
+            "day": "2026-09-15",
+            "payload": {},
+            "reason": "long ride",
+        },
+    ],
+    {"w2": ["carbs 95 g/h above the 90 g/h ceiling"]},
+)
+
+
+async def test_yes_skips_flagged_changes_at_both_gates_and_exits_1():
+    graph = Graph([[FLAGGED_WEEK], [FLAGGED_NOTE], [DONE]], [IDLE])
+    code, text = await run(graph, yes=True)
+    assert code == EXIT_ERROR
+    plan, fuel = graph.inputs[1].resume, graph.inputs[2].resume
+    assert plan["action"] == "edit" and fuel["action"] == "edit"
+    assert [c["op"] for p in plan["proposals"] for c in p["changes"]] == ["move"]
+    assert [c["op"] for p in fuel["proposals"] for c in p["changes"]] == ["set_day_targets"]
+    assert "skipping p1 week of 2026-09-21: hard sessions on consecutive days" in text
+    assert "skipping p2 set_session_note w2: carbs 95 g/h above the 90 g/h ceiling" in text

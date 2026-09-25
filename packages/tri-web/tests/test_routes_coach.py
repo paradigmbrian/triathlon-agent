@@ -73,7 +73,8 @@ async def test_a_proposing_coach_streams_the_interrupt_and_pauses(
         # approve resumes the run and streams the apply report
         r = await c.post("/api/coach/review", json={"action": "approve"})
         events = parse_sse(r.text)
-        assert ("report", {"text": "planning: applied 1"}) in events
+        reports = [d["text"] for n, d in events if n == "report"]
+        assert reports and reports[0].startswith("planning: applied 1\n  applied: move w1 -> ")
         assert events[-1][1]["paused"] is False
         assert (await c.get("/api/coach/thread")).json()["paused"] is None
     assert [call[0] for call in tp.calls] == ["tp_update_workout"]
@@ -119,7 +120,8 @@ async def test_edit_is_validated_and_resumes_with_typed_proposals(
         edited[0]["changes"][0]["new_date"] = "2026-09-19"
         r = await c.post("/api/coach/review", json={"action": "edit", "proposals": edited})
         assert r.status_code == 200
-        assert ("report", {"text": "planning: applied 1"}) in parse_sse(r.text)
+        reports = [d["text"] for n, d in parse_sse(r.text) if n == "report"]
+        assert reports[0].startswith("planning: applied 1\n  applied: move w1 -> 2026-09-19")
     assert tp.calls[0][0] == "tp_update_workout"
     assert "2026-09-19" in str(tp.calls[0][1])  # the moved date reached TrainingPeaks
 
@@ -183,4 +185,23 @@ async def test_route_errors_return_detail_only(runtime, client):
     rt.graph.aget_state = boom  # type: ignore[method-assign]
     async with client(rt) as c:
         r = await c.get("/api/coach/thread")
-    assert r.status_code == 500 and r.json() == {"detail": "RuntimeError: psycopg went away"}
+    assert r.status_code == 500 and r.json() == {"detail": "internal error"}
+
+
+async def test_a_turn_during_a_paused_review_is_409_and_keeps_the_review(
+    nocommit, runtime, client, parse_sse
+):
+    tp, kw = proposing(nocommit)
+    rt = runtime(**kw)
+    async with client(rt) as c:
+        await c.post("/api/coach/turns", json={"text": "my knee hurts"})
+        r = await c.post("/api/coach/turns", json={"text": "never mind"})
+        assert r.status_code == 409 and r.json() == {"reason": "paused"}
+        thread = (await c.get("/api/coach/thread")).json()
+        assert thread["paused"]["proposals"][0]["id"] == "p1"
+        assert [m["role"] for m in thread["messages"]].count("user") == 1
+        r = await c.post("/api/coach/review", json={"action": "reject"})
+        assert r.status_code == 200 and parse_sse(r.text)[-1][0] == "done"
+        assert (await c.get("/api/coach/thread")).json()["paused"] is None
+    assert tp.calls == []
+    assert not rt.lock.locked() and rt.running is None

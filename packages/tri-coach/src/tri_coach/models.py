@@ -25,7 +25,10 @@ class Proposal(BaseModel):
     domain: Domain
     summary: str  # the sub-graph's pending_summary
     changes: list[CalendarChange] | list[NutritionChange] = Field(default_factory=list)
-    violations: list[str] = Field(default_factory=list)  # last_error, fuel violations
+    violations: list[str] = Field(default_factory=list)  # last_error, then one line per key below
+    # the sub-graph's pending_violations: planning by week_start ISO, nutrition by tp_workout_id
+    # or "race"; check-in --yes leaves out the changes they cover
+    pending_violations: dict[str, list[str]] = Field(default_factory=dict)
     question: str | None = None  # set instead of changes when the sub-agent asked
     overrides: dict[str, Any] | None = None  # nutrition: profile_overrides to persist on apply
 
@@ -74,6 +77,7 @@ class ApplyReport(BaseModel):
     remaining: int
     error: str | None
     sessions_changed: bool  # planning: any create/update/delete/move applied
+    applied_changes: list[str] = Field(default_factory=list)  # one line per change as written
 
     def line(self) -> str:
         parts = [f"applied {self.applied}"]
@@ -84,4 +88,4 @@ class ApplyReport(BaseModel):
         text = f"{self.domain}: " + ", ".join(parts)
         if self.error:
             text += f"; stopped: {self.error}"
-        return text
+        return "\n".join([text, *(f"  applied: {c}" for c in self.applied_changes)])

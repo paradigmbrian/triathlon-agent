@@ -44,7 +44,7 @@ async def test_agent_tool_runs_on_a_fresh_throwaway_thread_and_returns_the_final
     assert await t.ainvoke({"question": "again?"}) == "answer"
     (p1, c1, k1), (_, c2, _) = agent.calls
     assert isinstance(p1["messages"][0], HumanMessage) and p1["messages"][0].content == "how?"
-    assert c1["recursion_limit"] == 7 and k1 == {}
+    assert c1["recursion_limit"] == 7 and c1["tags"] == ["tool:ask_fake"] and k1 == {}
     t1, t2 = c1["configurable"]["thread_id"], c2["configurable"]["thread_id"]
     assert t1.startswith("fake-") and t2.startswith("fake-") and t1 != t2
 

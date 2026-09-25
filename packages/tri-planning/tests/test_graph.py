@@ -108,7 +108,7 @@ async def test_bought_plan_path(nocommit, make_deps):
             "duration_planned": 1.0,
         },
     ]
-    tp = FakeTp(responses={"tp_get_workouts": {"workouts": workouts, "count": 2}})
+    tp = FakeTp(listings=[[], workouts])  # empty before the plan is applied, two after
     args = {**GOAL_ARGS, "tp_plan_id": "p1"}
     model = ScriptedChatModel(
         script=[tool_call("set_training_goal", args), AIMessage(content="Goal saved.")]
@@ -117,9 +117,47 @@ async def test_bought_plan_path(nocommit, make_deps):
     out = await graph.ainvoke({"messages": [HumanMessage("use my bought plan p1")]}, CFG)
     assert out["__interrupt__"][0].value["changes"][0]["op"] == "apply_plan"
     out = await graph.ainvoke(APPROVE, CFG)
-    assert [c[0] for c in tp.calls] == ["tp_apply_training_plan", "tp_get_workouts"]
+    assert [c[0] for c in tp.calls] == [
+        "tp_get_workouts",
+        "tp_apply_training_plan",
+        "tp_get_workouts",
+    ]
     assert out["phase"] == "active" and out["plan_id"] is not None
     assert repo.owned_workout_ids(nocommit, out["plan_id"]) == {"w1", "w2"}
+
+
+async def test_reject_on_a_bought_plan_ends_clean_and_the_next_message_reaches_adjust(
+    nocommit, make_deps
+):
+    args = {**GOAL_ARGS, "tp_plan_id": "p1"}
+    model = ScriptedChatModel(
+        script=[
+            tool_call("set_training_goal", args),
+            AIMessage(content="Goal saved."),
+            AIMessage(content="All on track."),
+        ]
+    )
+    tp = FakeTp()
+    graph = build_graph(make_deps(model, tp=tp), InMemorySaver())
+    out = await graph.ainvoke({"messages": [HumanMessage("use my bought plan p1")]}, CFG)
+    assert out["__interrupt__"][0].value["changes"][-1]["op"] == "apply_plan"
+    out = await graph.ainvoke(Command(resume={"action": "reject", "note": "not yet"}), CFG)
+    assert "__interrupt__" not in out and out["pending_changes"] == []
+    assert (await graph.aget_state(CFG)).next == ()
+    # The athlete gets a plan on the calendar another way; the next message must reach the
+    # adjust sub-agent, not the stale review.
+    gid = repo.get_active_goal(nocommit).id
+    pid = repo.insert_plan(
+        nocommit,
+        gid,
+        "generated",
+        None,
+        [WeekTarget(week_start=MONDAY, phase="base", target_tss=300, target_hours=6)],
+    )
+    repo.mark_weeks_written(nocommit, pid, [MONDAY])
+    out = await graph.ainvoke({"messages": [HumanMessage("how's it going")]}, CFG)
+    assert "__interrupt__" not in out and out["messages"][-1].content == "All on track."
+    assert "tp_apply_training_plan" not in [c[0] for c in tp.calls]
 
 
 def test_derive_phase_from_tables(nocommit):

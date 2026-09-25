@@ -24,6 +24,7 @@ def review_node(state: PlanningState) -> dict[str, Any]:
         {
             "summary": state.get("pending_summary") or "",
             "changes": [c.model_dump(mode="json") for c in changes],
+            "violations": state.get("pending_violations") or {},
             "last_error": state.get("last_error"),
         }
     )
@@ -32,6 +33,10 @@ def review_node(state: PlanningState) -> dict[str, Any]:
     if decision.action == "reject":
         note = decision.note or "no note given"
         update["messages"] = [HumanMessage(f"Plan review rejected: {note}")]
+        if state.get("changes_from") not in ("design", "adjust"):
+            # Nothing re-proposes after this reject; the set must not linger for route_start.
+            update["pending_changes"] = []
+            update["pending_summary"] = None
     elif decision.action == "edit" and decision.changes is not None:
         update["pending_changes"] = decision.changes
     return update

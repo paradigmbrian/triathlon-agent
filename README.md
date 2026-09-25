@@ -74,7 +74,7 @@ uv run tri sync [--since YYYY-MM-DD] [--source trainingpeaks|garmin|all] [--full
 uv run tri-analyze chat [--no-live]     # --no-live binds only the database tool
 uv run tri-analyze eval [--recreate-dataset]   # LangSmith feedback eval
 uv run tri-planning chat [--no-live]    # plan; every TrainingPeaks write is approved first
-uv run tri-planning check-in [--yes] [--no-sync] [--no-live]   # sync, review last 7 days, propose; exit 3 when paused, 1 on a model error
+uv run tri-planning check-in [--yes] [--no-sync] [--no-live]   # sync, review last 7 days, propose; exit 3 when paused, 1 on a model error or a week --yes skipped for violations
 uv run tri-planning reset [--yes]       # abandon goal and plan, clear the thread
 uv run tri-wellness ingest <file.pdf|csv> [--kind pdf|export] [--drawn-on YYYY-MM-DD]   # extract, review, store a lab panel
 uv run tri-wellness report [--panel ID] [--out path.md]   # interpret a stored panel; saved to lab_reports
@@ -82,7 +82,7 @@ uv run tri-wellness chat                                   # ask about panels an
 uv run tri-wellness panels                                 # list stored panels
 uv run tri-wellness eval [--recreate-dataset]              # LangSmith report evaluators
 uv run tri-coach chat [--no-live]       # the front door: one conversation over the analyst, wellness, planning and nutrition
-uv run tri-coach check-in [--yes] [--no-sync] [--no-live]   # sync, weekly checklist over plan and nutrition; exit 3 when paused
+uv run tri-coach check-in [--yes] [--no-sync] [--no-live]   # sync, weekly checklist over plan and nutrition; exit 3 when paused, 1 on a model error or a change --yes skipped for violations
 uv run tri-coach eval [--recreate-dataset]                   # LangSmith routing eval
 uv run tri-coach memory [--forget ID]   # the coach's athlete memory
 uv run tri-coach reset [--yes] [--forget-memory]

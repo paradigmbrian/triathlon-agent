@@ -7,6 +7,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 import tri_planning.graph.nodes.design as design_node
 from tri_core.testing import ScriptedChatModel, tool_call
 from tri_planning import repo
+from tri_planning.checkin import changes_without_violations
 from tri_planning.config import PlanningSettings
 from tri_planning.graph.deps import GraphDeps
 from tri_planning.graph.deps import make_deps as real_make_deps
@@ -26,10 +27,10 @@ pytestmark = pytest.mark.db
 CFG = {"configurable": {"thread_id": "t"}}
 
 
-def seed(conn, **over):
+def seed(conn, start=MONDAY, **over):
     goal = TrainingGoal(**{**GOAL_ARGS, **over})
     gid = repo.insert_goal(conn, goal)
-    targets = build(goal, FitnessSnapshot(ctl=45, recent_weekly_tss=300), MONDAY)
+    targets = build(goal, FitnessSnapshot(ctl=45, recent_weekly_tss=300), start)
     pid = repo.insert_plan(conn, gid, "generated", None, targets)
     return gid, pid, targets
 
@@ -59,6 +60,15 @@ async def test_designs_window_weeks_and_proposes_creates(nocommit, make_deps):
     weeks = repo.list_weeks(nocommit, pid)
     assert weeks[0].designed is not None and weeks[1].designed is not None
     assert weeks[2].designed is None
+
+
+async def test_design_node_clears_pending_violations(nocommit, make_deps):
+    # A later review on the persistent planning thread must not show stale violations from an
+    # earlier adjust run; the design node always starts the set clean.
+    gid, pid, targets = seed(nocommit)
+    model = ScriptedChatModel(script=[structured(week_json(MONDAY, targets[0].target_tss))])
+    out = await node_out(make_deps(model, horizon=1), gid, pid)
+    assert out["pending_violations"] == {}
 
 
 async def test_retries_once_on_violation_and_reports_if_still_bad(nocommit, make_deps):
@@ -123,6 +133,35 @@ def test_window_weeks_respects_horizon_and_written_flag():
     ]
 
 
+def test_window_starts_at_the_first_plan_week_when_today_is_before_it():
+    rows = [
+        PlanWeekRow(
+            plan_id=1,
+            week_start=MONDAY + timedelta(weeks=i),
+            phase="base",
+            target_tss=1,
+            target_hours=1,
+            designed=None,
+            written_to_tp=False,
+        )
+        for i in range(1, 6)
+    ]
+    # a Wednesday; the plan starts the Monday after it
+    picked = window_weeks(rows, MONDAY + timedelta(days=2), 3)
+    assert [w.week_start for w in picked] == [MONDAY + timedelta(weeks=i) for i in (1, 2, 3)]
+    assert window_weeks([], MONDAY, 3) == []
+
+
+async def test_horizon_three_on_a_wednesday_designs_three_weeks(nocommit, make_deps):
+    gid, pid, targets = seed(nocommit, start=MONDAY + timedelta(weeks=1))
+    model = ScriptedChatModel(
+        script=[structured(week_json(t.week_start, t.target_tss)) for t in targets[:3]]
+    )
+    node = make_design_node(make_deps(model, today=MONDAY + timedelta(days=2), horizon=3))
+    out = await node({"goal_id": gid, "plan_id": pid, "messages": []}, CFG)
+    assert model.calls == 3 and len(out["pending_changes"]) == 9
+
+
 def test_prompt_mentions_target_availability_and_rules():
     goal = TrainingGoal(**GOAL_ARGS)
     targets = build(goal, FitnessSnapshot(ctl=45), MONDAY)
@@ -160,3 +199,83 @@ def test_make_deps_takes_an_optional_design_model():
     settings = PlanningSettings(_env_file=None)
     assert real_make_deps(settings, agent, None).design_model is None
     assert real_make_deps(settings, agent, None, design_model=designer).design_model is designer
+
+
+async def test_a_reply_without_a_week_is_retried_once_then_reported(nocommit, make_deps):
+    gid, pid, targets = seed(nocommit)
+    model = ScriptedChatModel(
+        script=[
+            AIMessage(content="I need more information."),
+            structured(week_json(MONDAY, targets[0].target_tss)),
+        ]
+    )
+    out = await node_out(make_deps(model), gid, pid)
+    assert model.calls == 2 and "VIOLATIONS" not in out["pending_summary"]
+    assert len(out["pending_changes"]) == 3
+
+    model = ScriptedChatModel(script=[AIMessage(content="no"), AIMessage(content="still no")])
+    out = await node_out(make_deps(model), gid, pid)
+    assert model.calls == 2 and out["pending_changes"] == []
+    assert "VIOLATIONS" in out["pending_summary"] and "no week" in out["pending_summary"]
+
+
+def review_payload(out) -> dict:
+    """The review interrupt's payload, as the review node builds it from the node's output."""
+    return {
+        "changes": [c.model_dump(mode="json") for c in out["pending_changes"]],
+        "violations": out["pending_violations"],
+    }
+
+
+async def test_a_flagged_week_is_keyed_in_pending_violations_and_filtered(nocommit, make_deps):
+    gid, pid, targets = seed(nocommit)
+    bad = week_json(MONDAY, targets[0].target_tss, hard_on_consecutive_days=True)
+    clean = week_json(MONDAY + timedelta(weeks=1), targets[1].target_tss)
+    model = ScriptedChatModel(script=[structured(bad), structured(bad), structured(clean)])
+    out = await node_out(make_deps(model, horizon=2), gid, pid)
+    assert list(out["pending_violations"]) == [MONDAY.isoformat()]
+    assert any("consecutive" in v for v in out["pending_violations"][MONDAY.isoformat()])
+    kept, skipped = changes_without_violations(review_payload(out))
+    assert skipped == [MONDAY.isoformat()]
+    assert [c.workout_date.isoformat() for c in kept] == [s["date"] for s in clean["sessions"]]
+
+
+async def test_a_stray_session_in_the_next_week_goes_with_its_flagged_design(nocommit, make_deps):
+    # The stray lands in the next week, which has its own clean design: the stray is left out
+    # with the rest of its design, and the next week's sessions stay.
+    gid, pid, targets = seed(nocommit)
+    stray = week_json(MONDAY, targets[0].target_tss)
+    stray["sessions"][2]["date"] = (MONDAY + timedelta(days=8)).isoformat()
+    clean = week_json(MONDAY + timedelta(weeks=1), targets[1].target_tss)
+    model = ScriptedChatModel(script=[structured(stray), structured(stray), structured(clean)])
+    out = await node_out(make_deps(model, horizon=2), gid, pid)
+    assert any("outside the week" in v for v in out["pending_violations"][MONDAY.isoformat()])
+    kept, _ = changes_without_violations(review_payload(out))
+    assert sorted(c.workout_date.isoformat() for c in kept) == sorted(
+        s["date"] for s in clean["sessions"]
+    )
+
+
+async def test_a_design_for_the_wrong_week_is_left_out_entirely(nocommit, make_deps):
+    gid, pid, targets = seed(nocommit)
+    wrong = week_json(MONDAY + timedelta(weeks=1), targets[0].target_tss)
+    model = ScriptedChatModel(script=[structured(wrong), structured(wrong)])
+    out = await node_out(make_deps(model), gid, pid)
+    assert any("does not match" in v for v in out["pending_violations"][MONDAY.isoformat()])
+    assert len(out["pending_changes"]) == 3
+    kept, skipped = changes_without_violations(review_payload(out))
+    assert kept == [] and skipped == [MONDAY.isoformat()]
+
+
+async def test_a_violation_retry_without_a_week_keeps_the_first_design_and_its_violations(
+    nocommit, make_deps
+):
+    gid, pid, targets = seed(nocommit)
+    bad = week_json(MONDAY, targets[0].target_tss, hard_on_consecutive_days=True)
+    model = ScriptedChatModel(script=[structured(bad), AIMessage(content="I can't fix that.")])
+    out = await node_out(make_deps(model), gid, pid)
+    assert model.calls == 2 and "consecutive" in out["pending_summary"]
+    assert [c.workout.title for c in out["pending_changes"]] == [
+        s["title"] for s in bad["sessions"]
+    ]
+    assert any("consecutive" in v for v in out["pending_violations"][MONDAY.isoformat()])

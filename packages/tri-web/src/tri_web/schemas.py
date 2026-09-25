@@ -92,6 +92,10 @@ class NoReview(Exception):
     """Nothing is paused at the gate."""
 
 
+class Paused(Exception):
+    """A review is waiting at the gate; a new turn would drop it."""
+
+
 class EditRejected(Exception):
     def __init__(self, errors: list[ValidationItem]) -> None:
         super().__init__("edit rejected")

@@ -123,13 +123,17 @@ async def apply_changes(
         applied.append(change)
         remaining.remove(change)
         if change.op == "create" and change.workout_date is not None:
-            written.add(week_monday(change.workout_date))
+            # a designed session writes the week it was designed for, not the one it is dated in
+            written.add(change.design_week or week_monday(change.workout_date))
         if change.op == "apply_plan":
             tp_plan_applied = True
 
     if plan_id is not None and written:
         with deps.connect() as conn:
-            repo.mark_weeks_written(conn, plan_id, sorted(written))
+            # Only a designed week is on the calendar as a plan week; a one-off create in an
+            # undesigned week must not stop the design node from designing it.
+            designed = {w.week_start for w in repo.list_weeks(conn, plan_id) if w.designed}
+            repo.mark_weeks_written(conn, plan_id, sorted(written & designed))
             conn.commit()
 
     return ApplyResult(

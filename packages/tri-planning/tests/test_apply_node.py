@@ -8,6 +8,7 @@ from tri_planning.graph.nodes.apply import ApplyResult, apply_changes, make_appl
 from tri_planning.planning.models import (
     CalendarChange,
     PlannedSession,
+    PlannedWeek,
     TrainingGoal,
     WeekTarget,
 )
@@ -54,8 +55,11 @@ def state(gid, pid, changes):
     }
 
 
-async def test_applies_all_records_rows_marks_weeks_and_activates(nocommit, make_deps):
+async def test_applies_all_records_rows_marks_designed_weeks_and_activates(nocommit, make_deps):
     gid, pid = seed(nocommit)
+    repo.set_week_designed(
+        nocommit, pid, MONDAY, PlannedWeek(week_start=MONDAY, sessions=[], coach_note="n")
+    )
     tp = FakeTp()
     node = make_apply_node(make_deps(ScriptedChatModel(script=[]), tp=tp))
     out = await node(state(gid, pid, [create(0), create(7, "Ride 2")]), CFG)
@@ -63,8 +67,28 @@ async def test_applies_all_records_rows_marks_weeks_and_activates(nocommit, make
     assert out["phase"] == "active"
     assert [c[0] for c in tp.calls] == ["tp_create_workout", "tp_create_workout"]
     assert len(repo.owned_workout_ids(nocommit, pid)) == 2
-    assert [w.written_to_tp for w in repo.list_weeks(nocommit, pid)] == [True, True]
+    # week 2 received a create but was never designed, so it is not a written plan week
+    assert [w.written_to_tp for w in repo.list_weeks(nocommit, pid)] == [True, False]
     assert "applied 2" in out["messages"][0].content
+
+
+async def test_a_stray_session_does_not_mark_another_designed_week_written(nocommit, make_deps):
+    # Week 1's design put a session in week 2. Approving it writes week 1's design only; week 2's
+    # own design is still unwritten, so the design node must still pick it up.
+    gid, pid = seed(nocommit)
+    for i in range(2):
+        week = MONDAY + timedelta(weeks=i)
+        repo.set_week_designed(
+            nocommit, pid, week, PlannedWeek(week_start=week, sessions=[], coach_note="n")
+        )
+    changes = [
+        create(0).model_copy(update={"design_week": MONDAY}),
+        create(8, "Stray").model_copy(update={"design_week": MONDAY}),
+    ]
+    node = make_apply_node(make_deps(ScriptedChatModel(script=[]), tp=FakeTp()))
+    out = await node(state(gid, pid, changes), CFG)
+    assert out["pending_changes"] == [] and out["last_error"] is None
+    assert [w.written_to_tp for w in repo.list_weeks(nocommit, pid)] == [True, False]
 
 
 async def test_mid_batch_failure_keeps_remainder_pending(nocommit, make_deps):

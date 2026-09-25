@@ -71,11 +71,17 @@ class FakeTp:
     """Records every call; answers like the real server. `fail_on_call` raises on the nth call."""
 
     def __init__(
-        self, *, responses: dict[str, Any] | None = None, fail_on_call: int | None = None
+        self,
+        *,
+        responses: dict[str, Any] | None = None,
+        fail_on_call: int | None = None,
+        listings: list[list[dict[str, Any]]] | None = None,
     ) -> None:
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.responses = responses or {}
         self.fail_on_call = fail_on_call
+        # successive tp_get_workouts answers, one list of workouts per call
+        self.listings = list(listings) if listings is not None else None
 
     async def call_json(self, tool: str, args: dict[str, Any] | None = None) -> Any:
         self.calls.append((tool, dict(args or {})))
@@ -98,6 +104,9 @@ class FakeTp:
         if tool == "tp_apply_training_plan":
             return {"success": True, "created": 3, "failed": 0, "skipped_periods": 0, "total": 3}
         if tool == "tp_get_workouts":
+            if self.listings:
+                workouts = self.listings.pop(0)
+                return {"workouts": workouts, "count": len(workouts)}
             return {"workouts": [], "count": 0}
         if tool == "tp_list_training_plans":
             return {"plans": [{"id": "p1", "name": "12 week olympic"}]}

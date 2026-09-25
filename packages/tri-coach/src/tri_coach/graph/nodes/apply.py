@@ -28,6 +28,23 @@ from tri_planning.graph.nodes.apply import apply_changes as apply_planning
 from tri_planning.planning.models import CalendarChange
 
 
+def describe(change: CalendarChange | NutritionChange) -> str:
+    """One line for a change as it was written, so the coach's history holds what the athlete
+    approved or edited, not only what was proposed."""
+    if isinstance(change, NutritionChange):
+        return f"{change.op} {change.target_key or change.day.isoformat()}: {change.reason}"
+    if change.workout is not None:
+        w = change.workout
+        return f"{change.op} {w.date} {w.sport} '{w.title}': {change.reason}"
+    target = change.tp_workout_id or ""
+    if not target and change.workout_date is not None:
+        target = change.workout_date.isoformat()
+    if change.new_date is not None:
+        target += f" -> {change.new_date.isoformat()}"
+    head = f"{change.op} {target}".rstrip()
+    return f"{head}: {change.reason}"
+
+
 def report_from_planning(r: PlanningResult) -> ApplyReport:
     return ApplyReport(
         domain="planning",
@@ -36,6 +53,7 @@ def report_from_planning(r: PlanningResult) -> ApplyReport:
         remaining=len(r.remaining),
         error=r.error,
         sessions_changed=r.sessions_changed,
+        applied_changes=[describe(c) for c in r.applied],
     )
 
 
@@ -47,6 +65,7 @@ def report_from_nutrition(r: NutritionResult) -> ApplyReport:
         remaining=len(r.remaining),
         error=r.error,
         sessions_changed=False,
+        applied_changes=[describe(c) for c in r.applied],
     )
 
 
@@ -211,7 +230,7 @@ def make_apply_node(deps: CoachDeps, planning_graph: Any) -> Any:
             "reports": reports,
             "pending": ChangeSet(narration=pending.narration, proposals=kept) if kept else None,
             "carried": [],
-            "proposals": [],  # consumed: the follow-on proposal is p1, an applied id is gone
+            "proposals": [],  # consumed: an applied id is gone; next_proposal_id keeps counting
             "review_decision": None,
             "regenerate_after_apply": regenerate,
             "brief": (

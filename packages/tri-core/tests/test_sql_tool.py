@@ -110,3 +110,21 @@ def test_make_query_tool_extra_doc_is_appended():
     extended = make_query_tool("postgresql://x/y", extra_doc="lab_panels: id, drawn_on")
     assert extended.description.endswith("lab_panels: id, drawn_on")
     assert SCHEMA_DOC in extended.description
+
+
+@pytest.mark.db
+def test_run_query_returns_numeric_as_float(url):
+    out = run_readonly_query(url, "select 1.5::numeric as x, 2::numeric as n, 40.0::numeric as ctl")
+    assert out["rows"][0] == [1.5, 2.0, 40.0]
+    assert all(isinstance(v, float) for v in out["rows"][0])
+
+
+@pytest.mark.db
+def test_run_query_cuts_a_wide_result_at_a_row_boundary(url):
+    # five 3,000-character rows: two fit under MAX_CHARS, the third would not
+    out = run_readonly_query(url, "select repeat('x', 3000) as s from generate_series(1, 5)")
+    assert out["columns"] == ["s"]
+    assert out["row_count"] == 2 and len(out["rows"]) == 2
+    assert all(row == ["x" * 3000] for row in out["rows"])  # whole rows, never a cut string
+    assert out["truncated"] is True
+    assert "narrow" in out["note"]

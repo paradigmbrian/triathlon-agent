@@ -1,4 +1,6 @@
+import asyncio
 import json
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
 import pytest
@@ -6,7 +8,7 @@ from mcp.types import TextContent
 
 from tri_core.config import Settings
 from tri_core.mcp.client import McpToolClient, McpToolError, parse_tool_text
-from tri_core.mcp.servers import GARMIN_ENABLED_TOOLS, garmin_spec, trainingpeaks_spec
+from tri_core.mcp.servers import GARMIN_ENABLED_TOOLS, ServerSpec, garmin_spec, trainingpeaks_spec
 
 
 def test_parse_json_object():
@@ -98,3 +100,77 @@ def test_garmin_spec_enabled_tools_override():
     custom = garmin_spec(s, enabled_tools=["get_body_composition", "get_nutrition_daily_settings"])
     assert custom.env["GARMIN_ENABLED_TOOLS"] == "get_body_composition,get_nutrition_daily_settings"
     assert custom.args == default.args
+
+
+async def test_a_failing_initialize_closes_the_stack_and_reraises(monkeypatch):
+    closed: list[str] = []
+
+    @asynccontextmanager
+    async def fake_stdio_client(params):
+        try:
+            yield ("read", "write")
+        finally:
+            closed.append("transport")
+
+    class FakeSession:
+        def __init__(self, read, write) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            closed.append("session")
+
+        async def initialize(self):
+            raise RuntimeError("handshake failed")
+
+    monkeypatch.setattr("tri_core.mcp.client.stdio_client", fake_stdio_client)
+    monkeypatch.setattr("tri_core.mcp.client.ClientSession", FakeSession)
+    client = McpToolClient(ServerSpec(name="fake", command="x", args=[]))
+    with pytest.raises(RuntimeError, match="handshake failed"):
+        async with client:
+            pass
+    assert closed == ["session", "transport"]
+    assert client._stack is None and client._session is None
+
+
+async def test_a_cancelled_handshake_closes_the_stack_and_stays_cancelled(monkeypatch):
+    closed: list[str] = []
+    started = asyncio.Event()
+
+    @asynccontextmanager
+    async def fake_stdio_client(params):
+        try:
+            yield ("read", "write")
+        finally:
+            closed.append("transport")
+
+    class HangingSession:
+        def __init__(self, read, write) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            closed.append("session")
+
+        async def initialize(self):
+            started.set()
+            await asyncio.Event().wait()  # a server that never answers
+
+    async def open_client(client):
+        async with client:
+            pass
+
+    monkeypatch.setattr("tri_core.mcp.client.stdio_client", fake_stdio_client)
+    monkeypatch.setattr("tri_core.mcp.client.ClientSession", HangingSession)
+    client = McpToolClient(ServerSpec(name="fake", command="x", args=[]))
+    task = asyncio.create_task(open_client(client))
+    await started.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert closed == ["session", "transport"]
+    assert client._stack is None and client._session is None

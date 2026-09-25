@@ -536,6 +536,56 @@ def test_classifier_emits_one_event_per_visible_thing():
     )
 
 
+def test_printer_labels_the_wellness_tool_by_its_run_tag():
+    out: list[str] = []
+    p = TurnPrinter(out.append)
+    tags = ["checkin", "tool:ask_wellness"]
+    # the lab interpreter's own agent streams at the root namespace, tagged by agent_tool
+    p.on_event(
+        (),
+        "messages",
+        (AIMessageChunk(content="Ferritin is 30."), {"langgraph_node": "model", "tags": tags}),
+    )
+    call = AIMessage(
+        content="",
+        tool_calls=[
+            {"name": "list_findings", "args": {"panel_id": 3}, "id": "f1", "type": "tool_call"}
+        ],
+    )
+    p.on_event((), "updates", {"model": {"messages": [call]}})
+    p.on_event(
+        (),
+        "updates",
+        {
+            "tools": {
+                "messages": [ToolMessage(content="[]", name="list_findings", tool_call_id="f1")]
+            }
+        },
+    )
+    text = "".join(out)
+    assert "[wellness] Ferritin is 30." in text
+    assert "[wellness] → list_findings" in text and "[wellness] ← list_findings" in text
+    assert "[analyst]" not in text and p.final_text == ""
+    # the next root run is the analyst's
+    p.on_event(
+        (),
+        "messages",
+        (
+            AIMessageChunk(content="CTL 45"),
+            {"langgraph_node": "model", "tags": ["checkin", "tool:ask_analyst"]},
+        ),
+    )
+    assert "[analyst] CTL 45" in "".join(out)
+
+
+def test_where_of_reads_the_agent_tool_tag():
+    assert where_of("", "model", ["tool:ask_wellness"]) == "wellness"
+    assert where_of("", "tools", ["checkin", "tool:ask_analyst"]) == "analyst"
+    assert where_of("", "model", ["checkin"]) == "analyst"
+    assert where_of("coach", "model", ["tool:ask_wellness"]) == "coach"
+    assert where_of("planning", "model", ["tool:ask_wellness"]) == "planning"
+
+
 async def test_run_turn_uses_the_given_printer():
     class Collect(TurnPrinter):
         def __init__(self) -> None:

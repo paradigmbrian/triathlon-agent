@@ -4,6 +4,7 @@ call and its result."""
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from langchain_core.messages import HumanMessage, ToolMessage
@@ -16,9 +17,22 @@ from tri_core.harness.messages import last_ai_text
 from tri_planning.prompts.adjust import BRIEF_PREFIX
 
 
+def keyed_violations(
+    out: dict[str, Any], where: Callable[[str], str]
+) -> tuple[list[str], dict[str, list[str]]]:
+    """A sub-graph run's violations: `last_error`, then one line per `pending_violations` entry
+    (`where` names its key), for the coach and the review; and the entries themselves, which
+    check-in --yes uses to leave the flagged changes out."""
+    raw: dict[str, list[str]] = out.get("pending_violations") or {}
+    keyed = {k: list(v) for k, v in raw.items() if v}
+    lines = [out["last_error"]] if out.get("last_error") else []
+    lines += [f"{where(k)}: " + "; ".join(keyed[k]) for k in sorted(keyed)]
+    return lines, keyed
+
+
 def proposal_from_planning(out: dict[str, Any], pid: str) -> Proposal:
     changes = list(out.get("pending_changes") or [])
-    violations = [out["last_error"]] if out.get("last_error") else []
+    violations, keyed = keyed_violations(out, lambda week: f"week of {week}")
     if not changes:
         return Proposal(
             id=pid,
@@ -33,6 +47,7 @@ def proposal_from_planning(out: dict[str, Any], pid: str) -> Proposal:
         summary=out.get("pending_summary") or "",
         changes=changes,
         violations=violations,
+        pending_violations=keyed,
     )
 
 
@@ -59,10 +74,12 @@ def make_planning_node(graph: Any) -> Any:
             merge_configs(config, {"tags": ["domain:planning"]}),
         )
         proposals = list(state.get("proposals") or [])
-        proposal = proposal_from_planning(out, f"p{len(proposals) + 1}")
+        n = state.get("next_proposal_id") or 1
+        proposal = proposal_from_planning(out, f"p{n}")
         return {
             "brief": None,
             "proposals": [*proposals, proposal],
+            "next_proposal_id": n + 1,
             "messages": [result_message(brief, proposal)],
         }
 

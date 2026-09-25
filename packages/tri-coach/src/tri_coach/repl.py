@@ -3,13 +3,14 @@ dialogue over both domains.
 
 Events are (namespace, mode, data). The namespace is () for the coach graph's own nodes,
 ("coach:<id>",) inside the coach sub-agent, ("planning:<id>", ...) and ("nutrition:<id>", ...)
-inside a consultation; the first segment's name is the label. ask_analyst runs its own agent
-inside a tool, which streams at the root namespace under nodes `model` and `tools`; the coach
-graph has no such nodes, so those events are the analyst's."""
+inside a consultation; the first segment's name is the label. ask_analyst and ask_wellness each
+run their own agent inside a tool, which streams at the root namespace under nodes `model` and
+`tools`; the coach graph has no such nodes, so those events are the tool's, and the `tool:ask_*`
+tag agent_tool puts on the run says which."""
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 
 import yaml
@@ -35,8 +36,10 @@ EditFn = Callable[[list[Proposal]], Awaitable[list[Proposal] | None]]
 REVIEW_PROMPT = "approve / reject <note> / edit"
 # Only a consultation's output is tagged: the coach speaks to the athlete in its own voice.
 TAGGED = frozenset({"planning", "nutrition"})
-# Nodes of the coach graph itself; any other node at the root namespace belongs to the analyst.
+# Nodes of the coach graph itself; any other node at the root namespace belongs to an agent tool.
 ROOT_NODES = frozenset({"start", "coach", "planning", "nutrition", "review", "apply"})
+# agent_tool tags each run "tool:<name>"; the coach's agent tools are ask_analyst and ask_wellness.
+TOOL_TAG_PREFIX = "tool:ask_"
 
 
 Event = tuple[str, dict[str, Any]]
@@ -46,18 +49,27 @@ def label(namespace: tuple[str, ...]) -> str:
     return namespace[0].split(":", 1)[0] if namespace else ""
 
 
-def _tag(where: str, node: str = "") -> str:
-    """The bracket label: a consultation's, the analyst's, or "" for the coach and the root."""
+def tool_speaker(tags: Sequence[str]) -> str:
+    """The agent tool a run's tags name ("analyst", "wellness"); the analyst when none does."""
+    for tag in tags:
+        if tag.startswith(TOOL_TAG_PREFIX):
+            return tag[len(TOOL_TAG_PREFIX) :]
+    return "analyst"
+
+
+def _tag(where: str, node: str = "", tags: Sequence[str] = ()) -> str:
+    """The bracket label: a consultation's, the agent tool's, or "" for the coach and the root."""
     if where in TAGGED:
         return where
     if not where and node in ("model", "tools"):
-        return "analyst"
+        return tool_speaker(tags)
     return ""
 
 
-def where_of(namespace_label: str, node: str) -> str:
-    """Who is speaking: the tag, or "coach" for the coach's own voice and the root nodes."""
-    return _tag(namespace_label, node) or "coach"
+def where_of(namespace_label: str, node: str, tags: Sequence[str] = ()) -> str:
+    """Who is speaking: the tag, or "coach" for the coach's own voice and the root nodes. `tags`
+    are the run's, from the messages stream metadata; they say which agent tool is at the root."""
+    return _tag(namespace_label, node, tags) or "coach"
 
 
 class TurnClassifier:
@@ -67,11 +79,16 @@ class TurnClassifier:
     def __init__(self) -> None:
         self.final_text = ""
         self.interrupt: dict[str, Any] | None = None
+        self._root_tags: list[str] = []  # the last root model call's tags: which agent tool
 
     def classify(self, namespace: tuple[str, ...], mode: str, data: Any) -> list[Event]:
         where = label(namespace)
         if mode == "messages":
             chunk, meta = data
+            if not where and meta.get("tags"):
+                # updates carry no tags: the root run's model and tools nodes are labelled by
+                # the tags its model call streamed with
+                self._root_tags = list(meta["tags"])
             if (
                 isinstance(chunk, AIMessageChunk | AIMessage)
                 and meta.get("langgraph_node") == "model"
@@ -80,7 +97,8 @@ class TurnClassifier:
                 if text:
                     if where == "coach":
                         self.final_text += text
-                    return [("token", {"where": where_of(where, "model"), "text": text})]
+                    who = where_of(where, "model", self._root_tags)
+                    return [("token", {"where": who, "text": text})]
             return []
         if mode != "updates" or not isinstance(data, dict):
             return []
@@ -91,7 +109,7 @@ class TurnClassifier:
         for node, payload in data.items():
             for msg in (payload or {}).get("messages", []):
                 if node == "model" and isinstance(msg, AIMessage):
-                    who = where_of(where, node)
+                    who = where_of(where, node, self._root_tags)
                     for tc in msg.tool_calls:
                         events.append(
                             ("tool_call", {"where": who, "name": tc["name"], "args": tc["args"]})
@@ -106,7 +124,7 @@ class TurnClassifier:
                         (
                             "tool_result",
                             {
-                                "where": where_of(where, node),
+                                "where": where_of(where, node, self._root_tags),
                                 "name": msg.name,
                                 "chars": len(text_of(msg)),
                             },

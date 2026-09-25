@@ -166,3 +166,45 @@ async def test_run_sync_isolates_source_failure(db, monkeypatch):
     assert repo.list_workouts_between(db, date(2026, 9, 1), date(2026, 9, 1))
     st = repo.get_sync_state(db, "garmin")
     assert st.last_status == "error" and "server down" in (st.last_error or "")
+
+
+class _DeadConn:
+    """A connection whose writes fail after the source did; connect() returns it."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def commit(self):
+        pass
+
+    def rollback(self):
+        pass
+
+
+async def test_a_failing_state_write_is_reported_with_the_source_error(monkeypatch):
+    settings = Settings(_env_file=None)
+    monkeypatch.setattr("tri_core.sync.runner.connect", lambda url: _DeadConn())
+    monkeypatch.setattr(repo, "get_sync_state", lambda conn, source: None)
+
+    def dead_write(conn, source, last, status, error):
+        raise RuntimeError("the connection is closed")
+
+    monkeypatch.setattr(repo, "set_sync_state", dead_write)
+    lines: list[str] = []
+    report = await run_sync(
+        settings,
+        since=date(2026, 8, 30),
+        sources=("garmin",),
+        log=lines.append,
+        open_garmin=_factory(_Fake({}, fail=True)),
+    )
+    assert not report.ok
+    (result,) = report.results
+    assert result.source == "garmin" and result.status == "error"
+    assert "server down" in (result.error or "") and "the connection is closed" in (
+        result.error or ""
+    )
+    assert any("could not record the error state" in line for line in lines)

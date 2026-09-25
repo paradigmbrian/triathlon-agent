@@ -126,11 +126,16 @@ async def run_sync(
                 report.results.append(SourceResult(source, "ok", rows))
                 log(f"== {source}: ok, {rows} rows")
             except Exception as exc:  # per-source isolation is the point
-                conn.rollback()
                 err = f"{type(exc).__name__}: {exc}"
                 log(f"== {source}: ERROR {err}\n{traceback.format_exc()}")
                 last = state.last_synced_date if state else start
-                repo.set_sync_state(conn, source, last, "error", err[:2000])
-                conn.commit()
+                try:
+                    conn.rollback()
+                    repo.set_sync_state(conn, source, last, "error", err[:2000])
+                    conn.commit()
+                except Exception as state_exc:  # a dead connection must not hide the source error
+                    state_err = f"{type(state_exc).__name__}: {state_exc}"
+                    log(f"== {source}: could not record the error state: {state_err}")
+                    err = f"{err}; sync_state not updated: {state_err}"
                 report.results.append(SourceResult(source, "error", 0, err))
     return report
