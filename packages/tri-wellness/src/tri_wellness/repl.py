@@ -194,11 +194,16 @@ def review_from_yaml(text: str, registry: MarkerRegistry) -> dict[str, Any]:
         raise ValueError(f"yaml: {exc}") from exc
     problems: list[str] = []
     results: list[LabResult] = []
+    seen: set[str] = set()
     for i, row in enumerate(doc.get("results") or []):
         marker = str(row.get("marker") or "")
         if marker not in registry.markers:
             problems.append(f"results[{i}]: unknown marker '{marker}'")
             continue
+        if marker in seen:
+            problems.append(f"results[{i}]: marker '{marker}' appears more than once")
+            continue
+        seen.add(marker)
         spec = registry.get(marker)
         if row.get("unit") != spec.unit:
             problems.append(

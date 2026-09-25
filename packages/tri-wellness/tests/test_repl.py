@@ -180,6 +180,14 @@ def test_yaml_parse_failure_raises_value_error():
         review_from_yaml("results: [\n  - marker: ferritin\n", reg)
 
 
+def test_yaml_with_a_repeated_marker_is_rejected_before_store():
+    reg = load_registry("male", MARKERS_PATH)
+    doc = yaml.safe_load(review_to_yaml(payload()))
+    doc["results"].append({**doc["results"][0], "value": 43.0})
+    with pytest.raises(ValueError, match=r"results\[2\]: marker 'ferritin' appears more than once"):
+        review_from_yaml(yaml.safe_dump(doc), reg)
+
+
 async def test_review_dialogue_paths():
     out = []
     # approve is blocked while a unit row remains
