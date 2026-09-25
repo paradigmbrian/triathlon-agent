@@ -139,7 +139,9 @@ def make_fuel_node(deps: GraphDeps) -> Any:
             targets = {s.target.day: s.target for s in repo.list_targets(conn, today, end)}
             stored = repo.list_fuel_plans(conn, today, max(end, ctx.event_date or end))
         by_workout = {p.tp_workout_id: p for p in stored if p.kind == "session" and p.tp_workout_id}
-        stored_race = next((p for p in stored if p.kind == "race"), None)
+        stored_race = next(
+            (p for p in stored if p.kind == "race" and p.day == ctx.event_date), None
+        )
 
         changes: list[NutritionChange] = list(state.get("pending_changes") or [])
         fuels: list[SessionFuel] = []

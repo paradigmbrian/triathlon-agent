@@ -185,6 +185,26 @@ async def test_race_update_uses_stored_note_id(ndb, mem_store, make_deps):
     assert race.target_key == "note-77"
 
 
+async def test_moved_event_date_creates_a_new_note(ndb, mem_store, make_deps):
+    model = ScriptedChatModel(
+        script=[
+            fuel_call("w1", MONDAY),
+            fuel_call("w2", TUE),
+            tool_call("RaceFuelPlan", race_plan_json(RACE)),
+        ]
+    )
+    deps, graph, h = await seeded(ndb, mem_store, make_deps, model)
+    old_day = MONDAY + timedelta(days=6)  # the race was here before the goal moved to RACE
+    rid = repo.upsert_fuel_plan(ndb, "race", old_day, None, {"note_text": "old"}, [])
+    repo.mark_fuel_written(ndb, rid, "note-77")
+    out = await graph.ainvoke({"pending_changes": []}, CFG)
+    race = next(c for c in out["pending_changes"] if c.op == "set_race_note")
+    assert race.target_key == "" and race.day == RACE  # create, not an update of note-77
+    plans = {p.day: p for p in repo.list_fuel_plans(ndb, MONDAY, RACE) if p.kind == "race"}
+    assert plans[old_day].written and plans[old_day].tp_note_id == "note-77"
+    assert plans[old_day].payload == {"note_text": "old"} and not plans[RACE].written
+
+
 async def test_session_without_workout_id_is_stored_not_written(ndb, mem_store, make_deps):
     await S.put_profile(mem_store, NutritionProfile(**PROFILE_ARGS))
     seed_goal_and_plan(
