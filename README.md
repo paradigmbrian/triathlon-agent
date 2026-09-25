@@ -43,6 +43,10 @@ Deeper context lives next to the code:
 
 ## Setup
 
+`./setup.sh` does steps 1, 2 and 6 and creates `.env` from the example (step 3): it needs uv
+and a running Docker, and is safe to re-run (each migration is skipped when already applied).
+Steps 3 (the API key), 4 and 5 stay manual. The steps it automates:
+
 1. Python 3.12 via uv, from the repository root: `uv sync` (installs every package editable
    and their console scripts into one `.venv`).
 2. Postgres (Docker, host port 5435): `docker compose up -d`, then apply the migrations to
