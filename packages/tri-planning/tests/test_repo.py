@@ -139,3 +139,18 @@ def test_fitness_snapshot(pdb):
 def test_fitness_snapshot_empty(pdb):
     snap = repo.fitness_snapshot(pdb, date(1999, 1, 1))
     assert snap.ctl is None and snap.recent_weekly_tss is None
+
+
+def test_fitness_snapshot_scales_the_days_present(pdb):
+    as_of = date(2026, 9, 14)
+    five = [
+        DailyMetricsRow(metric_date=as_of - timedelta(days=d), tss_day=70.0) for d in range(1, 6)
+    ]
+    core_repo.upsert_daily_metrics(pdb, five)
+    assert repo.fitness_snapshot(pdb, as_of).recent_weekly_tss is None
+    rest = [
+        DailyMetricsRow(metric_date=as_of - timedelta(days=d), tss_day=70.0) for d in range(6, 15)
+    ]
+    core_repo.upsert_daily_metrics(pdb, rest)
+    # 14 days of 70 is a 490 TSS week, not 14 * 70 / 4
+    assert repo.fitness_snapshot(pdb, as_of).recent_weekly_tss == pytest.approx(490)

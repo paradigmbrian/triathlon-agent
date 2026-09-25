@@ -281,8 +281,9 @@ def fitness_snapshot(conn: Conn, as_of: date) -> FitnessSnapshot:
         (as_of - timedelta(days=28), as_of - timedelta(days=1)),
     ).fetchone()
     weekly = None
-    if tss_row and tss_row["n"]:
-        weekly = float(tss_row["total"]) / 4
+    if tss_row and tss_row["n"] >= 7:
+        # scale the days that have data to a week; fewer than seven is no basis for a load
+        weekly = float(tss_row["total"]) / float(tss_row["n"]) * 7
     return FitnessSnapshot(ctl=float(ctl_row["ctl"]) if ctl_row else None, recent_weekly_tss=weekly)
 
 
