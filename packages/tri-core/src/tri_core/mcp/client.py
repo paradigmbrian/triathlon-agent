@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from contextlib import AsyncExitStack
@@ -12,6 +13,8 @@ from mcp.client.stdio import stdio_client
 from mcp.types import TextContent
 
 from tri_core.mcp.servers import ServerSpec
+
+SESSION_TIMEOUT_S = 120  # uvx cold start + Garmin login can take a while
 
 
 class McpToolError(Exception):
@@ -58,10 +61,19 @@ class McpToolClient:
             args=self.spec.args,
             env={**os.environ, **self.spec.env},
         )
+        try:
+            await asyncio.wait_for(self._open(params), timeout=SESSION_TIMEOUT_S)
+        except Exception:
+            # a failed or hung handshake must not leave the server subprocess running
+            await self.__aexit__(None, None, None)
+            raise
+        return self
+
+    async def _open(self, params: StdioServerParameters) -> None:
+        assert self._stack is not None
         read, write = await self._stack.enter_async_context(stdio_client(params))
         self._session = await self._stack.enter_async_context(ClientSession(read, write))
         await self._session.initialize()
-        return self
 
     async def __aexit__(self, *exc: object) -> None:
         if self._stack is not None:
