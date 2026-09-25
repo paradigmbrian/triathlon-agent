@@ -147,3 +147,20 @@ def test_order_is_preserved_and_flag_kept(reg):
     out = normalize(rows, reg)
     assert [r.marker for r in out.results] == ["glucose", "tsh", "alt"]
     assert out.results[0].raw.flag == "H"
+
+
+def test_dimensionless_marker_without_unit_is_canonical(reg):
+    out = normalize(
+        [
+            raw("BUN/Creatinine Ratio", "14"),
+            raw("Hematocrit", "45"),
+            raw("Ferritin", "42"),
+        ],
+        reg,
+    )
+    assert [(r.marker, r.value, r.unit, r.raw.unit, r.note) for r in out.results] == [
+        ("bun_creatinine_ratio", 14.0, "ratio", None, None),
+        ("hematocrit", 45.0, "%", None, None),
+    ]
+    [u] = out.unmapped
+    assert u.reason == "unit" and u.marker == "ferritin"  # a dimensioned marker still blocks

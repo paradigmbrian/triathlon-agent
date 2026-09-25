@@ -47,9 +47,14 @@ def _unit_key(unit: str) -> str:
     return unit.strip().lower().replace(" ", "")
 
 
+DIMENSIONLESS_UNITS: frozenset[str] = frozenset({"ratio", "%", "index", "score"})
+
+
 def _factor(spec: MarkerSpec, unit: str | None) -> float | None:
-    if unit is None:
-        return None
+    """1.0 for the canonical unit, the table's factor for a known printed unit, None otherwise.
+    A dimensionless marker printed without a unit is in its canonical unit."""
+    if unit is None or not unit.strip():
+        return 1.0 if spec.unit in DIMENSIONLESS_UNITS else None
     table = {_unit_key(spec.unit): 1.0}
     for u, f in spec.conversions.items():
         table.setdefault(_unit_key(u), f)
@@ -88,7 +93,7 @@ def normalize(raw_results: list[RawResult], registry: MarkerRegistry) -> Normali
         note: str | None = None
         if factor != 1.0:
             unit = raw.unit
-            assert unit is not None  # _factor returns None above when raw.unit is None
+            assert unit is not None  # a factor other than 1.0 comes only from a printed unit
             note = f"converted from {raw.value.strip()} {unit.strip()}"
         taken.add(spec.key)
         out.results.append(
