@@ -8,6 +8,7 @@ from tri_planning.graph.nodes.apply import ApplyResult, apply_changes, make_appl
 from tri_planning.planning.models import (
     CalendarChange,
     PlannedSession,
+    PlannedWeek,
     TrainingGoal,
     WeekTarget,
 )
@@ -54,8 +55,11 @@ def state(gid, pid, changes):
     }
 
 
-async def test_applies_all_records_rows_marks_weeks_and_activates(nocommit, make_deps):
+async def test_applies_all_records_rows_marks_designed_weeks_and_activates(nocommit, make_deps):
     gid, pid = seed(nocommit)
+    repo.set_week_designed(
+        nocommit, pid, MONDAY, PlannedWeek(week_start=MONDAY, sessions=[], coach_note="n")
+    )
     tp = FakeTp()
     node = make_apply_node(make_deps(ScriptedChatModel(script=[]), tp=tp))
     out = await node(state(gid, pid, [create(0), create(7, "Ride 2")]), CFG)
@@ -63,7 +67,8 @@ async def test_applies_all_records_rows_marks_weeks_and_activates(nocommit, make
     assert out["phase"] == "active"
     assert [c[0] for c in tp.calls] == ["tp_create_workout", "tp_create_workout"]
     assert len(repo.owned_workout_ids(nocommit, pid)) == 2
-    assert [w.written_to_tp for w in repo.list_weeks(nocommit, pid)] == [True, True]
+    # week 2 received a create but was never designed, so it is not a written plan week
+    assert [w.written_to_tp for w in repo.list_weeks(nocommit, pid)] == [True, False]
     assert "applied 2" in out["messages"][0].content
 
 
