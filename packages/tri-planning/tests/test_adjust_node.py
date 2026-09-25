@@ -8,7 +8,11 @@ from langchain_core.tools import tool
 from tri_core.testing import ScriptedChatModel, tool_call
 from tri_planning import repo
 from tri_planning.graph.nodes import adjust as adjust_node
-from tri_planning.graph.nodes.adjust import changes_from_messages, make_adjust_node
+from tri_planning.graph.nodes.adjust import (
+    changes_from_messages,
+    make_adjust_node,
+    violating_changes_from_messages,
+)
 from tri_planning.planning.models import (
     CalendarChange,
     FitnessSnapshot,
@@ -259,6 +263,20 @@ def test_changes_from_messages_keys_violations_by_week_and_drops_them_on_redesig
     assert changes_from_messages(redesigned)[2] == {}
 
 
+def test_violating_changes_are_keyed_by_the_designed_week_whatever_their_dates():
+    # The model dated the violating week's session outside its target week.
+    stray = design_result(violations=["hard sessions on consecutive days"])
+    stray["changes"][0]["workout_date"] = stray["changes"][0]["workout"]["date"] = "2026-09-28"
+    msgs = [
+        ToolMessage(content=json.dumps(stray), name="design_next_week", tool_call_id="1"),
+        design_message(week_start="2026-10-05", title="clean", call_id="2"),
+    ]
+    changes, _, _ = changes_from_messages(msgs)
+    assert violating_changes_from_messages(msgs) == {"2026-09-21": changes[:1]}
+    redesigned = [*msgs, design_message(title="second try", call_id="3")]
+    assert violating_changes_from_messages(redesigned) == {}
+
+
 async def test_design_violations_become_pending_violations(nocommit, make_deps):
     gid, pid, targets = seed(nocommit)
     bad = week_json(
@@ -282,6 +300,7 @@ async def test_design_violations_become_pending_violations(nocommit, make_deps):
     assert list(out["pending_violations"]) == ["2026-09-21"]
     assert any("consecutive" in v for v in out["pending_violations"]["2026-09-21"])
     assert len(out["pending_changes"]) == 3
+    assert out["pending_violating_changes"] == {"2026-09-21": out["pending_changes"]}
 
 
 async def test_directed_brief_ends_on_the_proposal_and_merges_the_designed_week(

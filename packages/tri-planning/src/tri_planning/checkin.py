@@ -22,12 +22,20 @@ EXIT_OK, EXIT_ERROR, EXIT_NO_PLAN, EXIT_PAUSED = 0, 1, 2, 3
 def changes_without_violations(
     payload: dict[str, Any],
 ) -> tuple[list[CalendarChange], list[str]]:
-    """The review payload's changes minus every change dated inside a week that has validator
-    violations, and those weeks (ISO Mondays, sorted). A change without a date is kept."""
+    """The review payload's changes minus every change that came from a designed week with
+    validator violations, whatever its date, and those weeks (ISO Mondays, sorted).
+
+    A payload from a checkpoint without `violating_changes` falls back to dropping the changes
+    dated inside a violating week; there a change without a date is kept."""
     violations: dict[str, list[str]] = payload.get("violations") or {}
+    changes = [CalendarChange.model_validate(x) for x in payload.get("changes", [])]
+    origin: dict[str, list[Any]] | None = payload.get("violating_changes")
+    if origin is not None:
+        dropped = [CalendarChange.model_validate(x) for week in origin for x in origin[week]]
+        return [c for c in changes if c not in dropped], sorted(violations)
     kept = [
         c
-        for c in (CalendarChange.model_validate(x) for x in payload.get("changes", []))
+        for c in changes
         if c.workout_date is None or week_monday(c.workout_date).isoformat() not in violations
     ]
     return kept, sorted(violations)

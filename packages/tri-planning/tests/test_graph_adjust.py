@@ -158,3 +158,4 @@ async def test_review_payload_carries_the_designed_weeks_violations(nocommit, ma
     payload = out["__interrupt__"][0].value
     assert list(payload["violations"]) == ["2026-09-21"]
     assert "consecutive" in payload["violations"]["2026-09-21"][0]
+    assert payload["violating_changes"] == {"2026-09-21": payload["changes"]}

@@ -28,17 +28,11 @@ def _json(msg: ToolMessage) -> dict[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
-def changes_from_messages(
+def _tool_results(
     messages: Sequence[AnyMessage],
-) -> tuple[list[CalendarChange], str | None, dict[str, list[str]]]:
-    """Changes from the last `propose_calendar_changes` result plus the last `design_next_week`
-    result per week, in week order of first appearance; the proposal's summary, or a generated
-    one when only designed weeks were added; and the validator violations of each designed
-    week that has any, keyed by week_start ISO date.
-
-    A week designed twice in one turn would otherwise be created twice, so a repeat replaces
-    the earlier result (and its violations) instead of adding to it.
-    """
+) -> tuple[dict[str, list[CalendarChange]], dict[str, list[str]], list[CalendarChange], str | None]:
+    """The last `design_next_week` changes and violations per week_start, and the last
+    `propose_calendar_changes` changes and summary."""
     designed: dict[str, list[CalendarChange]] = {}
     violations: dict[str, list[str]] = {}
     proposed: list[CalendarChange] = []
@@ -59,6 +53,21 @@ def changes_from_messages(
         elif msg.name == "propose_calendar_changes":
             proposed = changes
             summary = data.get("summary") or None
+    return designed, violations, proposed, summary
+
+
+def changes_from_messages(
+    messages: Sequence[AnyMessage],
+) -> tuple[list[CalendarChange], str | None, dict[str, list[str]]]:
+    """Changes from the last `propose_calendar_changes` result plus the last `design_next_week`
+    result per week, in week order of first appearance; the proposal's summary, or a generated
+    one when only designed weeks were added; and the validator violations of each designed
+    week that has any, keyed by week_start ISO date.
+
+    A week designed twice in one turn would otherwise be created twice, so a repeat replaces
+    the earlier result (and its violations) instead of adding to it.
+    """
+    designed, violations, proposed, summary = _tool_results(messages)
     designed_weeks = list(designed)
     all_changes = [c for week in designed_weeks for c in designed[week]] + proposed
     if summary is None and designed_weeks:
@@ -66,6 +75,17 @@ def changes_from_messages(
             "Designed week(s) " + ", ".join(designed_weeks) + " added to the calendar proposal."
         )
     return all_changes, summary, violations
+
+
+def violating_changes_from_messages(
+    messages: Sequence[AnyMessage],
+) -> dict[str, list[CalendarChange]]:
+    """The changes of each designed week that has violations, keyed like the violations.
+
+    A change's own date need not fall in its week_start's week, so check-in --yes skips a
+    violating design by these, not by date."""
+    designed, violations, _, _ = _tool_results(messages)
+    return {week: designed[week] for week in violations}
 
 
 def make_adjust_node(deps: GraphDeps) -> Any:
@@ -91,6 +111,7 @@ def make_adjust_node(deps: GraphDeps) -> Any:
                 "pending_changes": changes,
                 "pending_summary": summary,
                 "pending_violations": violations,
+                "pending_violating_changes": violating_changes_from_messages(new),
                 "changes_from": "adjust",
                 "review_decision": None,
             }
@@ -101,6 +122,7 @@ def make_adjust_node(deps: GraphDeps) -> Any:
             "pending_changes": [],
             "pending_summary": None,
             "pending_violations": {},
+            "pending_violating_changes": {},
             "changes_from": None,
             "review_decision": None,
         }
