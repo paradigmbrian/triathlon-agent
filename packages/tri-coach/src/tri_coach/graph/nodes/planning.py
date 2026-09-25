@@ -59,10 +59,12 @@ def make_planning_node(graph: Any) -> Any:
             merge_configs(config, {"tags": ["domain:planning"]}),
         )
         proposals = list(state.get("proposals") or [])
-        proposal = proposal_from_planning(out, f"p{len(proposals) + 1}")
+        n = state.get("next_proposal_id") or 1
+        proposal = proposal_from_planning(out, f"p{n}")
         return {
             "brief": None,
             "proposals": [*proposals, proposal],
+            "next_proposal_id": n + 1,
             "messages": [result_message(brief, proposal)],
         }
 

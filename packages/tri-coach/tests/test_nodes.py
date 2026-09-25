@@ -8,7 +8,7 @@ from langchain_core.messages import AIMessage
 from langgraph.errors import GraphInterrupt
 from langgraph.graph import END
 
-from tri_coach.graph.graph import after_apply
+from tri_coach.graph.graph import after_apply, start_node
 from tri_coach.graph.nodes.apply import _regeneration_due
 from tri_coach.graph.nodes.nutrition import (
     FOLLOW_ON,
@@ -157,3 +157,34 @@ async def test_consultations_carry_a_domain_tag():
     out = await node({"brief": brief, "proposals": []}, CONFIG)
     assert "domain:planning" in graph.configs[0]["tags"]
     assert out["messages"][0].id == "m1" and out["proposals"][0].question == "Which day?"
+
+
+def test_start_resets_the_proposal_counter():
+    assert start_node({})["next_proposal_id"] == 1
+
+
+async def test_proposal_ids_continue_from_the_turn_counter():
+    graph = Recorder({"pending_changes": [], "messages": [AIMessage(content="Which day?")]})
+    node = make_planning_node(graph)
+    brief = Brief(domain="planning", instruction="x", tool_call_id="c1", message_id="m1")
+    out = await node({"brief": brief, "proposals": [], "next_proposal_id": 2}, CONFIG)
+    assert out["proposals"][0].id == "p2" and out["next_proposal_id"] == 3
+
+
+async def test_the_follow_on_after_an_apply_is_not_numbered_p1_again():
+    change = {
+        "op": "set_day_targets",
+        "target_key": "2026-09-14",
+        "day": "2026-09-14",
+        "payload": {"calorie_goal": 2800},
+        "reason": "easy day",
+    }
+    graph = Recorder(
+        {"pending_changes": [change], "pending_summary": "Daily targets", "last_error": None}
+    )
+    node = make_nutrition_node(graph)
+    brief = Brief(domain="nutrition", instruction="regenerate", regenerate=True)
+    # apply consumed p1 and emptied `proposals`; the counter is what carries the numbering
+    out = await node({"brief": brief, "proposals": [], "next_proposal_id": 2}, CONFIG)
+    assert out["proposals"][0].id == "p2" and out["next_proposal_id"] == 3
+    assert "call propose_changes with p2" in out["messages"][0].content

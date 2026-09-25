@@ -45,6 +45,7 @@ def start_node(state: CoachState) -> dict[str, Any]:
         "pending": state.get("pending"),
         "brief": None,
         "proposals": [],
+        "next_proposal_id": 1,
         "proposal_request": None,
         "carried": [],
         "regenerate_after_apply": False,

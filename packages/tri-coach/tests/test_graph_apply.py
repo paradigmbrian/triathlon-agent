@@ -533,7 +533,7 @@ async def test_a_plan_change_that_moves_sessions_regenerates_nutrition_and_opens
         coach=[
             consult("planning", "Move w1."),
             propose("Move it.", ["p1"]),
-            propose("Today's targets follow the moved session.", ["p1"], "c10"),
+            propose("Today's targets follow the moved session.", ["p2"], "c10"),
         ],
         planning=[move_call(), AIMessage(content="ok")],
     )
@@ -544,7 +544,7 @@ async def test_a_plan_change_that_moves_sessions_regenerates_nutrition_and_opens
     assert [c[0] for c in tp.calls] == ["tp_update_workout"]
     second = out["__interrupt__"][0].value
     assert second["narration"].startswith("Today's targets")
-    assert [(p["id"], p["domain"]) for p in second["proposals"]] == [("p1", "nutrition")]
+    assert [(p["id"], p["domain"]) for p in second["proposals"]] == [("p2", "nutrition")]
     assert second["proposals"][0]["changes"][0]["op"] == "set_day_targets"
     assert any(
         isinstance(m, HumanMessage) and m.content.startswith("[follow-on]") for m in out["messages"]

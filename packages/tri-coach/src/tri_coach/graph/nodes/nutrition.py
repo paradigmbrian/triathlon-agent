@@ -86,7 +86,8 @@ def make_nutrition_node(graph: Any) -> Any:
         )
         cfg = merge_configs(config, {"tags": ["domain:nutrition"]})
         proposals = list(state.get("proposals") or [])
-        pid = f"p{len(proposals) + 1}"
+        n = state.get("next_proposal_id") or 1
+        pid = f"p{n}"
         if brief.regenerate:
             # apply's step is already committed; a failure here must not strand the thread
             try:
@@ -103,6 +104,7 @@ def make_nutrition_node(graph: Any) -> Any:
                 "brief": None,
                 "regenerate_after_apply": False,
                 "proposals": [*proposals, proposal],
+                "next_proposal_id": n + 1,
                 "messages": [follow_on_message(proposal)],
             }
         out = await graph.ainvoke(
@@ -112,6 +114,7 @@ def make_nutrition_node(graph: Any) -> Any:
         return {
             "brief": None,
             "proposals": [*proposals, proposal],
+            "next_proposal_id": n + 1,
             "messages": [result_message(brief, proposal)],
         }
 
