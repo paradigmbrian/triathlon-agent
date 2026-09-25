@@ -230,7 +230,7 @@ def make_apply_node(deps: CoachDeps, planning_graph: Any) -> Any:
             "reports": reports,
             "pending": ChangeSet(narration=pending.narration, proposals=kept) if kept else None,
             "carried": [],
-            "proposals": [],  # consumed: the follow-on proposal is p1, an applied id is gone
+            "proposals": [],  # consumed: an applied id is gone; next_proposal_id keeps counting
             "review_decision": None,
             "regenerate_after_apply": regenerate,
             "brief": (
