@@ -18,7 +18,12 @@ from tri_core.llm import streaming
 from tri_wellness import repo
 from tri_wellness.labs.evaluate import evaluate
 from tri_wellness.labs.training_context import load_training_context
-from tri_wellness.prompts.report import REPORT_SYSTEM, render_report_prompt
+from tri_wellness.prompts.report import (
+    DISCLAIMER,
+    REPORT_SYSTEM,
+    render_report_prompt,
+    with_disclaimer,
+)
 from tri_wellness.ranges.registry import MarkerRegistry
 from tri_wellness.repl import Out
 
@@ -104,6 +109,7 @@ async def run_report(
         has_previous=has_previous,
     )
     tags = [f"panel_id:{pid}", f"ranges_version:{registry.version}"]
+    out(f"{DISCLAIMER}\n\n")
     try:
         text = await ReportWriter(model).write(prompt, out, tags)
     except ReportTruncated as exc:
@@ -118,6 +124,7 @@ async def run_report(
     except anthropic.APIConnectionError as exc:
         out(f"\n[connection error talking to Anthropic: {exc}]\n")
         return 1
+    text = with_disclaimer(text)
     with connect() as conn:
         report_id = repo.insert_report(conn, pid, registry.version, findings, text)
         conn.commit()

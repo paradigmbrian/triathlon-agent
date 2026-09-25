@@ -15,6 +15,7 @@ from tri_core.db.repo import Conn, upsert_daily_metrics, upsert_workouts
 from tri_core.testing import ScriptedChatModel
 from tri_wellness import repo
 from tri_wellness.labs.models import LabResult, PanelContext, RawResult
+from tri_wellness.prompts.report import DISCLAIMER
 
 FIXTURES = Path(__file__).resolve().parents[2] / "tests" / "fixtures"
 
@@ -130,11 +131,8 @@ def seed_panel(
     )
 
 
-REPORT_OK = """\
-This is an educational interpretation of lab values against functional-medicine ranges for one \
-athlete, prepared for discussion with a qualified practitioner; it is not a diagnosis or a \
-prescription.
-
+# What the model writes (prompt v2: no disclaimer, no dosing). REPORT_OK is what gets stored.
+REPORT_BODY = """\
 ## Draw conditions
 Fasted, 07:30 draw. Active confounders: recent hard session (long ride, 210 TSS, the day \
 before), which raises ferritin, hs-CRP and CK for 24-72 h; weight it heavily for those three.
@@ -164,8 +162,8 @@ Red meat or heme iron three times a week, paired with vitamin C; no coffee withi
 iron-rich meals.
 
 ## Supplements
-Iron bisglycinate 25 mg every other morning for 8 weeks, target ferritin above 50; retest \
-shows it worked. Discuss with your practitioner.
+Iron bisglycinate, target ferritin above 50; a retest above 50 with hs-CRP under 1 shows it \
+worked. Form and amount are for your practitioner to set.
 
 ## Retest plan
 Ferritin, hs-CRP, CBC in 8 weeks, fasted, 48 h after the last hard session.
@@ -176,3 +174,5 @@ Ferritin, hs-CRP, CBC in 8 weeks, fasted, 48 h after the last hard session.
 ## Changes since last panel
 Ferritin 35 -> 42 (+20.0%) since 2031-01-15.
 """
+
+REPORT_OK = f"{DISCLAIMER}\n\n{REPORT_BODY}"

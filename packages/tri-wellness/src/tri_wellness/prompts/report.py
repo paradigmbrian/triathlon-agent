@@ -10,7 +10,7 @@ from tri_wellness.labs.models import Finding, PanelContext, TrainingContext
 from tri_wellness.labs.normalize import parse_value
 from tri_wellness.ranges.registry import MarkerRegistry
 
-PROMPT_VERSION = "1"  # bump when REPORT_SYSTEM or REPORT_RULES changes; names the eval experiment
+PROMPT_VERSION = "2"  # bump when REPORT_SYSTEM or REPORT_RULES changes; names the eval experiment
 
 DISCLAIMER = (
     "This is an educational interpretation of lab values against functional-medicine ranges "
@@ -44,36 +44,46 @@ Rules:
 REPORT_SYSTEM = f"""\
 You are a functional-medicine practitioner who works with one endurance athlete. You write a
 lab interpretation from findings that Python has already evaluated against a curated range
-table. You explain patterns; you do not re-judge the numbers.
+table. You explain patterns; you do not re-judge the numbers. The report is for the athlete to
+take to their practitioner: it names what to discuss, not what to take.
 
-Write markdown with exactly this structure, these level-2 headings, in this order:
-
-{DISCLAIMER}
+Write markdown with exactly this structure, these level-2 headings, in this order.
+Do not write a disclaimer or a preamble; a fixed one is placed above your text. Start with the
+first heading.
 
 ## {SECTION_TITLES[0]}
 Fasting, timing, active confounders, and how much weight each carries.
 ## {SECTION_TITLES[1]}
 One level-3 heading per system that has at least one non-optimal marker, describing what the
-pattern across its markers says; systems that are entirely optimal get one line each.
+pattern across its markers says; systems that are entirely optimal get one line each. A marker
+whose status is indeterminate is reported as the lab printed it, with what the bound rules out.
 ## {SECTION_TITLES[2]}
-At most three, ranked, with reasoning.
+At most three, ranked, with reasoning. Any marker whose conventional status is low or high
+comes first, and its item opens with "discuss with your practitioner first".
 ## {SECTION_TITLES[3]}
 Load, intensity and recovery over the coming weeks, written so it could be pasted into a
 training-plan constraint.
 ## {SECTION_TITLES[4]}
 Nutrition, sleep, stress and training changes tied to specific findings.
 ## {SECTION_TITLES[5]}
-Compound, dose range, timing, target marker, and what would show it worked. Framed for
-discussion with a practitioner.
+Per item: the compound, the marker it targets, and what a retest would show if it worked.
+No dose, no timing, no duration; those are the practitioner's call.
 ## {SECTION_TITLES[6]}
 Which markers, when, and under what draw conditions.
 ## {SECTION_TITLES[7]}
 ## {CHANGES_TITLE}
 Only when the prompt says a previous panel exists.
 
-The first line of your answer is the disclaimer above, verbatim.
-
 {REPORT_RULES}"""
+
+
+def with_disclaimer(report: str) -> str:
+    """The saved report: the fixed disclaimer, a blank line, then the model's text (minus its own
+    copy of the disclaimer, if it wrote one despite the prompt), ending in one newline."""
+    body = report.strip()
+    if body.startswith(DISCLAIMER):
+        body = body[len(DISCLAIMER) :].lstrip()
+    return f"{DISCLAIMER}\n\n{body}\n"
 
 
 def _g(v: Any) -> str:

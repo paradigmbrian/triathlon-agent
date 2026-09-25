@@ -7,15 +7,18 @@ from tri_wellness.labs.models import LabResult, PanelContext, RawResult, Trainin
 from tri_wellness.prompts.report import (
     CHANGES_TITLE,
     DISCLAIMER,
+    PROMPT_VERSION,
     REPORT_RULES,
     REPORT_SYSTEM,
     SECTION_TITLES,
     findings_block,
     format_range,
     render_report_prompt,
+    with_disclaimer,
 )
 from tri_wellness.ranges.registry import MARKERS_PATH, load_registry
 from tri_wellness.report import extract_section
+from tri_wellness.testing import REPORT_BODY, REPORT_OK
 
 D = date(2026, 8, 20)
 
@@ -71,12 +74,25 @@ def findings(reg):
 
 
 def test_system_prompt_has_structure_and_rules():
-    assert DISCLAIMER in REPORT_SYSTEM
+    assert PROMPT_VERSION == "2"
+    assert DISCLAIMER not in REPORT_SYSTEM and "Do not write a disclaimer" in REPORT_SYSTEM
     for title in SECTION_TITLES:
         assert f"## {title}" in REPORT_SYSTEM
     assert CHANGES_TITLE in REPORT_SYSTEM
     assert "pattern suggests" in REPORT_RULES and "no generic" in REPORT_RULES.lower()
     assert REPORT_RULES in REPORT_SYSTEM
+    assert 'opens with "discuss with your practitioner first"' in REPORT_SYSTEM
+    assert "No dose, no timing, no duration" in REPORT_SYSTEM
+    assert "dose range" not in REPORT_SYSTEM
+
+
+def test_with_disclaimer_prepends_once():
+    assert with_disclaimer(REPORT_BODY) == REPORT_OK
+    assert with_disclaimer(REPORT_OK) == REPORT_OK  # a model that wrote it anyway: not doubled
+    assert (
+        with_disclaimer("\n\n## Draw conditions\nx") == f"{DISCLAIMER}\n\n## Draw conditions\nx\n"
+    )
+    assert REPORT_OK.startswith(f"{DISCLAIMER}\n\n## Draw conditions")
 
 
 def test_findings_block_groups_by_system_and_never_shows_a_bare_value(reg, findings):
