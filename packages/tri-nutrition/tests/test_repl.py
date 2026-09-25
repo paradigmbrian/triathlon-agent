@@ -158,6 +158,20 @@ def test_render_fuel_and_race():
     assert "If the gut turns" in text
 
 
+async def test_chat_loop_a_bare_slash_lists_the_commands():
+    graph = StubGraph([])
+    inputs = iter(["/", "/  ", "/quit"])
+
+    async def read():
+        return next(inputs, None)
+
+    buf = []
+    await chat_loop(graph, read=read, out=buf.append)
+    text = "".join(buf)
+    assert text.count("commands: /pending, /quit\n") == 2
+    assert graph.inputs == []
+
+
 def test_split_violating_keeps_order_and_matches_notes_by_key():
     note = NutritionChange(
         op="set_session_note", target_key="w2", day=MONDAY, payload={}, reason="r"

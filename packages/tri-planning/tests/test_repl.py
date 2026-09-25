@@ -143,3 +143,17 @@ async def test_chat_loop_edit_uses_editor_callback():
     await chat_loop(graph, read=read, out=lambda s: None, edit=edit)
     resume = graph.inputs[1].resume
     assert resume["action"] == "edit" and resume["changes"][0]["reason"] == "edited"
+
+
+async def test_chat_loop_a_bare_slash_lists_the_commands():
+    graph = StubGraph([])
+    inputs = iter(["/", "/  ", "/quit"])
+
+    async def read():
+        return next(inputs, None)
+
+    buf = []
+    await chat_loop(graph, read=read, out=buf.append)
+    text = "".join(buf)
+    assert text.count("commands: /pending, /quit\n") == 2
+    assert graph.inputs == []

@@ -156,9 +156,13 @@ async def chat_loop(
         if not line:
             continue
         if line.startswith("/"):
-            name = line[1:].split()[0]
+            name = (line[1:].split() or [""])[0]
             if name == "quit":
                 return
+            if not name:
+                names = ", ".join(f"/{n}" for n in sorted(["quit", "pending", *commands]))
+                out(f"commands: {names}\n")
+                continue
             if name == "pending":
                 snap = await graph.aget_state({"configurable": {"thread_id": thread_id}})
                 changes = snap.values.get("pending_changes") or []
