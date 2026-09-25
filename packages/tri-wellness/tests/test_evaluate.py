@@ -4,6 +4,8 @@ import pytest
 
 from tri_wellness.labs.evaluate import (
     active_confounders,
+    bounded_conventional_status,
+    bounded_functional_status,
     conventional_status,
     evaluate,
     functional_status,
@@ -192,7 +194,7 @@ def test_evaluate_builds_one_finding_per_result_with_only_declared_confounders(r
     findings = evaluate(
         results,
         reg,
-        previous={"ferritin": (date(2026, 3, 1), 35.0)},
+        previous={"ferritin": (date(2026, 3, 1), 35.0, None)},
         context=PanelContext(fasting=False, draw_time=time(8, 0)),
         training=quiet_training(last_sessions=[hard]),
     )
@@ -216,7 +218,7 @@ def test_evaluate_delta_pct_rounding_and_zero_previous(reg):
     [f] = evaluate(
         [lr("ferritin", 47.0, "ng/mL")],
         reg,
-        previous={"ferritin": (D, 45.0)},
+        previous={"ferritin": (D, 45.0, None)},
         context=FASTED_AM,
         training=quiet_training(),
     )
@@ -224,7 +226,7 @@ def test_evaluate_delta_pct_rounding_and_zero_previous(reg):
     [z] = evaluate(
         [lr("hs_crp", 0.5, "mg/L")],
         reg,
-        previous={"hs_crp": (D, 0.0)},
+        previous={"hs_crp": (D, 0.0, None)},
         context=FASTED_AM,
         training=quiet_training(),
     )
@@ -264,3 +266,61 @@ def test_functional_range_collapses_the_side_direction_ignores(reg):
         training=quiet_training(),
     )
     assert fer.functional_range == (50.0, 150.0)
+
+
+# ---- bounds ---------------------------------------------------------------------------------
+
+
+def test_bounded_status_is_the_status_at_both_ends_or_indeterminate(reg):
+    tg = reg.get("tg_ab")  # conventional {high: 0.9}, functional {high: 0.9}
+    assert bounded_conventional_status(1.0, "<", 0.1, None, None, tg) == "in_range"
+    assert bounded_functional_status(1.0, "<", 0.1, tg) == "optimal"
+    egfr = reg.get("egfr")  # conventional {low: 60}
+    assert bounded_conventional_status(60.0, ">", 1.0, None, None, egfr) == "in_range"
+    fer = reg.get("ferritin")  # conventional 30-400 (male)
+    assert bounded_conventional_status(15.0, "<", 1.0, None, None, fer) == "low"
+    assert bounded_functional_status(15.0, "<", 1.0, fer) == "low"
+    assert bounded_conventional_status(50.0, "<", 1.0, 30.0, 100.0, fer) == "indeterminate"
+    assert bounded_conventional_status(42.0, None, 0.0, 30.0, 100.0, fer) == "in_range"
+
+
+def bounded(marker, text, value, unit, lab_low=None, lab_high=None) -> LabResult:
+    return LabResult(
+        marker=marker,
+        value=value,
+        unit=unit,
+        bound=text[0],
+        raw=RawResult(name=marker, value=text, unit=unit),
+        lab_ref_low=lab_low,
+        lab_ref_high=lab_high,
+    )
+
+
+def test_evaluate_carries_the_bound_and_drops_the_delta(reg):
+    [crp] = evaluate(
+        [bounded("hs_crp", "<0.3", 0.3, "mg/L")],
+        reg,
+        previous={"hs_crp": (D, 0.5, None)},
+        context=FASTED_AM,
+        training=quiet_training(),
+    )
+    assert crp.bound == "<" and crp.raw_value == "<0.3"
+    assert crp.conventional_status == "in_range" and crp.functional_status == "optimal"
+    assert crp.previous == (D, 0.5) and crp.delta_pct is None
+    [again] = evaluate(
+        [lr("hs_crp", 0.5, "mg/L")],
+        reg,
+        previous={"hs_crp": (D, 0.3, "<")},
+        context=FASTED_AM,
+        training=quiet_training(),
+    )
+    assert again.previous == (D, 0.3) and again.delta_pct is None  # bounded previous value
+    [fer] = evaluate(
+        [bounded("ferritin", "<50", 50.0, "ng/mL", 30.0, 100.0)],
+        reg,
+        previous={},
+        context=FASTED_AM,
+        training=quiet_training(),
+    )
+    assert fer.conventional_status == "indeterminate"
+    assert fer.functional_status == "indeterminate"

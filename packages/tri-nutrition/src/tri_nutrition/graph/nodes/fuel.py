@@ -35,13 +35,18 @@ from tri_nutrition.nutrition.models import (
 from tri_nutrition.nutrition.tp_calls import race_note_change, race_note_title, session_note_change
 from tri_nutrition.prompts.fuel import FUEL_SYSTEM, render_session_prompt
 from tri_nutrition.prompts.race import RACE_SYSTEM, render_race_prompt
-from tri_nutrition.repl import render_fuel, render_race
+from tri_nutrition.repl import RACE_VIOLATIONS_KEY, render_fuel, render_race
 
 LONG_SESSION_MIN = 75
 RACE_WINDOW_DAYS = 21
 
 
 def qualifies(session: Session) -> bool:
+    """Long or hard sessions get a fuel note — unless already completed: today's finished
+    workout still counts toward the day's energy target (in `targets.py`, over the same
+    `sessions` list) but gets no note proposed or written for a session that already happened."""
+    if session.completed:
+        return False
     return session.duration_min > LONG_SESSION_MIN or session.intensity in HARD_INTENSITIES
 
 
@@ -139,7 +144,9 @@ def make_fuel_node(deps: GraphDeps) -> Any:
             targets = {s.target.day: s.target for s in repo.list_targets(conn, today, end)}
             stored = repo.list_fuel_plans(conn, today, max(end, ctx.event_date or end))
         by_workout = {p.tp_workout_id: p for p in stored if p.kind == "session" and p.tp_workout_id}
-        stored_race = next((p for p in stored if p.kind == "race"), None)
+        stored_race = next(
+            (p for p in stored if p.kind == "race" and p.day == ctx.event_date), None
+        )
 
         changes: list[NutritionChange] = list(state.get("pending_changes") or [])
         fuels: list[SessionFuel] = []
@@ -163,6 +170,10 @@ def make_fuel_node(deps: GraphDeps) -> Any:
                     s.tp_workout_id,
                     plan.model_dump(mode="json"),
                     violations,
+                    # Only id-less sessions need the title in the conflict key (it's what keeps
+                    # two of them on the same day apart); an id'd session keys on tp_workout_id
+                    # alone, so a TP rename updates its row instead of adding a new one.
+                    title=s.title if s.tp_workout_id is None else None,
                 )
                 conn.commit()
             if s.tp_workout_id is None:
@@ -179,6 +190,8 @@ def make_fuel_node(deps: GraphDeps) -> Any:
             cfg = merge_configs(config, {"tags": [f"day:{ctx.event_date}", "kind:race"]})
             target = targets.get(ctx.event_date)
             plan_r, rv = await planner.race(profile, library, fuel_log, ctx, target, cfg)
+            if rv:
+                violations_by_id[RACE_VIOLATIONS_KEY] = rv
             with deps.connect() as conn:
                 repo.upsert_fuel_plan(
                     conn, "race", ctx.event_date, None, plan_r.model_dump(mode="json"), rv
@@ -199,6 +212,10 @@ def make_fuel_node(deps: GraphDeps) -> Any:
         if race_text:
             block.append(race_text)
         summary = (state.get("pending_summary") or "") + "\n\n" + "\n".join(block)
-        return {"pending_changes": changes, "pending_summary": summary.strip()}
+        return {
+            "pending_changes": changes,
+            "pending_violations": violations_by_id,
+            "pending_summary": summary.strip(),
+        }
 
     return fuel

@@ -74,12 +74,11 @@ def _carbs_per_h_violations(label: str, carbs: int, evidence: int) -> list[str]:
 
 
 def _fluid_sodium_violations(label: str, fluid: int | None, sodium: int | None) -> list[str]:
+    """0 means none planned and is valid; the bounds apply to a positive value."""
     out: list[str] = []
-    if fluid is not None and fluid > C.FUEL_FLUID_MAX_ML_PER_H:
+    if fluid and fluid > C.FUEL_FLUID_MAX_ML_PER_H:
         out.append(f"{label}: fluid {fluid} ml/h exceeds {C.FUEL_FLUID_MAX_ML_PER_H}")
-    if sodium is not None and not (
-        C.FUEL_SODIUM_MIN_MG_PER_H <= sodium <= C.FUEL_SODIUM_MAX_MG_PER_H
-    ):
+    if sodium and not (C.FUEL_SODIUM_MIN_MG_PER_H <= sodium <= C.FUEL_SODIUM_MAX_MG_PER_H):
         out.append(
             f"{label}: sodium {sodium} mg/h is outside {C.FUEL_SODIUM_MIN_MG_PER_H} to "
             f"{C.FUEL_SODIUM_MAX_MG_PER_H}"

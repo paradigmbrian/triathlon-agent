@@ -43,6 +43,8 @@ def test_session_from_workout_maps_fields_and_skips_unknown_sports():
         "tempo",
         "w1",
     )
+    assert s.completed is False
+    assert L.session_from_workout({**row, "completed": True}).completed is True
     assert L.session_from_workout({**row, "sport": "rest"}) is None
     assert L.session_from_workout({**row, "planned_duration_sec": None}) is None
 
@@ -122,6 +124,39 @@ def test_load_horizon_from_tp_calendar_when_no_designed_weeks(pdb):
     assert [s.tp_workout_id for s in sessions] == ["w1"]  # completed and out-of-window rows dropped
 
 
+def test_load_horizon_keeps_todays_completed_workout(pdb):
+    # an afternoon regenerate must not drop the session already done today and lower the target
+    seed_goal_and_plan(pdb, MONDAY, [("base", None)])
+    seed_workouts(
+        pdb,
+        [
+            {
+                "tp_workout_id": "done-today",
+                "workout_date": MONDAY,
+                "sport": "bike",
+                "planned_duration_sec": 5400,
+                "completed": True,
+            },
+            {
+                "tp_workout_id": "done-later",
+                "workout_date": MONDAY + timedelta(days=1),
+                "sport": "run",
+                "planned_duration_sec": 2400,
+                "completed": True,
+            },
+            {
+                "tp_workout_id": "w3",
+                "workout_date": MONDAY + timedelta(days=2),
+                "sport": "run",
+                "planned_duration_sec": 2400,
+            },
+        ],
+    )
+    sessions, ctx = L.load_horizon(pdb, MONDAY, 14)
+    assert ctx.source == "tp_calendar"
+    assert [s.tp_workout_id for s in sessions] == ["done-today", "w3"]
+
+
 def test_load_horizon_profile_hours_fallback(pdb):
     seed_goal_and_plan(pdb, MONDAY, [("base", None)], weekly_hours=9)
     sessions, ctx = L.load_horizon(pdb, MONDAY, 14)
@@ -150,6 +185,45 @@ def test_attach_workout_ids_matches_day_and_sport_then_title():
     kept = sessions[0].model_copy(update={"tp_workout_id": "kept"})
     assert L.attach_workout_ids([kept], rows)[0].tp_workout_id == "kept"
     assert L.attach_workout_ids(sessions, [])[0].tp_workout_id is None
+
+
+def test_attach_workout_ids_carries_completed_from_the_matched_row():
+    a = session_json(MONDAY, "bike", 90)
+    designed = {"week_start": MONDAY.isoformat(), "coach_note": "", "sessions": [a]}
+    sessions = L.sessions_from_designed(designed, MONDAY, MONDAY)
+    rows = [
+        {
+            "tp_workout_id": "w1",
+            "workout_date": MONDAY,
+            "sport": "bike",
+            "title": "bike 90",
+            "completed": True,
+        }
+    ]
+    out = L.attach_workout_ids(sessions, rows)
+    assert out[0].tp_workout_id == "w1" and out[0].completed is True
+
+
+def test_load_horizon_marks_todays_designed_session_completed(pdb):
+    # T15's ruling, for the designed-plan path: today's finished workout must not still be
+    # eligible for a fuel-note proposal.
+    seed_goal_and_plan(pdb, MONDAY, [("build", [session_json(MONDAY, "bike", 90)])])
+    seed_workouts(
+        pdb,
+        [
+            {
+                "tp_workout_id": "done-today",
+                "workout_date": MONDAY,
+                "sport": "bike",
+                "planned_duration_sec": 5400,
+                "title": "bike 90",
+                "completed": True,
+            }
+        ],
+    )
+    sessions, ctx = L.load_horizon(pdb, MONDAY, 14)
+    assert ctx.source == "plan"
+    assert [(s.tp_workout_id, s.completed) for s in sessions] == [("done-today", True)]
 
 
 def test_load_horizon_attaches_ids_and_goal_fields(pdb):

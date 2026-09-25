@@ -44,23 +44,71 @@ def macro_grams(
     return carbs, protein, fat, total, floor_hit
 
 
-def daily_deficit_kcal(profile: NutritionProfile) -> int:
-    weekly_budget = (
-        profile.max_weekly_change_pct / 100 * profile.weight_kg * C.KCAL_PER_KG_BODY_MASS
+def weekly_change_pct_needed(profile: NutritionProfile, today: date) -> float | None:
+    """Percent of body mass per week that reaches target_weight_kg by target_date; None without
+    a target weight or date, or when the date is not after today."""
+    if profile.target_weight_kg is None or profile.target_date is None:
+        return None
+    weeks = (profile.target_date - today).days / 7
+    if weeks <= 0:
+        return None
+    return abs(profile.weight_kg - profile.target_weight_kg) / profile.weight_kg * 100 / weeks
+
+
+def _needed(profile: NutritionProfile, today: date | None) -> float | None:
+    return weekly_change_pct_needed(profile, today) if today is not None else None
+
+
+def rate_capped(profile: NutritionProfile, today: date | None) -> bool:
+    """True when target_date asks for more than max_weekly_change_pct per week."""
+    needed = _needed(profile, today)
+    return needed is not None and needed > profile.max_weekly_change_pct
+
+
+def effective_weekly_change_pct(profile: NutritionProfile, today: date | None) -> float:
+    """The rate the deficit is built from: what target_date needs, capped at
+    max_weekly_change_pct; the cap alone when there is no date to work from."""
+    needed = _needed(profile, today)
+    if needed is None:
+        return profile.max_weekly_change_pct
+    return min(needed, profile.max_weekly_change_pct)
+
+
+def rate_note(profile: NutritionProfile, today: date) -> str | None:
+    """What the athlete is told when target_date asks for more than the cap allows."""
+    if profile.goal != "lose" or not rate_capped(profile, today):
+        return None
+    needed = _needed(profile, today) or 0.0
+    return (
+        f"reaching {profile.target_weight_kg} kg by {profile.target_date} needs {needed:.2f} % "
+        f"of body mass per week; the deficit is capped at {profile.max_weekly_change_pct:g} "
+        "%/week, so the target date will slip"
     )
+
+
+def daily_deficit_kcal(profile: NutritionProfile, today: date | None = None) -> int:
+    pct = effective_weekly_change_pct(profile, today)
+    weekly_budget = pct / 100 * profile.weight_kg * C.KCAL_PER_KG_BODY_MASS
     return min(C.MAX_DEFICIT_KCAL_PER_DAY, round(weekly_budget / 7))
 
 
 def goal_adjust(
-    profile: NutritionProfile, day_type: DayType, phase: Phase | None
+    profile: NutritionProfile,
+    day_type: DayType,
+    phase: Phase | None,
+    today: date | None = None,
 ) -> tuple[int, list[str]]:
-    """Signed kcal adjustment for the day and the notes explaining it. Spec §7.4."""
+    """Signed kcal adjustment for the day and the notes explaining it. Spec §7.4. With `today`
+    the deficit follows target_date; without it the cap rate is used."""
     if profile.goal == "lose":
         if day_type not in C.DEFICIT_DAY_TYPES:
             return 0, [C.NOTE_DEFICIT_PAUSED_DAY]
         if phase in DEFICIT_PAUSE_PHASES:
             return 0, [C.NOTE_DEFICIT_PAUSED_PHASE]
-        return -daily_deficit_kcal(profile), [C.NOTE_DEFICIT]
+        notes = [C.NOTE_DEFICIT]
+        if rate_capped(profile, today):
+            notes.append(C.NOTE_RATE_CAPPED)
+        return -daily_deficit_kcal(profile, today), notes
     if profile.goal == "gain_lean" and day_type in C.SURPLUS_DAY_TYPES:
         return round((C.SURPLUS_KCAL_MIN + C.SURPLUS_KCAL_MAX) / 2), [C.NOTE_SURPLUS]
     return 0, []
@@ -109,7 +157,7 @@ def build(
         dt = energy.day_type(day_sessions, day, ctx)
         phase = ctx.phases.get(energy.week_monday(day))
         s_kcal = round(sum(energy.session_kcal(s, profile, ctx.ftp_watts) for s in day_sessions))
-        adjust, adjust_notes = goal_adjust(profile, dt, phase)
+        adjust, adjust_notes = goal_adjust(profile, dt, phase, today)
         notes.extend(adjust_notes)
         carbs, protein, fat, total, floor_hit = macro_grams(
             dt, s_kcal, base_kcal + s_kcal + adjust, profile.weight_kg

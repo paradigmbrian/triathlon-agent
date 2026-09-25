@@ -9,20 +9,30 @@ from psycopg.types.json import Jsonb
 
 from tri_core.db.repo import Conn
 from tri_wellness.labs.models import (
+    Bound,
     Finding,
     LabResult,
     PanelContext,
     PanelSummary,
+    PreviousValue,
     RawResult,
     SourceKind,
     StoredPanel,
     StoredReport,
     StoredResult,
 )
+from tri_wellness.labs.normalize import parse_value
 
 
 def _f(v: Any) -> float | None:
     return None if v is None else float(v)
+
+
+def _bound_of(raw_value: str) -> Bound | None:
+    """The bound `parse_value` reads off a raw printed value, for a row stored before migration
+    006 added the `bound` column (left NULL, with no backfill)."""
+    parsed = parse_value(raw_value)
+    return parsed[1] if parsed else None
 
 
 def insert_panel(
@@ -35,13 +45,15 @@ def insert_panel(
     context: PanelContext,
     raw_extract: list[RawResult],
     results: list[LabResult],
+    source_sha: str | None = None,
 ) -> int:
     """Insert the panel and its result rows. Runs inside the caller's transaction, so a
     failing result row leaves no panel behind."""
     row = conn.execute(
         """
-        insert into lab_panels (drawn_on, lab_name, source_file, source_kind, context, raw_extract)
-        values (%s, %s, %s, %s, %s, %s) returning id
+        insert into lab_panels (drawn_on, lab_name, source_file, source_kind, context,
+            raw_extract, source_sha)
+        values (%s, %s, %s, %s, %s, %s, %s) returning id
         """,
         (
             drawn_on,
@@ -50,6 +62,7 @@ def insert_panel(
             source_kind,
             Jsonb(context.model_dump(mode="json")),
             Jsonb([r.model_dump(mode="json") for r in raw_extract]),
+            source_sha,
         ),
     ).fetchone()
     assert row is not None
@@ -59,8 +72,8 @@ def insert_panel(
             cur.execute(
                 """
                 insert into lab_results (panel_id, marker, value, unit, raw_name, raw_value,
-                    raw_unit, lab_ref_low, lab_ref_high, flag)
-                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    raw_unit, lab_ref_low, lab_ref_high, flag, bound)
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     panel_id,
@@ -73,6 +86,7 @@ def insert_panel(
                     r.lab_ref_low,
                     r.lab_ref_high,
                     r.raw.flag,
+                    r.bound,
                 ),
             )
     return panel_id
@@ -88,6 +102,7 @@ def _panel(row: dict[str, Any]) -> StoredPanel:
         context=PanelContext.model_validate(row["context"]),
         raw_extract=[RawResult.model_validate(r) for r in row["raw_extract"]],
         created_at=row["created_at"],
+        source_sha=row["source_sha"],
     )
 
 
@@ -127,6 +142,14 @@ def list_panels(conn: Conn) -> list[PanelSummary]:
     ]
 
 
+def panel_id_for_sha(conn: Conn, sha: str) -> int | None:
+    """The panel already stored from a file with these bytes, if any (lowest id)."""
+    row = conn.execute(
+        "select id from lab_panels where source_sha = %s order by id limit 1", (sha,)
+    ).fetchone()
+    return int(row["id"]) if row else None
+
+
 def find_duplicate_panels(conn: Conn, drawn_on: date, lab_name: str | None) -> list[int]:
     rows = conn.execute(
         "select id from lab_panels where drawn_on = %s and lab_name is not distinct from %s "
@@ -148,6 +171,7 @@ def _result(row: dict[str, Any]) -> StoredResult:
         lab_ref_low=_f(row["lab_ref_low"]),
         lab_ref_high=_f(row["lab_ref_high"]),
         flag=row["flag"],
+        bound=row["bound"] or _bound_of(row["raw_value"]),
     )
 
 
@@ -175,6 +199,7 @@ def lab_results_for_panel(conn: Conn, panel_id: int) -> list[LabResult]:
                     ref_high=None if s.lab_ref_high is None else str(s.lab_ref_high),
                     flag=s.flag,
                 ),
+                bound=s.bound,
                 lab_ref_low=s.lab_ref_low,
                 lab_ref_high=s.lab_ref_high,
             )
@@ -182,13 +207,13 @@ def lab_results_for_panel(conn: Conn, panel_id: int) -> list[LabResult]:
     return out
 
 
-def previous_values(conn: Conn, panel_id: int) -> dict[str, tuple[date, float]]:
-    """Per marker, the value from the most recent panel strictly earlier than this one,
-    ordered by (drawn_on, id)."""
+def previous_values(conn: Conn, panel_id: int) -> dict[str, PreviousValue]:
+    """Per marker, the value and bound from the most recent panel strictly earlier than this
+    one, ordered by (drawn_on, id)."""
     rows = conn.execute(
         """
         with me as (select drawn_on, id from lab_panels where id = %s)
-        select distinct on (r.marker) r.marker, p.drawn_on, r.value
+        select distinct on (r.marker) r.marker, p.drawn_on, r.value, r.bound, r.raw_value
         from lab_results r
         join lab_panels p on p.id = r.panel_id
         cross join me
@@ -197,7 +222,10 @@ def previous_values(conn: Conn, panel_id: int) -> dict[str, tuple[date, float]]:
         """,
         (panel_id,),
     ).fetchall()
-    return {r["marker"]: (r["drawn_on"], float(r["value"])) for r in rows}
+    return {
+        r["marker"]: (r["drawn_on"], float(r["value"]), r["bound"] or _bound_of(r["raw_value"]))
+        for r in rows
+    }
 
 
 def has_earlier_panel(conn: Conn, panel_id: int) -> bool:

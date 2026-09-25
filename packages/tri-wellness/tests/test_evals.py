@@ -15,7 +15,7 @@ from tri_wellness.evals.target import make_target, parse_inputs
 from tri_wellness.labs.evaluate import evaluate
 from tri_wellness.prompts.report import DISCLAIMER, PROMPT_VERSION
 from tri_wellness.ranges.registry import MARKERS_PATH, load_registry
-from tri_wellness.testing import REPORT_OK
+from tri_wellness.testing import REPORT_BODY, REPORT_OK
 
 
 def case(name):
@@ -50,9 +50,9 @@ def _parts(c, reg):
 async def test_target_writes_and_code_evaluators_pass_on_a_good_report():
     reg = load_registry("male", MARKERS_PATH)
     c = case("iron_after_long_ride")
-    model = ScriptedChatModel(script=[AIMessage(content=REPORT_OK)])
+    model = ScriptedChatModel(script=[AIMessage(content=REPORT_BODY)])
     out = await make_target(model, reg)(c.inputs())
-    assert out["report_md"] == REPORT_OK and model.calls == 1
+    assert out["report_md"] == REPORT_OK and model.calls == 1  # disclaimer prepended by the target
     assert {f["marker"] for f in out["findings"]} == {"ferritin", "hs_crp", "hemoglobin", "tsh"}
     assert cites_functional_ranges(c.inputs(), out) == {
         "key": "cites_functional_ranges",

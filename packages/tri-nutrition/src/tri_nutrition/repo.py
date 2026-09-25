@@ -98,12 +98,18 @@ def upsert_fuel_plan(
     tp_workout_id: str | None,
     payload: dict[str, Any],
     violations: list[str],
+    title: str | None = None,
 ) -> int:
+    """Insert or replace the plan keyed by (kind, day, workout id, title). `title` is stored in
+    the payload; it keeps two id-less sessions on one day apart (migration 006)."""
+    if title is not None:
+        payload = {**payload, "title": title}
     row = conn.execute(
         """
         insert into fuel_plans (kind, day, tp_workout_id, payload, violations, generated_at)
         values (%s, %s, %s, %s, %s, now())
-        on conflict (kind, day, coalesce(tp_workout_id, '')) do update set
+        on conflict (kind, day, coalesce(tp_workout_id, ''), coalesce((payload->>'title'), ''))
+        do update set
             payload = excluded.payload,
             violations = excluded.violations,
             written = false,

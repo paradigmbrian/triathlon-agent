@@ -27,7 +27,7 @@ Each row: what is wrong, the change, and the test that pins it. Paths are under 
 | W3 | `ranges/registry.py:94-98` strips `(...)` before lookup, so qualified labels map to the wrong marker. | `normalize_alias` keeps parenthesised words (`testosterone (free)` becomes `testosterone free`). `markers.yaml` gains the qualified aliases for testosterone free/total, cortisol AM/PM, B12 active/total, vitamin D 25-OH, and the alias collision check stays. | `test_registry.py`: `"Testosterone (Free)"` maps to `testosterone_free`, `"Cortisol (PM)"` is unmapped, and a golden list of 40 LabCorp and Quest labels resolves without collision. |
 | W4 | `_factor` (`normalize.py:38-44`) returns `None` for `unit=None`, so ratios and `%` rows block review. | When `spec.unit` is dimensionless (`ratio`, `%`, `index`, `score`), a missing raw unit means the canonical unit and `factor = 1.0`. Dimensioned markers keep the blocking reason. | `test_normalize.py`: `bun_creatinine_ratio` with no unit is accepted; ferritin with no unit still blocks. |
 | W5 | `repo.py:130-137` detects duplicates by date and lab name only; a re-download stores a twin and `previous_values` reports 0% deltas. | `lab_panels` gains `source_sha text` (migration 006). Ingest computes the sha of the file bytes and blocks with `already ingested as panel <id>` when it matches; the date-plus-lab warning stays for different bytes. | `test_repo.py` and `test_graph.py`: the same file twice blocks at review. |
-| W6 | `labs/extract/exports.py:85-91` takes the first row's date for a multi-date CSV. | Group rows by date; more than one date is a blocking review reason naming the dates, with the hint to split the file. | `test_exports.py`: a two-date CSV blocks. |
+| W6 | `labs/extract/exports.py:85-91` takes the first row's date for a multi-date CSV. | Group rows by date; more than one date refuses the file at extract, naming the dates, with the hint to split the file. | `test_exports.py`: a two-date CSV is refused. |
 | W7 | `repl.py:189-222` accepts YAML with a repeated marker; the PK raises at store and the rerun re-extracts. | `review_from_yaml` rejects duplicates with the marker name before store. | `test_repl.py`: duplicate marker is a validation error. |
 | W8 | `report.py:52-61` saves a truncated stream as a complete report. | `ReportWriter.write` reads the final chunk's `response_metadata["stop_reason"]`; `max_tokens` raises `ReportTruncated`, which `run_report` prints and does not save. | `test_report.py` with a scripted `stop_reason`. |
 | W9 | Prompt framing (`prompts/report.py:43-46, 57-58, 64-66`). | The disclaimer is prepended by `run_report`, not requested from the model. Priorities rule: any `conventional_status` of `low` or `high` leads, with "discuss with your practitioner first". Supplements rule: compound, target marker, what would show it worked; no dose, no timing. `PROMPT_VERSION = "2"`. | `test_report_prompt.py` updated; `tri-wellness eval` rerun as `report-v2` after merge (athlete-run). |
@@ -100,6 +100,7 @@ create index if not exists lab_panels_source_sha_idx on lab_panels (source_sha);
 drop index if exists fuel_plans_kind_day_workout_idx;
 create unique index if not exists fuel_plans_kind_day_workout_title_idx
   on fuel_plans (kind, day, coalesce(tp_workout_id, ''), coalesce((payload->>'title'), ''));
+alter table training_goals add column if not exists tp_plan_applied_at timestamptz;
 ```
 
 The data layer spec takes 007, the guardrails spec 008, and the hygiene spec 009 and 010.
@@ -117,4 +118,4 @@ Every row above names its test. Beyond those: the full suite, `ruff` and `mypy` 
 
 ## 6. Rollout
 
-One plan, one branch, one commit per package section (2.1 to 2.6) plus the migration. Brian runs migration 006 on both databases before merging. The order inside the plan is 2.1, 2.2, 2.3, 2.5, 2.4, 2.6 so the two evals that change are re-baselined last.
+One plan, one branch, one commit per package section (2.1 to 2.6) plus the migration. Brian runs migration 006 on both databases at merge time, not before: the old code breaks once the fuel index it drops is gone, and the new code breaks without it, so the migration and the merge land together. The order inside the plan is 2.1, 2.2, 2.3, 2.5, 2.4, 2.6 so the two evals that change are re-baselined last.

@@ -7,15 +7,18 @@ from tri_wellness.labs.models import LabResult, PanelContext, RawResult, Trainin
 from tri_wellness.prompts.report import (
     CHANGES_TITLE,
     DISCLAIMER,
+    PROMPT_VERSION,
     REPORT_RULES,
     REPORT_SYSTEM,
     SECTION_TITLES,
     findings_block,
     format_range,
     render_report_prompt,
+    with_disclaimer,
 )
 from tri_wellness.ranges.registry import MARKERS_PATH, load_registry
 from tri_wellness.report import extract_section
+from tri_wellness.testing import REPORT_BODY, REPORT_OK
 
 D = date(2026, 8, 20)
 
@@ -64,19 +67,32 @@ def findings(reg):
     return evaluate(
         results,
         reg,
-        {"ferritin": (date(2026, 3, 1), 35.0)},
+        {"ferritin": (date(2026, 3, 1), 35.0, None)},
         PanelContext(fasting=True, draw_time=time(7, 30)),
         training,
     ), training
 
 
 def test_system_prompt_has_structure_and_rules():
-    assert DISCLAIMER in REPORT_SYSTEM
+    assert PROMPT_VERSION == "2"
+    assert DISCLAIMER not in REPORT_SYSTEM and "Do not write a disclaimer" in REPORT_SYSTEM
     for title in SECTION_TITLES:
         assert f"## {title}" in REPORT_SYSTEM
     assert CHANGES_TITLE in REPORT_SYSTEM
     assert "pattern suggests" in REPORT_RULES and "no generic" in REPORT_RULES.lower()
     assert REPORT_RULES in REPORT_SYSTEM
+    assert 'opens with "discuss with your practitioner first"' in REPORT_SYSTEM
+    assert "No dose, no timing, no duration" in REPORT_SYSTEM
+    assert "dose range" not in REPORT_SYSTEM
+
+
+def test_with_disclaimer_prepends_once():
+    assert with_disclaimer(REPORT_BODY) == REPORT_OK
+    assert with_disclaimer(REPORT_OK) == REPORT_OK  # a model that wrote it anyway: not doubled
+    assert (
+        with_disclaimer("\n\n## Draw conditions\nx") == f"{DISCLAIMER}\n\n## Draw conditions\nx\n"
+    )
+    assert REPORT_OK.startswith(f"{DISCLAIMER}\n\n## Draw conditions")
 
 
 def test_findings_block_groups_by_system_and_never_shows_a_bare_value(reg, findings):
@@ -148,3 +164,45 @@ def test_format_range():
     assert format_range(None, 1.0) == "up to 1"
     assert format_range(50.0, None) == "50 or above"
     assert format_range(None, None) == "no range"
+
+
+def test_findings_block_shows_bounded_values_as_printed(reg):
+    tg = LabResult(
+        marker="tg_ab",
+        value=1.0,
+        unit="IU/mL",
+        bound="<",
+        raw=RawResult(name="Thyroglobulin Antibody", value="<1.0", unit="IU/mL"),
+    )
+    fer = LabResult(
+        marker="ferritin",
+        value=50.0,
+        unit="ng/mL",
+        bound="<",
+        raw=RawResult(name="Ferritin", value="<50", unit="ng/mL"),
+        lab_ref_low=30.0,
+        lab_ref_high=100.0,
+    )
+    fs = evaluate([tg, fer], reg, {}, PanelContext(fasting=True), TrainingContext(drawn_on=D))
+    text = findings_block(fs, reg)
+    assert "optimal: Thyroglobulin antibodies <1.0 IU/mL (up to 0.9)" in text
+    assert (
+        "- Ferritin: <50 ng/mL — indeterminate (reported as <50) "
+        "(functional 50-150; conventional indeterminate)"
+    ) in text
+
+
+def test_findings_block_shows_the_raw_unit_when_a_bounded_value_was_unit_converted(reg):
+    # insulin's canonical unit is uIU/mL; a pmol/L reading here converts, and its raw text
+    # ("<50") reads as canonical unless the raw unit is carried along.
+    insulin = LabResult(
+        marker="insulin",
+        value=7.205,
+        unit="uIU/mL",
+        bound="<",
+        raw=RawResult(name="Insulin", value="<50", unit="pmol/L"),
+    )
+    fs = evaluate([insulin], reg, {}, PanelContext(fasting=True), TrainingContext(drawn_on=D))
+    assert fs[0].functional_status == "indeterminate"
+    text = findings_block(fs, reg)
+    assert "indeterminate (reported as <50 pmol/L)" in text

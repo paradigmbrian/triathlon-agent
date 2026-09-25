@@ -79,6 +79,35 @@ def test_fuel_plans_roundtrip_and_unique(ndb):
     assert repo.delete_unwritten_fuel_plans(ndb) == 1
 
 
+def test_two_idless_sessions_on_one_day_are_two_rows(ndb):
+    idx = "select to_regclass('fuel_plans_kind_day_workout_title_idx') as t"
+    if ndb.execute(idx).fetchone()["t"] is None:
+        pytest.skip("migrations/006_fixes.sql not applied to the test database")
+    swim = repo.upsert_fuel_plan(ndb, "session", MON, None, {"note_text": "s"}, [], title="Swim")
+    bike = repo.upsert_fuel_plan(ndb, "session", MON, None, {"note_text": "b"}, [], title="Bike")
+    assert swim != bike
+    again = repo.upsert_fuel_plan(ndb, "session", MON, None, {"note_text": "s2"}, [], title="Swim")
+    assert again == swim
+    plans = repo.list_fuel_plans(ndb, MON, MON)
+    assert sorted(p.payload["title"] for p in plans) == ["Bike", "Swim"]
+    assert next(p for p in plans if p.id == swim).payload["note_text"] == "s2"
+
+
+def test_idd_session_rerun_without_title_stays_one_row(ndb):
+    """The fuel node only passes title for id-less sessions (ruling: passing it for id'd
+    sessions would key a TP rename as a new row). Confirm the conflict target stays stable
+    across re-runs when title is omitted, matching what the node does for id'd sessions."""
+    idx = "select to_regclass('fuel_plans_kind_day_workout_title_idx') as t"
+    if ndb.execute(idx).fetchone()["t"] is None:
+        pytest.skip("migrations/006_fixes.sql not applied to the test database")
+    first = repo.upsert_fuel_plan(ndb, "session", MON, "w1", {"note_text": "a"}, [])
+    again = repo.upsert_fuel_plan(ndb, "session", MON, "w1", {"note_text": "b"}, [])
+    assert again == first
+    plans = repo.list_fuel_plans(ndb, MON, MON)
+    assert len(plans) == 1
+    assert plans[0].payload["note_text"] == "b" and "title" not in plans[0].payload
+
+
 def test_changes_and_note_ownership(ndb):
     assert repo.last_change_at(ndb) is None
     day_change = NutritionChange(

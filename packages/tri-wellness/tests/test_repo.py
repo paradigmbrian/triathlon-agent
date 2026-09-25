@@ -43,6 +43,24 @@ def panel(conn, drawn_on, results, lab="Quest", extra_raw=()):
     )
 
 
+def test_source_sha_round_trips_and_finds_the_panel(wdb):
+    pid = repo.insert_panel(
+        wdb,
+        drawn_on=D1,
+        lab_name="Quest",
+        source_file="/labs/a.pdf",
+        source_kind="pdf",
+        context=CTX,
+        raw_extract=[],
+        results=[],
+        source_sha="a" * 64,
+    )
+    assert repo.get_panel(wdb, pid).source_sha == "a" * 64
+    assert repo.panel_id_for_sha(wdb, "a" * 64) == pid
+    assert repo.panel_id_for_sha(wdb, "b" * 64) is None
+    assert repo.get_panel(wdb, panel(wdb, D2, [lr("ferritin", 40.0)])).source_sha is None
+
+
 def test_insert_and_get_panel_roundtrip(wdb):
     pid = panel(
         wdb,
@@ -66,6 +84,7 @@ def test_results_roundtrip_and_lab_results_rebuild(wdb):
         0.3,
         "mg/L",
         raw=raw("hs-CRP", "<0.3", "mg/L", None, "3.0"),
+        bound="<",
         lab_ref_low=None,
         lab_ref_high=3.0,
     )
@@ -82,13 +101,15 @@ def test_results_roundtrip_and_lab_results_rebuild(wdb):
     )
     assert (f.lab_ref_low, f.lab_ref_high, f.flag) == (30.0, 400.0, None)
     c = stored[1]
-    assert (c.raw_value, c.lab_ref_low, c.lab_ref_high) == ("<0.3", None, 3.0)
+    assert (c.raw_value, c.bound, c.lab_ref_low, c.lab_ref_high) == ("<0.3", "<", None, 3.0)
+    assert f.bound is None
     rebuilt = repo.lab_results_for_panel(wdb, pid)
     assert [(r.marker, r.value, r.unit, r.lab_ref_low, r.lab_ref_high) for r in rebuilt] == [
         ("ferritin", 42.0, "ng/mL", 30.0, 400.0),
         ("hs_crp", 0.3, "mg/L", None, 3.0),
     ]
     assert rebuilt[0].raw.name == "Ferritin, Serum" and rebuilt[1].raw.value == "<0.3"
+    assert rebuilt[1].bound == "<" and rebuilt[0].bound is None
     assert rebuilt[0].note is None  # notes are not stored; the report reads the raw columns
 
 
@@ -134,8 +155,14 @@ def test_previous_values_and_marker_history(wdb):
     p2 = panel(wdb, D2, [lr("ferritin", 40.0)])
     p3 = panel(wdb, D3, [lr("ferritin", 48.0), lr("hs_crp", 0.9, "mg/L"), lr("tsh", 1.5, "mIU/L")])
     assert repo.previous_values(wdb, p1) == {}
-    assert repo.previous_values(wdb, p2) == {"ferritin": (D1, 35.0), "hs_crp": (D1, 0.5)}
-    assert repo.previous_values(wdb, p3) == {"ferritin": (D2, 40.0), "hs_crp": (D1, 0.5)}
+    assert repo.previous_values(wdb, p2) == {
+        "ferritin": (D1, 35.0, None),
+        "hs_crp": (D1, 0.5, None),
+    }
+    assert repo.previous_values(wdb, p3) == {
+        "ferritin": (D2, 40.0, None),
+        "hs_crp": (D1, 0.5, None),
+    }
     assert repo.marker_history(wdb, "ferritin") == [
         (p1, D1, 35.0, "ng/mL"),
         (p2, D2, 40.0, "ng/mL"),
@@ -148,8 +175,28 @@ def test_previous_values_and_marker_history(wdb):
 def test_previous_values_same_day_uses_lower_id(wdb):
     p1 = panel(wdb, D1, [lr("ferritin", 35.0)])
     p2 = panel(wdb, D1, [lr("ferritin", 36.0)], lab="LabCorp")
-    assert repo.previous_values(wdb, p2) == {"ferritin": (D1, 35.0)}
+    assert repo.previous_values(wdb, p2) == {"ferritin": (D1, 35.0, None)}
     assert repo.previous_values(wdb, p1) == {}
+
+
+def test_previous_values_carry_the_bound(wdb):
+    p1 = panel(wdb, D1, [lr("hs_crp", 0.3, "mg/L", bound="<")])
+    p2 = panel(wdb, D2, [lr("hs_crp", 0.5, "mg/L")])
+    assert repo.previous_values(wdb, p2) == {"hs_crp": (D1, 0.3, "<")}
+    assert repo.previous_values(wdb, p1) == {}
+
+
+def test_bound_is_inferred_from_raw_value_when_the_column_is_null(wdb):
+    """Migration 006 left `bound` NULL on rows stored before it; the raw text still carries it,
+    so a pre-migration `<1.0` row is not silently read back as the point value 1.0."""
+    tg = lr("tg_ab", 1.0, "IU/mL", raw=raw("Thyroglobulin Antibody", "<1.0", "IU/mL"))
+    p1 = panel(wdb, D1, [tg])
+    stored = repo.list_results(wdb, p1)
+    assert stored[0].bound == "<"  # inferred from raw_value, not the NULL column
+    rebuilt = repo.lab_results_for_panel(wdb, p1)
+    assert rebuilt[0].bound == "<"
+    p2 = panel(wdb, D2, [lr("tg_ab", 1.2, "IU/mL")])
+    assert repo.previous_values(wdb, p2) == {"tg_ab": (D1, 1.0, "<")}
 
 
 def test_has_earlier_panel(wdb):

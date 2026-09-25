@@ -314,7 +314,7 @@ def test_after_checkin_routes_on_either_flag():
     assert after_checkin({}) == END
 
 
-async def test_checkin_run_pauses_then_approves_on_second_run(ndb, make_deps, mem_store):
+async def test_checkin_run_pauses_and_a_later_yes_does_not_approve_it(ndb, make_deps, mem_store):
     await S.put_profile(mem_store, NutritionProfile(**PROFILE_ARGS))
     g = FakeGarmin()
     model = ScriptedChatModel(script=proposal_script({}, "extend horizon"))
@@ -324,9 +324,10 @@ async def test_checkin_run_pauses_then_approves_on_second_run(ndb, make_deps, me
     text = "".join(printed)
     assert "approve / reject" in text and "paused" in text and g.calls == []
     printed.clear()
-    assert await checkin_run(graph, thread_id="nutrition", out=printed.append, approve=True) == 0
-    assert "already waiting at review" in "".join(printed) and len(g.calls) == 1
-    assert (await graph.aget_state(CFG)).next == ()
+    # the review belongs to whoever started it: --yes must not approve it
+    assert await checkin_run(graph, thread_id="nutrition", out=printed.append, approve=True) == 3
+    assert "already waiting at review" in "".join(printed) and g.calls == []
+    assert (await graph.aget_state(CFG)).next == ("review",)
 
 
 async def test_checkin_run_returns_zero_when_nothing_proposed(ndb, make_deps, mem_store):
@@ -334,3 +335,79 @@ async def test_checkin_run_returns_zero_when_nothing_proposed(ndb, make_deps, me
     model = ScriptedChatModel(script=[AIMessage(content="Targets stand.")])
     graph = make_graph(make_deps, mem_store, model, FakeGarmin(), horizon=3)
     assert await checkin_run(graph, thread_id="nutrition", out=lambda s: None, approve=True) == 0
+
+
+async def test_checkin_run_yes_skips_violating_changes_and_exits_1(ndb, make_deps, mem_store):
+    if ndb.execute("select to_regclass('plan_weeks') as t").fetchone()["t"] is None:
+        pytest.skip("planning migrations not applied")
+    await S.put_profile(mem_store, NutritionProfile(**PROFILE_ARGS))
+    tue = MONDAY + timedelta(days=2)
+    week = [
+        session_json(MONDAY, "bike", 120, "endurance", 100),
+        session_json(tue, "run", 45, "threshold", 60),
+    ]
+    seed_goal_and_plan(ndb, MONDAY, [("build", week)])
+    seed_workouts(
+        ndb,
+        [
+            {
+                "tp_workout_id": "w1",
+                "workout_date": MONDAY,
+                "sport": "bike",
+                "planned_duration_sec": 7200,
+                "title": "bike 120",
+            },
+            {
+                "tp_workout_id": "w2",
+                "workout_date": tue,
+                "sport": "run",
+                "planned_duration_sec": 2700,
+                "title": "run 45",
+            },
+        ],
+    )
+    bad = tool_call("SessionFuel", session_fuel_json("w2", tue, products=["Mystery"]))
+    model = ScriptedChatModel(
+        script=[
+            *proposal_script({}, "extend horizon"),
+            tool_call("SessionFuel", session_fuel_json("w1", MONDAY)),
+            bad,
+            bad,  # the retry fails the same way
+        ]
+    )
+    g, tp = FakeGarmin(), FakeTp()
+    graph = build_graph(make_deps(model, garmin=g, tp=tp, horizon=7), InMemorySaver(), mem_store)
+    printed: list[str] = []
+    assert await checkin_run(graph, thread_id="nutrition", out=printed.append, approve=True) == 1
+    text = "".join(printed)
+    assert "skipped set_session_note w2" in text and "Mystery" in text
+    assert [c[0] for c in g.calls] == ["set_nutrition_daily_settings"]
+    assert [(c[0], c[1]["workout_id"]) for c in tp.calls] == [
+        ("tp_get_workout_note", "w1"),
+        ("tp_set_workout_note", "w1"),
+    ]
+    snap = await graph.aget_state(CFG)
+    assert snap.next == () and snap.values["pending_changes"] == []
+    assert snap.values["pending_violations"] == {}
+
+
+async def test_override_only_checkin_persists_the_override_and_leaves_state_clean(
+    ndb, make_deps, mem_store
+):
+    await S.put_profile(mem_store, NutritionProfile(**PROFILE_ARGS))
+    g = FakeGarmin()
+    script = [
+        *proposal_script({}, "extend horizon"),
+        *proposal_script({"scale_days_per_week": 5}, "weigh in more often"),
+    ]
+    graph = make_graph(make_deps, mem_store, ScriptedChatModel(script=script), g, horizon=3)
+    await graph.ainvoke({"messages": [HumanMessage("check in")]}, CFG)
+    await graph.ainvoke(APPROVE, CFG)  # today's target is now on Garmin
+    # scale_days_per_week changes no target, so the second proposal has no changes to review
+    out = await graph.ainvoke({"messages": [HumanMessage("check in again")]}, CFG)
+    assert "__interrupt__" not in out and len(g.calls) == 1
+    assert (await S.get_profile(mem_store)).scale_days_per_week == 5
+    assert out["profile_overrides"] is None and out["pending_changes"] == []
+    assert out["review_decision"] is None
+    assert "profile updated" in out["messages"][-1].content
+    assert (await graph.aget_state(CFG)).next == ()

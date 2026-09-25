@@ -127,6 +127,16 @@ def test_brick_without_legs_splits_by_fraction():
     assert energy.session_kcal(brick, profile(), ftp_watts=None) == pytest.approx(expected)
 
 
+def test_brick_without_legs_shares_tss_with_the_bike_leg_only():
+    brick = session(sport="brick", duration_min=150, planned_tss=180, distance_km=40)
+    bike_min = round(150 * C.BRICK_BIKE_FRACTION)
+    bike = 180 * C.BRICK_BIKE_FRACTION * 250 * C.BIKE_KCAL_PER_TSS_FTP
+    run = (150 - bike_min) / 60 * 75 * C.SPORT_KCAL_PER_KG_H["run"]["endurance"]
+    kcal = energy.session_kcal(brick, profile(), ftp_watts=250)
+    assert kcal == pytest.approx(bike + run)  # 1080 + 625
+    assert 1500 < kcal < 1800  # not the whole brick's TSS on the bike plus a 40 km run on top
+
+
 # --- day type ---
 
 

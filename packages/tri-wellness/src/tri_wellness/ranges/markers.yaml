@@ -247,7 +247,7 @@ markers:
     display: Creatine kinase (CK)
     system: metabolic
     unit: U/L
-    aliases: [ck, "creatine kinase", "creatine kinase, total", "ck, total", cpk, "creatine phosphokinase", "ck total"]
+    aliases: [ck, "creatine kinase", "creatine kinase (ck)", "creatine kinase, total", "ck, total", cpk, "creatine phosphokinase", "ck total"]
     conversions: {"IU/L": 1.0, "ukat/L": 60.0}
     conventional: {male: {low: 39, high: 308}, female: {low: 26, high: 192}}
     functional: {male: {low: 40, high: 200}, female: {low: 30, high: 150}}
@@ -475,7 +475,7 @@ markers:
     display: CO2 (bicarbonate)
     system: electrolytes
     unit: mmol/L
-    aliases: [co2, "carbon dioxide, total", "carbon dioxide", bicarbonate, "co2, total", hco3]
+    aliases: [co2, "co2 (bicarbonate)", "carbon dioxide, total", "carbon dioxide", bicarbonate, "co2, total", hco3]
     conversions: {"mEq/L": 1.0}
     conventional: {low: 20, high: 29}
     functional: {low: 25, high: 29}
@@ -778,7 +778,7 @@ markers:
     display: Vitamin D (25-OH)
     system: vitamins_minerals
     unit: ng/mL
-    aliases: [vitamin d, "vitamin d, 25-hydroxy", "25-hydroxyvitamin d", "25-oh vitamin d", "vitamin d 25-hydroxy", "25(oh)d", "vitamin d, 25-oh, total", "vit d 25-oh", "vitamin d total", "calcifediol"]
+    aliases: [vitamin d, "vitamin d (25-oh)", "vitamin d (25-hydroxy)", "vitamin d, 25-hydroxy", "25-hydroxyvitamin d", "25-oh vitamin d", "vitamin d 25-hydroxy", "25(oh)d", "vitamin d, 25-oh, total", "vit d 25-oh", "vitamin d total", "calcifediol"]
     conversions: {"nmol/L": 0.4006}
     conventional: {low: 30, high: 100}
     functional: {low: 50, high: 80}
@@ -793,7 +793,7 @@ markers:
     display: Vitamin B12
     system: vitamins_minerals
     unit: pg/mL
-    aliases: [b12, "vitamin b12", "vitamin b-12", cobalamin, "b-12", "vitamin b12, serum"]
+    aliases: [b12, "vitamin b12", "vitamin b12 (total)", "b12 (total)", "vitamin b-12", cobalamin, "b-12", "vitamin b12, serum"]
     conversions: {"pmol/L": 1.355, "ng/L": 1.0}
     conventional: {low: 232, high: 1245}
     functional: {low: 500, high: 900}
@@ -870,7 +870,7 @@ markers:
     display: Testosterone, total
     system: hormones
     unit: ng/dL
-    aliases: [testosterone, "testosterone, total", "total testosterone", "testosterone, serum", "testosterone total"]
+    aliases: [testosterone, "testosterone, total", "testosterone (total)", "total testosterone", "testosterone, serum", "testosterone total"]
     conversions: {"nmol/L": 28.84, "ng/mL": 100.0}
     conventional: {male: {low: 264, high: 916}, female: {low: 8, high: 60}}
     functional: {male: {low: 550, high: 900}, female: {low: 25, high: 50}}
@@ -888,7 +888,7 @@ markers:
     display: Testosterone, free
     system: hormones
     unit: pg/mL
-    aliases: [free testosterone, "testosterone, free", "testosterone,free (direct)", "free testosterone (direct)", "testosterone free"]
+    aliases: [free testosterone, "testosterone, free", "testosterone (free)", "testosterone,free (direct)", "free testosterone (direct)", "testosterone free"]
     conversions: {"pmol/L": 0.2884, "ng/dL": 10.0}
     conventional: {male: {low: 8.7, high: 25.1}, female: {low: 0.0, high: 4.2}}
     functional: {male: {low: 15.0, high: 25.0}, female: {low: 1.0, high: 4.0}}
@@ -917,7 +917,7 @@ markers:
     display: Cortisol (AM)
     system: hormones
     unit: ug/dL
-    aliases: [cortisol, "cortisol, am", "cortisol - am", "am cortisol", "cortisol, serum", "cortisol, total", "cortisol am", "morning cortisol"]
+    aliases: [cortisol, "cortisol, am", "cortisol (am)", "cortisol - am", "am cortisol", "cortisol, serum", "cortisol, total", "cortisol am", "morning cortisol"]
     conversions: {"µg/dL": 1.0, "nmol/L": 0.03625}
     conventional: {low: 6.2, high: 19.4}
     functional: {low: 10, high: 18}

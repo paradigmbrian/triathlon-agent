@@ -49,7 +49,9 @@ def test_qualifies_and_race_due():
     long = Session(day=MONDAY, sport="bike", duration_min=90, intensity="endurance")
     short = Session(day=MONDAY, sport="run", duration_min=40, intensity="endurance")
     hard = Session(day=MONDAY, sport="run", duration_min=40, intensity="threshold")
+    done = Session(day=MONDAY, sport="bike", duration_min=90, intensity="endurance", completed=True)
     assert qualifies(long) and qualifies(hard) and not qualifies(short)
+    assert not qualifies(done)  # already happened; no fuel note for it
     assert race_due(PlanContext(source="plan", event_date=MONDAY + timedelta(days=21)), MONDAY)
     assert not race_due(PlanContext(source="plan", event_date=MONDAY + timedelta(days=22)), MONDAY)
     assert not race_due(PlanContext(source="plan", event_date=MONDAY - timedelta(days=1)), MONDAY)
@@ -146,8 +148,10 @@ async def test_retries_once_and_keeps_violations(ndb, mem_store, make_deps):
     w2 = next(p for p in repo.list_fuel_plans(ndb, MONDAY, RACE) if p.tp_workout_id == "w2")
     assert any("Mystery" in v for v in w2.violations)
     assert "VIOLATIONS" in out["pending_summary"] and "Mystery" in out["pending_summary"]
-    # a session plan with violations is still proposed; the athlete decides at review
+    # a session plan with violations is still proposed; the athlete decides at review, and
+    # check-in --yes reads pending_violations to skip it
     assert [c.op for c in out["pending_changes"]].count("set_session_note") == 2
+    assert list(out["pending_violations"]) == ["w2"]
 
 
 async def test_unchanged_written_notes_are_not_reproposed(ndb, mem_store, make_deps):
@@ -181,6 +185,62 @@ async def test_race_update_uses_stored_note_id(ndb, mem_store, make_deps):
     out = await graph.ainvoke({"pending_changes": []}, CFG)
     race = next(c for c in out["pending_changes"] if c.op == "set_race_note")
     assert race.target_key == "note-77"
+
+
+async def test_moved_event_date_creates_a_new_note(ndb, mem_store, make_deps):
+    model = ScriptedChatModel(
+        script=[
+            fuel_call("w1", MONDAY),
+            fuel_call("w2", TUE),
+            tool_call("RaceFuelPlan", race_plan_json(RACE)),
+        ]
+    )
+    deps, graph, h = await seeded(ndb, mem_store, make_deps, model)
+    old_day = MONDAY + timedelta(days=6)  # the race was here before the goal moved to RACE
+    rid = repo.upsert_fuel_plan(ndb, "race", old_day, None, {"note_text": "old"}, [])
+    repo.mark_fuel_written(ndb, rid, "note-77")
+    out = await graph.ainvoke({"pending_changes": []}, CFG)
+    race = next(c for c in out["pending_changes"] if c.op == "set_race_note")
+    assert race.target_key == "" and race.day == RACE  # create, not an update of note-77
+    plans = {p.day: p for p in repo.list_fuel_plans(ndb, MONDAY, RACE) if p.kind == "race"}
+    assert plans[old_day].written and plans[old_day].tp_note_id == "note-77"
+    assert plans[old_day].payload == {"note_text": "old"} and not plans[RACE].written
+
+
+async def test_completed_session_gets_no_fuel_note_but_still_counts_toward_the_target(
+    ndb, mem_store, make_deps
+):
+    await S.put_profile(mem_store, NutritionProfile(**PROFILE_ARGS))
+    # no designed weeks -> sessions come from the tp_calendar path, which carries `completed`
+    seed_goal_and_plan(ndb, MONDAY, [("build", None), ("peak", None)])
+    seed_workouts(
+        ndb,
+        [
+            {
+                "tp_workout_id": "done-today",
+                "workout_date": MONDAY,
+                "sport": "bike",
+                "planned_duration_sec": 9000,  # 150 min: qualifies on duration alone
+                "completed": True,
+            },
+            {
+                "tp_workout_id": "w2",
+                "workout_date": TUE,
+                "sport": "run",
+                "planned_duration_sec": 2700,
+                "planned_if": 0.9,  # threshold: qualifies on intensity
+            },
+        ],
+    )
+    model = ScriptedChatModel(script=[fuel_call("w2", TUE)])
+    deps = make_deps(model, horizon=7)
+    h = await build_horizon(deps, mem_store)
+    out = await fuel_graph(deps, mem_store).ainvoke({"pending_changes": []}, CFG)
+    assert model.calls == 1  # the completed session never reaches the planner
+    assert [c.target_key for c in out["pending_changes"]] == ["w2"]
+    plans = {p.tp_workout_id: p for p in repo.list_fuel_plans(ndb, MONDAY, TUE)}
+    assert "done-today" not in plans and "w2" in plans  # no row stored for it either
+    assert h.targets[0].day == MONDAY and h.targets[0].day_type == "long"  # still counted
 
 
 async def test_session_without_workout_id_is_stored_not_written(ndb, mem_store, make_deps):

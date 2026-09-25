@@ -7,6 +7,8 @@ parent graph was compiled with, so the same tool objects work in chat and in tes
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
+from datetime import date
 from typing import Any
 
 from langchain_core.tools import BaseTool, StructuredTool
@@ -15,6 +17,7 @@ from pydantic import BaseModel, ValidationError
 
 from tri_nutrition import store as S
 from tri_nutrition.nutrition.models import NutritionProfile
+from tri_nutrition.nutrition.targets import rate_note
 
 DISORDERED_EATING_FLAG = "disordered_eating"
 REFERRAL_MESSAGE = (
@@ -35,7 +38,9 @@ it); meals_per_day; cooks; caffeine_mg_per_day and alcohol_drinks_per_week (null
 tracks_food; scale_days_per_week; known_sweat_rate_l_per_h (null if unknown); tested_products,
 a list of {name, form (gel | chew | drink | bar | real_food | other), carbs_g, sodium_mg,
 caffeine_mg} per serving; fuel_notes; unit_preference (metric | imperial). Returns JSON with
-saved: true, or an error explaining what to fix. Do not call it more than once per confirmation."""
+saved: true (plus rate_note when target_date needs a faster loss than max_weekly_change_pct
+allows: tell the athlete the cap applies and the date will slip), or an error explaining what
+to fix. Do not call it more than once per confirmation."""
 
 
 class NoArgs(BaseModel):
@@ -46,7 +51,7 @@ def _error_json(exc: ValidationError) -> str:
     return json.dumps({"error": str(exc)})
 
 
-def make_profile_tools() -> list[BaseTool]:
+def make_profile_tools(today: Callable[[], date] = date.today) -> list[BaseTool]:
     async def save_nutrition_profile(**kwargs: Any) -> str:
         try:
             profile = NutritionProfile(**kwargs)
@@ -55,7 +60,15 @@ def make_profile_tools() -> list[BaseTool]:
         if profile.goal == "lose" and DISORDERED_EATING_FLAG in profile.medical_flags:
             return json.dumps({"error": REFERRAL_MESSAGE})
         await S.put_profile(get_store(), profile)
-        return json.dumps({"saved": True, "weight_kg": profile.weight_kg, "goal": profile.goal})
+        result: dict[str, Any] = {
+            "saved": True,
+            "weight_kg": profile.weight_kg,
+            "goal": profile.goal,
+        }
+        note = rate_note(profile, today())
+        if note is not None:
+            result["rate_note"] = note  # the intake agent relays it; the cap wins in the targets
+        return json.dumps(result)
 
     async def read_nutrition_profile() -> str:
         """The athlete's saved nutrition profile as JSON, or {"profile": null} before intake."""

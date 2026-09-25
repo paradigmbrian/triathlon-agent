@@ -40,6 +40,7 @@ def session_from_workout(row: dict[str, Any]) -> Session | None:
         title=row.get("title") or "",
         planned_tss=float(row["planned_tss"]) if row.get("planned_tss") is not None else None,
         distance_km=float(dist) / 1000 if dist else None,
+        completed=bool(row.get("completed", False)),
     )
 
 
@@ -87,13 +88,14 @@ def attach_workout_ids(sessions: list[Session], rows: list[dict[str, Any]]) -> l
             continue
         wid = str(pool[0]["tp_workout_id"])
         used.add(wid)
-        out.append(s.model_copy(update={"tp_workout_id": wid}))
+        completed = bool(pool[0].get("completed", False))
+        out.append(s.model_copy(update={"tp_workout_id": wid, "completed": completed}))
     return out
 
 
 def _workouts_between(conn: Conn, start: date, end: date) -> list[dict[str, Any]]:
     return conn.execute(
-        "select tp_workout_id, workout_date, sport, title from workouts "
+        "select tp_workout_id, workout_date, sport, title, completed from workouts "
         "where workout_date between %s and %s order by workout_date, tp_workout_id",
         (start, end),
     ).fetchall()
@@ -117,11 +119,15 @@ def _active_plan_weeks(conn: Conn, goal_id: int) -> list[dict[str, Any]]:
 
 
 def _planned_workouts(conn: Conn, start: date, end: date) -> list[dict[str, Any]]:
+    """Workouts in [start, end]. A completed one is dropped unless it is dated `start` (today):
+    an afternoon regenerate must not lower today's target. `completed` rides along on the row so
+    `session_from_workout` can mark today's Session, which keeps it out of the fuel node."""
     return conn.execute(
         "select tp_workout_id, workout_date, sport, title, planned_duration_sec, "
-        "planned_distance_m, planned_tss, planned_if from workouts "
-        "where not completed and workout_date between %s and %s order by workout_date",
-        (start, end),
+        "planned_distance_m, planned_tss, planned_if, completed from workouts "
+        "where (not completed or workout_date = %s) and workout_date between %s and %s "
+        "order by workout_date",
+        (start, start, end),
     ).fetchall()
 
 

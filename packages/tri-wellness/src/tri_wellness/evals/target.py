@@ -10,8 +10,8 @@ from typing import Any
 from langchain_core.language_models import BaseChatModel
 
 from tri_wellness.labs.evaluate import evaluate
-from tri_wellness.labs.models import LabResult, PanelContext, TrainingContext
-from tri_wellness.prompts.report import render_report_prompt
+from tri_wellness.labs.models import LabResult, PanelContext, PreviousValue, TrainingContext
+from tri_wellness.prompts.report import render_report_prompt, with_disclaimer
 from tri_wellness.ranges.registry import MarkerRegistry
 from tri_wellness.report import ReportWriter
 
@@ -22,12 +22,12 @@ def parse_inputs(
     list[LabResult],
     PanelContext,
     TrainingContext,
-    dict[str, tuple[date, float]],
+    dict[str, PreviousValue],
     dict[str, Any] | None,
 ]:
-    previous = {
-        m: (date.fromisoformat(str(d)), float(v))
-        for m, (d, v) in (inputs.get("previous") or {}).items()
+    previous: dict[str, PreviousValue] = {
+        m: (date.fromisoformat(str(d)), float(v), (b[0] if b else None))
+        for m, (d, v, *b) in (inputs.get("previous") or {}).items()
     }
     return (
         [LabResult.model_validate(r) for r in inputs["results"]],
@@ -47,7 +47,10 @@ async def run_case(
         findings, context, training, None, profile, registry, has_previous=bool(previous)
     )
     text = await writer.write(prompt, lambda _s: None, ["eval"])
-    return {"report_md": text, "findings": [f.model_dump(mode="json") for f in findings]}
+    return {
+        "report_md": with_disclaimer(text),
+        "findings": [f.model_dump(mode="json") for f in findings],
+    }
 
 
 def make_target(

@@ -86,15 +86,15 @@ class MarkerSpec(BaseModel):
     sources: list[str]
 
 
-_PAREN = re.compile(r"\([^)]*\)")
 _NON_ALNUM = re.compile(r"[^a-z0-9\s]")
 _WS = re.compile(r"\s+")
 
 
 def normalize_alias(name: str) -> str:
-    """Lowercase, drop parenthesized qualifiers, turn punctuation into spaces, collapse spaces."""
-    s = _PAREN.sub(" ", name.lower())
-    s = _NON_ALNUM.sub(" ", s)
+    """Lowercase, turn punctuation (parentheses included) into spaces, collapse spaces. A
+    parenthesised qualifier stays: 'Testosterone (Free)' -> 'testosterone free', so a qualified
+    label maps only when the table lists it."""
+    s = _NON_ALNUM.sub(" ", name.lower())
     return _WS.sub(" ", s).strip()
 
 

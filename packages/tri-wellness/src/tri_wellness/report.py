@@ -18,7 +18,12 @@ from tri_core.llm import streaming
 from tri_wellness import repo
 from tri_wellness.labs.evaluate import evaluate
 from tri_wellness.labs.training_context import load_training_context
-from tri_wellness.prompts.report import REPORT_SYSTEM, render_report_prompt
+from tri_wellness.prompts.report import (
+    DISCLAIMER,
+    REPORT_SYSTEM,
+    render_report_prompt,
+    with_disclaimer,
+)
 from tri_wellness.ranges.registry import MarkerRegistry
 from tri_wellness.repl import Out
 
@@ -43,6 +48,10 @@ def athlete_profile(conn: Conn) -> dict[str, Any] | None:
     ).fetchone()
 
 
+class ReportTruncated(Exception):
+    """The stream stopped at the model's output limit; the text is not a whole report."""
+
+
 class ReportWriter:
     """One streaming call. Shared by the command and the evaluation target."""
 
@@ -51,6 +60,7 @@ class ReportWriter:
 
     async def write(self, prompt: str, out: Out, tags: list[str]) -> str:
         parts: list[str] = []
+        stop_reason: str | None = None
         async for chunk in streaming(self.model).astream(
             [SystemMessage(REPORT_SYSTEM), HumanMessage(prompt)], config={"tags": tags}
         ):
@@ -58,6 +68,9 @@ class ReportWriter:
             if text:
                 out(text)
                 parts.append(text)
+            stop_reason = chunk.response_metadata.get("stop_reason") or stop_reason
+        if stop_reason == "max_tokens":
+            raise ReportTruncated("the report hit the output limit (stop_reason max_tokens)")
         return "".join(parts)
 
 
@@ -96,8 +109,12 @@ async def run_report(
         has_previous=has_previous,
     )
     tags = [f"panel_id:{pid}", f"ranges_version:{registry.version}"]
+    out(f"{DISCLAIMER}\n\n")
     try:
         text = await ReportWriter(model).write(prompt, out, tags)
+    except ReportTruncated as exc:
+        out(f"\n[{exc}; not saved. Rerun.]\n")
+        return 1
     except anthropic.RateLimitError as exc:
         out(f"\n[rate limited: {exc}. Wait a moment and rerun.]\n")
         return 1
@@ -107,6 +124,7 @@ async def run_report(
     except anthropic.APIConnectionError as exc:
         out(f"\n[connection error talking to Anthropic: {exc}]\n")
         return 1
+    text = with_disclaimer(text)
     with connect() as conn:
         report_id = repo.insert_report(conn, pid, registry.version, findings, text)
         conn.commit()

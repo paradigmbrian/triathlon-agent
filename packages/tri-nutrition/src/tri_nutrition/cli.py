@@ -277,7 +277,8 @@ def check_in(
     no_live: bool = typer.Option(False, "--no-live", help="Do not start the MCP servers"),
 ) -> None:
     """Sync, run the check-in on the nutrition thread, and pause at review (exit code 3) or
-    approve with --yes."""
+    approve with --yes. Under --yes a change that failed validation is skipped and printed
+    (exit code 1); a review left by an earlier run is shown, not approved (exit code 3)."""
     raise typer.Exit(code=asyncio.run(_check_in(yes=yes, no_sync=no_sync, no_live=no_live)))
 
 

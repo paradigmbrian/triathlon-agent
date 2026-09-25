@@ -29,6 +29,10 @@ LAB_COLS = ("lab", "lab_name", "laboratory")
 MAX_FALLBACK_CHARS = 200_000
 
 
+class ExportError(ValueError):
+    """The file parsed but cannot be one panel. The message says what to do."""
+
+
 def _norm(h: str) -> str:
     return h.strip().lower()
 
@@ -68,7 +72,7 @@ def parse_generic_csv(text: str, delimiter: str = ",") -> ExtractedPanel:
     unit, low, high = _col(header, UNIT_COLS), _col(header, LOW_COLS), _col(header, HIGH_COLS)
     flag, dcol, lcol = _col(header, FLAG_COLS), _col(header, DATE_COLS), _col(header, LAB_COLS)
     results: list[RawResult] = []
-    drawn_on: date | None = None
+    dates: list[date] = []  # distinct draw dates across the rows, in file order
     lab_name: str | None = None
     for row in reader:
         n, v = _cell(row, name), _cell(row, value)
@@ -84,14 +88,22 @@ def parse_generic_csv(text: str, delimiter: str = ",") -> ExtractedPanel:
                 flag=_cell(row, flag),
             )
         )
-        if drawn_on is None and (d := _cell(row, dcol)):
+        if d := _cell(row, dcol):
             try:
-                drawn_on = date.fromisoformat(d[:10])
+                parsed = date.fromisoformat(d[:10])
             except ValueError:
-                drawn_on = None
+                parsed = None
+            if parsed is not None and parsed not in dates:
+                dates.append(parsed)
         if lab_name is None:
             lab_name = _cell(row, lcol)
-    return ExtractedPanel(drawn_on=drawn_on, lab_name=lab_name, results=results)
+    if len(dates) > 1:
+        listed = ", ".join(d.isoformat() for d in dates)
+        raise ExportError(
+            f"rows carry {len(dates)} draw dates ({listed}); split the file by date and ingest "
+            "each part"
+        )
+    return ExtractedPanel(drawn_on=dates[0] if dates else None, lab_name=lab_name, results=results)
 
 
 def parse_export(path: Path) -> ExtractedPanel | None:

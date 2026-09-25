@@ -101,6 +101,7 @@ class Session(BaseModel):
     planned_tss: float | None = None
     distance_km: float | None = None
     legs: list[Session] | None = None  # bricks only; None means split by BRICK_BIKE_FRACTION
+    completed: bool = False  # only set from `workouts`; designed-plan sessions default False
 
     @property
     def hours(self) -> float:

@@ -23,6 +23,7 @@ def make_store_node(deps: GraphDeps) -> Any:
                 context=context,
                 raw_extract=list(state.get("raw_results") or []),
                 results=list(state.get("results") or []),
+                source_sha=state.get("source_sha"),
             )
             conn.commit()
         return {"panel_id": panel_id, "last_error": None}

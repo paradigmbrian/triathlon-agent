@@ -143,7 +143,7 @@ uv run python scripts/spike_mcp.py   # re-record packages/tri-core/tests/fixture
 ```
 pyproject.toml          workspace root: members, shared ruff/mypy/pytest config
 conftest.py             pytest options and the shared `db` fixture plugin
-migrations/             001_initial.sql (sync tables), 002_planning.sql and 003_rename_skeleton_to_targets.sql (planning tables), 004_nutrition.sql (nutrition tables), 005_wellness.sql (lab tables)
+migrations/             001_initial.sql (sync tables), 002_planning.sql and 003_rename_skeleton_to_targets.sql (planning tables), 004_nutrition.sql (nutrition tables), 005_wellness.sql (lab tables), 006_fixes.sql (2026-09-24 correctness fixes)
 packages/tri-core/      src/tri_core/{config,cli,mcp,db,sync,testing}
 packages/tri-analyze/   src/tri_analyze/{config,cli,llm,agent,repo,repl,testing,allowlist,prompts,tools,evals}
 packages/tri-planning/  src/tri_planning/{config,cli,repo,repl,testing,planning,graph,tools,prompts}
