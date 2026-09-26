@@ -8,6 +8,7 @@ from typing import Any
 from psycopg.types.json import Jsonb
 
 from tri_core.db.repo import Conn
+from tri_core.db.writes import pending_rows
 from tri_planning.planning.models import (
     CalendarChange,
     FitnessSnapshot,
@@ -234,10 +235,56 @@ def insert_change(
     return int(row["id"])
 
 
+def insert_pending_change(
+    conn: Conn, plan_id: int | None, thread_id: str, change: CalendarChange
+) -> int:
+    """The row for a TrainingPeaks call about to be made; `mark_change_applied` settles it."""
+    row = conn.execute(
+        """
+        insert into plan_changes (plan_id, thread_id, operation, tp_workout_id, workout_date,
+            payload, reason, status)
+        values (%s, %s, %s, %s, %s, %s, %s, 'pending') returning id
+        """,
+        (
+            plan_id,
+            thread_id,
+            change.op,
+            change.tp_workout_id,
+            change.workout_date,
+            Jsonb(change.model_dump(mode="json")),
+            change.reason,
+        ),
+    ).fetchone()
+    assert row is not None
+    return int(row["id"])
+
+
+def mark_change_applied(
+    conn: Conn, row_id: int, *, tp_workout_id: str | None, result: dict[str, Any] | None
+) -> None:
+    conn.execute(
+        "update plan_changes set status = 'applied', tp_workout_id = %s, result = %s, "
+        "applied_at = now(), error = null where id = %s",
+        (tp_workout_id, Jsonb(result) if result is not None else None, row_id),
+    )
+
+
+def pending_changes(conn: Conn) -> list[dict[str, Any]]:
+    return pending_rows(conn, "plan_changes")
+
+
+def recorded_create_ids(conn: Conn) -> set[str]:
+    rows = conn.execute(
+        "select tp_workout_id from plan_changes where status = 'applied' "
+        "and operation in ('create', 'apply_plan') and tp_workout_id is not null"
+    ).fetchall()
+    return {r["tp_workout_id"] for r in rows}
+
+
 def owned_workout_ids(conn: Conn, plan_id: int) -> set[str]:
     rows = conn.execute(
         "select operation, tp_workout_id from plan_changes "
-        "where plan_id = %s and tp_workout_id is not null",
+        "where plan_id = %s and tp_workout_id is not null and status = 'applied'",
         (plan_id,),
     ).fetchall()
     created = {r["tp_workout_id"] for r in rows if r["operation"] in ("create", "apply_plan")}
@@ -297,7 +344,8 @@ def athlete_thresholds(conn: Conn) -> dict[str, Any] | None:
 def owned_workouts(conn: Conn, plan_id: int) -> list[dict[str, Any]]:
     rows = conn.execute(
         "select operation, tp_workout_id, workout_date, payload from plan_changes "
-        "where plan_id = %s and tp_workout_id is not null order by applied_at, id",
+        "where plan_id = %s and tp_workout_id is not null and status = 'applied' "
+        "order by applied_at, id",
         (plan_id,),
     ).fetchall()
     deleted = {r["tp_workout_id"] for r in rows if r["operation"] == "delete"}

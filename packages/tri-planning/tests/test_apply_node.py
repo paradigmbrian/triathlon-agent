@@ -80,10 +80,11 @@ async def test_mid_batch_failure_keeps_remainder_pending(nocommit, make_deps):
     assert [c.workout.title for c in out["pending_changes"]] == ["B", "C"]
     assert "boom" in out["last_error"] and "phase" not in out
     assert len(repo.owned_workout_ids(nocommit, pid)) == 1
-    row = nocommit.execute(
-        "select count(*) as n from plan_changes where plan_id = %s", (pid,)
-    ).fetchone()
-    assert row["n"] == 1
+    rows = nocommit.execute(
+        "select status, error from plan_changes where plan_id = %s order by id", (pid,)
+    ).fetchall()
+    assert [r["status"] for r in rows] == ["applied", "failed"]
+    assert "boom" in rows[1]["error"]
 
 
 async def test_ownership_refusal_unless_athlete_requested(nocommit, make_deps):
@@ -166,3 +167,109 @@ async def test_apply_changes_direct_stops_at_failure(nocommit, make_deps):
     assert [c.workout.title for c in r.applied] == ["Ride"]
     assert [c.workout.title for c in r.remaining] == ["B", "C"]
     assert r.sessions_changed is True and "boom" in r.error
+
+
+def _backdate(conn, row_id):
+    conn.execute(
+        "update plan_changes set applied_at = now() - interval '5 minutes' where id = %s", (row_id,)
+    )
+
+
+def _listing(*items):
+    return {"tp_get_workouts": {"workouts": list(items), "count": len(items)}}
+
+
+def _listed(wid, title="Ride", sport="Bike", day=MONDAY):
+    return {"id": wid, "date": day.isoformat(), "title": title, "sport": sport}
+
+
+def _status(conn, row_id):
+    return conn.execute(
+        "select status, error, tp_workout_id from plan_changes where id = %s", (row_id,)
+    ).fetchone()
+
+
+async def test_a_pending_create_found_on_tp_is_recorded_as_applied(nocommit, make_deps):
+    gid, pid = seed(nocommit)
+    rid = repo.insert_pending_change(nocommit, pid, "t", create(0))
+    _backdate(nocommit, rid)
+    tp = FakeTp(responses=_listing(_listed("555")))
+    r = await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp), [], "t", plan_id=pid, goal_id=gid
+    )
+    assert tp.calls == [
+        (
+            "tp_get_workouts",
+            {"start_date": "2026-09-14", "end_date": "2026-09-14", "workout_filter": "all"},
+        )
+    ]
+    assert _status(nocommit, rid)["status"] == "applied"
+    assert repo.owned_workout_ids(nocommit, pid) == {"555"}
+    assert "reconciled: create" in r.report(0) and "recorded as applied" in r.report(0)
+
+
+async def test_a_pending_create_missing_on_tp_is_failed(nocommit, make_deps):
+    gid, pid = seed(nocommit)
+    rid = repo.insert_pending_change(nocommit, pid, "t", create(0))
+    _backdate(nocommit, rid)
+    tp = FakeTp(responses=_listing(_listed("555", title="Something else")))
+    r = await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp), [], "t", plan_id=pid, goal_id=gid
+    )
+    row = _status(nocommit, rid)
+    assert (
+        row["status"] == "failed"
+        and row["error"] == "not found on TrainingPeaks after a pending write"
+    )
+    assert repo.owned_workout_ids(nocommit, pid) == set()
+    assert "not found on TrainingPeaks" in r.report(0)
+
+
+async def test_an_ambiguous_pending_create_is_failed(nocommit, make_deps):
+    gid, pid = seed(nocommit)
+    rid = repo.insert_pending_change(nocommit, pid, "t", create(0))
+    _backdate(nocommit, rid)
+    tp = FakeTp(responses=_listing(_listed("555"), _listed("athletes-own")))
+    await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp), [], "t", plan_id=pid, goal_id=gid
+    )
+    row = _status(nocommit, rid)
+    assert row["status"] == "failed" and "more than one" in row["error"]
+    assert repo.owned_workout_ids(nocommit, pid) == set()
+
+
+async def test_a_young_pending_row_is_left_alone(nocommit, make_deps):
+    gid, pid = seed(nocommit)
+    rid = repo.insert_pending_change(nocommit, pid, "t", create(0))
+    tp = FakeTp(responses=_listing(_listed("555")))
+    await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp), [], "t", plan_id=pid, goal_id=gid
+    )
+    assert tp.calls == [] and _status(nocommit, rid)["status"] == "pending"
+
+
+async def test_unreachable_tp_leaves_rows_pending_and_the_apply_goes_on(nocommit, make_deps):
+    gid, pid = seed(nocommit)
+    rid = repo.insert_pending_change(nocommit, pid, "t", create(0))
+    _backdate(nocommit, rid)
+    tp = FakeTp(fail_on_call=1)
+    r = await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp),
+        [create(1, "New")],
+        "t",
+        plan_id=pid,
+        goal_id=gid,
+    )
+    assert _status(nocommit, rid)["status"] == "pending"
+    assert [c[0] for c in tp.calls] == ["tp_get_workouts", "tp_create_workout"]
+    assert [c.workout.title for c in r.applied] == ["New"]
+    assert "left pending" in r.report(1)
+
+
+async def test_ownership_counts_applied_rows_only(nocommit, make_deps):
+    gid, pid = seed(nocommit)
+    repo.insert_change(nocommit, pid, "t", create(0), tp_workout_id="w1", result={})
+    drop = CalendarChange(op="delete", tp_workout_id="w1", workout_date=MONDAY, reason="drop")
+    repo.insert_pending_change(nocommit, pid, "t", drop)
+    assert repo.owned_workout_ids(nocommit, pid) == {"w1"}
+    assert [w["tp_workout_id"] for w in repo.owned_workouts(nocommit, pid)] == ["w1"]
