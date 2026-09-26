@@ -4,6 +4,7 @@ import psycopg
 import pytest
 from langgraph.graph import END, START, StateGraph
 
+from tri_core.mcp.client import McpToolError
 from tri_core.testing import ScriptedChatModel
 from tri_nutrition import repo
 from tri_nutrition import store as S
@@ -103,11 +104,12 @@ async def test_garmin_failure_keeps_change_pending(ndb, make_deps, mem_store):
     out = await apply_graph(make_deps, mem_store, g).ainvoke(
         state([day_target_change(target())]), CFG
     )
-    assert [c.day for c in out["pending_changes"]] == [MONDAY]
-    assert "boom" in out["last_error"]
+    # every Garmin error is ambiguous: the row waits for reconciliation, not a re-proposal
+    assert out["pending_changes"] == []
+    assert "boom" in out["last_error"] and "outcome unknown" in out["last_error"]
     assert repo.list_targets(ndb, MONDAY, MONDAY)[0].written_to_garmin is False
     rows = ndb.execute("select status, error from nutrition_changes").fetchall()
-    assert [r["status"] for r in rows] == ["failed"] and "boom" in rows[0]["error"]
+    assert [r["status"] for r in rows] == ["pending"] and "boom" in rows[0]["error"]
 
 
 async def test_refuses_without_garmin(ndb, make_deps, mem_store):
@@ -203,7 +205,8 @@ async def test_tp_failure_stops_batch_and_keeps_remainder(ndb, make_deps, mem_st
     out = await apply_graph2(make_deps, mem_store, FakeGarmin(), tp).ainvoke(
         state([session_change("w1"), session_change("w2", MONDAY + timedelta(days=1))]), CFG
     )
-    assert [c.target_key for c in out["pending_changes"]] == ["w1", "w2"]
+    # API_ERROR is ambiguous: w1 waits for reconciliation, w2 stays pending
+    assert [c.target_key for c in out["pending_changes"]] == ["w2"]
     assert "boom" in out["last_error"]
 
 
@@ -452,3 +455,53 @@ async def test_a_pending_row_that_cannot_be_checked_stays_pending(ndb, make_deps
     assert _status(ndb, rid)["status"] == "pending"
     assert f"row {rid}: could not be checked (ValueError" in r.report(1, None)
     assert [c.op for c in r.applied] == ["set_day_targets"] and r.error is None
+
+
+class _FlakyTp(FakeTp):
+    """Answers like FakeTp, but the nth call raises `error`."""
+
+    def __init__(self, n, error, **kw):
+        super().__init__(**kw)
+        self.n, self.error = n, error
+
+    async def call_json(self, tool, args=None):
+        if len(self.calls) + 1 == self.n:
+            self.calls.append((tool, dict(args or {})))
+            raise self.error
+        return await super().call_json(tool, args)
+
+
+async def test_a_timed_out_session_note_is_reconciled_and_owned(ndb, make_deps, mem_store):
+    fuel = SessionFuel(**session_fuel_json("w1", MONDAY))
+    timeout = McpToolError("tp_set_workout_note", "NETWORK_ERROR: Request timed out")
+    tp = _FlakyTp(2, timeout)  # the ownership read answers, the write times out
+    r = await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp),
+        mem_store,
+        [session_note_change(fuel)],
+        "t",
+        overrides=None,
+    )
+    assert [c[0] for c in tp.calls] == ["tp_get_workout_note", "tp_set_workout_note"]
+    assert r.applied == [] and r.remaining == []
+    assert "outcome unknown, it will be checked on the next apply" in r.report(1, None)
+    rows = ndb.execute("select id, status, error from nutrition_changes").fetchall()
+    assert [row["status"] for row in rows] == ["pending"]
+    assert "Request timed out" in rows[0]["error"]
+    assert repo.session_note_owned(ndb, "w1") is False
+
+    _backdate(ndb, rows[0]["id"])
+    tp2 = FakeTp(responses={"tp_get_workout_note": {"note": fuel.note_text}})
+    newer = SessionFuel(**session_fuel_json("w1", MONDAY, note_text="Fuel: 70 g/h."))
+    r2 = await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp2),
+        mem_store,
+        [session_note_change(newer)],
+        "t",
+        overrides=None,
+    )
+    row = _status(ndb, rows[0]["id"])
+    assert row["status"] == "applied" and row["error"] is None
+    # our note is owned now, so the new write skips the ownership read that would refuse it
+    assert [c[0] for c in tp2.calls] == ["tp_get_workout_note", "tp_set_workout_note"]
+    assert r2.error is None and [c.op for c in r2.applied] == ["set_session_note"]

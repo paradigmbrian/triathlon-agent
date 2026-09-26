@@ -225,12 +225,13 @@ async def test_partial_apply_keeps_the_remainder_pending_and_shows_it_next_turn(
     )
     await graph.ainvoke({"messages": [HumanMessage("go")]}, CFG)
     out = await graph.ainvoke(Command(resume={"action": "approve"}), CFG)
-    assert out["reports"][0].applied == 0 and out["reports"][0].remaining == 2
-    assert out["pending"] is not None and len(out["pending"].proposals[0].changes) == 2
+    # API_ERROR is ambiguous: the first change waits for reconciliation, the second is held
+    assert out["reports"][0].applied == 0 and out["reports"][0].remaining == 1
+    assert out["pending"] is not None and len(out["pending"].proposals[0].changes) == 1
     assert out["pending"].proposals[0].id == "held-planning"
     assert "boom" in out["last_error"] and "stopped:" in out["messages"][-1].content
     await graph.ainvoke({"messages": [HumanMessage("what now?")]}, CFG)
-    assert "Pending change set from an earlier turn (2 planning, 0 nutrition)" in prompts[-1]
+    assert "Pending change set from an earlier turn (1 planning, 0 nutrition)" in prompts[-1]
     assert "held-planning" in prompts[-1]
 
 
@@ -278,9 +279,9 @@ async def test_a_held_remainder_can_be_re_proposed_by_its_id_next_turn(
     assert "__interrupt__" in out, "the held remainder must reach review, not an unknown-id error"
     payload = out["__interrupt__"][0].value
     assert payload["proposals"][0]["id"] == "held-planning"
-    assert len(payload["proposals"][0]["changes"]) == 2
+    assert len(payload["proposals"][0]["changes"]) == 1  # the first's outcome is unknown
     out = await graph.ainvoke(Command(resume={"action": "approve"}), CFG)
-    assert out["reports"][0].applied == 2 and out["pending"] is None
+    assert out["reports"][0].applied == 1 and out["pending"] is None
 
 
 async def test_start_clears_last_turns_proposals_but_not_pending(nocommit, make_deps, mem_store):

@@ -89,13 +89,14 @@ async def test_mid_batch_failure_then_reproposes_remainder(nocommit, make_deps):
     graph = build_graph(make_deps(model, tp=tp), InMemorySaver())
     await graph.ainvoke({"messages": [HumanMessage("Olympic Dec 13")]}, CFG)
     out = await graph.ainvoke(APPROVE, CFG)
-    assert len(out["pending_changes"]) == 2 and "boom" in out["last_error"]
+    # the failed call's outcome is unknown (API_ERROR): it waits for reconciliation
+    assert len(out["pending_changes"]) == 1 and "boom" in out["last_error"]
     assert out["phase"] == "planning"
     tp.fail_on_call = None
     out = await graph.ainvoke({"messages": [HumanMessage("try again")]}, CFG)
-    assert "__interrupt__" in out and len(out["__interrupt__"][0].value["changes"]) == 2
+    assert "__interrupt__" in out and len(out["__interrupt__"][0].value["changes"]) == 1
     out = await graph.ainvoke(APPROVE, CFG)
-    assert out["phase"] == "active" and len(tp.calls) == 4  # 1 ok + 1 failed + 2 retried
+    assert out["phase"] == "active" and len(tp.calls) == 3  # 1 ok + 1 unknown + 1 retried
 
 
 async def test_bought_plan_path(nocommit, make_deps):

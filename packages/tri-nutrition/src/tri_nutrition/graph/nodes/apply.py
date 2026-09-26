@@ -14,7 +14,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.store.base import BaseStore
 
 from tri_core.db.repo import Conn
-from tri_core.db.writes import SentUnrecorded, mark_failed, recorded_write
+from tri_core.db.writes import OutcomeUnknown, SentUnrecorded, mark_failed, recorded_write
 from tri_core.mcp.client import McpToolError
 from tri_core.sync import ToolCaller
 from tri_nutrition import repo
@@ -109,9 +109,9 @@ async def _record_and_send(
 
 async def write_change(deps: GraphDeps, thread_id: str, change: NutritionChange) -> dict[str, Any]:
     """Send one change to its server with its audit row recorded first, and mark the target
-    written. Raises McpToolError/ValueError on failure, SentUnrecorded when the call went through
-    but its row stayed pending, and PermissionError on an ownership refusal; neither refusal
-    leaves a row."""
+    written. Raises McpToolError/ValueError on a definitive failure, OutcomeUnknown when the
+    call may have gone through and its row stayed pending, and PermissionError on an ownership
+    refusal; neither refusal leaves a row."""
     if change.op in GARMIN_OPS:
         if deps.garmin is None:
             raise McpToolError("set_nutrition_daily_settings", "Garmin server unavailable")
@@ -283,8 +283,9 @@ async def apply_changes(
     """Send each change to its server in order, recording every attempt in `nutrition_changes`
     under `thread_id` (pending, then applied or failed); pending rows from earlier applies are
     reconciled first. Changes whose server is down are held (kept in `remaining`); an ownership
-    refusal drops the change; a server error, or a change sent but not recorded (it leaves
-    `remaining` and is reconciled next apply), stops the batch. `overrides` are written to the
+    refusal drops the change; a failure stops the batch. A definitively rejected change stays in
+    `remaining`; one whose outcome is unknown (a timeout, a server error, or sent but not
+    recorded) leaves it and is reconciled next apply. `overrides` are written to the
     profile in the Store only when every change went through."""
     reconciled = await reconcile_pending(deps)
     todo = list(changes)
@@ -303,7 +304,7 @@ async def apply_changes(
             skipped.append(f"{_label(change)}: {exc}; dropped")
             remaining.remove(change)
             continue
-        except SentUnrecorded as exc:  # the database is unhealthy: stop, but never re-send it
+        except OutcomeUnknown as exc:  # its row is pending: stop, and never re-send it unchecked
             error = f"{_label(change)}: {exc}"
             remaining.remove(change)
             break

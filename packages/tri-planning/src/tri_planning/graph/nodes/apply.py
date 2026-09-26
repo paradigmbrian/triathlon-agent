@@ -13,7 +13,7 @@ from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
 
 from tri_core.db.repo import Conn
-from tri_core.db.writes import SentUnrecorded, mark_failed, recorded_write
+from tri_core.db.writes import OutcomeUnknown, SentUnrecorded, mark_failed, recorded_write
 from tri_core.mcp.client import McpToolError
 from tri_core.sync import ToolCaller
 from tri_planning import repo
@@ -231,8 +231,9 @@ async def apply_changes(
     """Send each change to TrainingPeaks in order, recording every attempt in `plan_changes`
     under `thread_id` (pending, then applied or failed); pending rows from earlier applies are
     reconciled first. Ownership: update/move/delete only agent-authored workouts unless
-    `athlete_requested`. Stops at the first server error, or at a change sent but not recorded
-    (it leaves `remaining` and is reconciled next apply); the rest stay in `remaining`."""
+    `athlete_requested`. Stops at the first failure; the rest stay in `remaining`. A definitive
+    rejection stays there too; a change whose outcome is unknown (a timeout, a server error, or
+    sent but not recorded) leaves `remaining` and is reconciled next apply."""
     todo = list(changes)
     if deps.tp is None:
         return ApplyResult(
@@ -278,7 +279,7 @@ async def apply_changes(
                 thread_id=thread_id,
                 goal_id=goal_id,
             )
-        except SentUnrecorded as exc:  # the database is unhealthy: stop, but never re-send it
+        except OutcomeUnknown as exc:  # its row is pending: stop, and never re-send it unchecked
             error = f"{_label(change)}: {exc}"
             remaining.remove(change)
             break
@@ -293,12 +294,20 @@ async def apply_changes(
             tp_plan_applied = True
 
     if plan_id is not None and written:
-        with deps.connect() as conn:
-            # Only a designed week is on the calendar as a plan week; a one-off create in an
-            # undesigned week must not stop the design node from designing it.
-            designed = {w.week_start for w in repo.list_weeks(conn, plan_id) if w.designed}
-            repo.mark_weeks_written(conn, plan_id, sorted(written & designed))
-            conn.commit()
+        try:
+            with deps.connect() as conn:
+                # Only a designed week is on the calendar as a plan week; a one-off create in an
+                # undesigned week must not stop the design node from designing it.
+                designed = {w.week_start for w in repo.list_weeks(conn, plan_id) if w.designed}
+                repo.mark_weeks_written(conn, plan_id, sorted(written & designed))
+                conn.commit()
+        except psycopg.Error as exc:  # the changes above are on TrainingPeaks; report, never raise
+            weeks = ", ".join(d.isoformat() for d in sorted(written))
+            note = (
+                f"weeks written not recorded ({type(exc).__name__}: {exc}); weeks {weeks} are "
+                "on TrainingPeaks but not marked written, check them before designing again"
+            )
+            error = f"{error}; {note}" if error else note
 
     return ApplyResult(
         applied=applied,
