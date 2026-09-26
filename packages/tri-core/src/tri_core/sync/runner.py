@@ -100,11 +100,17 @@ async def _sync_garmin(conn: Any, opener: Opener, start: date, end: date, log: L
     async with opener() as client:
         snap = await fetch_garmin(client, start, end, log=log)
     rows = repo.upsert_daily_metrics(conn, snap.daily)
+    rows += repo.upsert_garmin_activities(conn, snap.activities)
     workouts = repo.list_workouts_between(conn, start, end)
-    pairs = match_activities(workouts, snap.activities)
+    linked = repo.linked_activities(conn, start, end)
+    pairs = match_activities(workouts, snap.activities, linked=linked)
     for tp_id, act in pairs:
-        repo.set_garmin_match(conn, tp_id, act.id, act.start_time_local)
-    log(f"garmin: matched {len(pairs)} of {len(snap.activities)} activities to TP workouts")
+        repo.link_activity(conn, act.id, tp_id)
+    n_linked = sum(len(v) for v in linked.values())
+    log(
+        f"garmin: {len(snap.activities)} activities; {len(pairs)} newly matched, "
+        f"{n_linked} matched before"
+    )
     return rows + len(pairs)
 
 

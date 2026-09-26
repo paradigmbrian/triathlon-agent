@@ -10,7 +10,13 @@ from typing import Any
 import psycopg
 from psycopg.types.json import Jsonb
 
-from tri_core.db.models import AthleteProfileRow, DailyMetricsRow, SyncState, WorkoutRow
+from tri_core.db.models import (
+    AthleteProfileRow,
+    DailyMetricsRow,
+    GarminActivityRow,
+    SyncState,
+    WorkoutRow,
+)
 
 Conn = psycopg.Connection[dict[str, Any]]
 
@@ -154,6 +160,81 @@ def set_garmin_match(
         "update workouts set garmin_activity_id = %s, start_time_local = %s "
         "where tp_workout_id = %s",
         (garmin_activity_id, start_time_local, tp_workout_id),
+    )
+
+
+_ACTIVITY_COLS = [
+    "id",
+    "type_key",
+    "sport",
+    "start_time_local",
+    "duration_sec",
+    "distance_m",
+    "avg_hr",
+    "name",
+    "raw",
+]
+
+
+def upsert_garmin_activities(conn: Conn, rows: Iterable[GarminActivityRow]) -> int:
+    """Every fetched activity, matched or not. `tp_workout_id` is not in the column list, so a
+    re-sync keeps the link."""
+    cols = ", ".join(_ACTIVITY_COLS)
+    placeholders = ", ".join(f"%({c})s" for c in _ACTIVITY_COLS)
+    updates = ", ".join(f"{c} = excluded.{c}" for c in _ACTIVITY_COLS if c != "id")
+    sql = (
+        f"insert into garmin_activities ({cols}, synced_at) values ({placeholders}, now()) "
+        f"on conflict (id) do update set {updates}, synced_at = now()"
+    )
+    n = 0
+    with conn.cursor() as cur:
+        for row in rows:
+            cur.execute(sql, _params(row))
+            n += 1
+    return n
+
+
+def _num(v: Any) -> float | None:
+    return float(v) if v is not None else None
+
+
+def linked_activities(conn: Conn, start: date, end: date) -> dict[str, list[GarminActivityRow]]:
+    rows = conn.execute(
+        f"select tp_workout_id, {', '.join(_ACTIVITY_COLS)} from garmin_activities "
+        "where tp_workout_id is not null and start_time_local::date between %s and %s "
+        "order by start_time_local, id",
+        (start, end),
+    ).fetchall()
+    out: dict[str, list[GarminActivityRow]] = {}
+    for r in rows:
+        out.setdefault(r["tp_workout_id"], []).append(
+            GarminActivityRow(
+                id=r["id"],
+                type_key=r["type_key"],
+                sport=r["sport"],
+                start_time_local=r["start_time_local"],
+                duration_sec=_num(r["duration_sec"]),
+                distance_m=_num(r["distance_m"]),
+                avg_hr=r["avg_hr"],
+                name=r["name"],
+                raw=r["raw"],
+            )
+        )
+    return out
+
+
+def link_activity(conn: Conn, activity_id: str, tp_workout_id: str) -> None:
+    """Link one activity to its workout. The workout's own `garmin_activity_id` is the first
+    linked leg and is never replaced, so `get_activity_splits` readers keep working."""
+    conn.execute(
+        "update garmin_activities set tp_workout_id = %s where id = %s",
+        (tp_workout_id, activity_id),
+    )
+    conn.execute(
+        "update workouts w set garmin_activity_id = a.id, start_time_local = a.start_time_local "
+        "from garmin_activities a "
+        "where a.id = %s and w.tp_workout_id = %s and w.garmin_activity_id is null",
+        (activity_id, tp_workout_id),
     )
 
 

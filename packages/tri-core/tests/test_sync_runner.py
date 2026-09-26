@@ -335,3 +335,57 @@ async def test_future_fitness_is_not_stored(db, monkeypatch):
         (date(2026, 9, 1), future),
     ).fetchall()
     assert [r["metric_date"] for r in got] == [date(2026, 9, 1)]
+
+
+@pytest.mark.db
+async def test_garmin_keeps_every_activity_and_a_brick_gets_both_legs(db, monkeypatch):
+    settings = Settings(_env_file=None)
+    settings.database_url = settings.test_database_url
+    monkeypatch.setattr("tri_core.sync.runner.connect", lambda url: _NoClose(db))
+    brick = {
+        "id": "w1",
+        "date": "2026-09-01",
+        "sport": "Brick",
+        "metrics": {"duration_actual": 4800 / 3600},
+        "completed": True,
+    }
+    tp = _tp_answers()
+    tp["tp_get_workout"] = brick
+    garmin = _garmin_answers()
+    garmin["get_activities_by_date"] = {
+        "activities": [
+            {
+                "id": 1,
+                "type": "cycling",
+                "start_time": "2026-09-01 06:00:00",
+                "duration_seconds": 3600.0,
+            },
+            {
+                "id": 2,
+                "type": "running",
+                "start_time": "2026-09-01 07:05:00",
+                "duration_seconds": 1200.0,
+            },
+            {
+                "id": 3,
+                "type": "walking",
+                "start_time": "2026-09-01 18:00:00",
+                "duration_seconds": 900.0,
+            },
+        ],
+        "has_more": False,
+    }
+    report = await run_sync(
+        settings,
+        since=date(2026, 8, 30),
+        log=lambda m: None,
+        open_tp=_factory(_Fake(tp)),
+        open_garmin=_factory(_Fake(garmin)),
+    )
+    assert report.ok, report
+    rows = db.execute(
+        "select id, tp_workout_id from garmin_activities where id in ('1', '2', '3') order by id"
+    ).fetchall()
+    assert [(r["id"], r["tp_workout_id"]) for r in rows] == [("1", "w1"), ("2", "w1"), ("3", None)]
+    w = repo.list_workouts_between(db, date(2026, 9, 1), date(2026, 9, 1))[0]
+    assert w["garmin_activity_id"] == "1"
