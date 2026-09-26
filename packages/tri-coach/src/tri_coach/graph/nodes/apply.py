@@ -54,6 +54,7 @@ def report_from_planning(r: PlanningResult) -> ApplyReport:
         error=r.error,
         sessions_changed=r.sessions_changed,
         applied_changes=[describe(c) for c in r.applied],
+        reconciled=r.reconciled,
     )
 
 
@@ -66,6 +67,7 @@ def report_from_nutrition(r: NutritionResult) -> ApplyReport:
         error=r.error,
         sessions_changed=False,
         applied_changes=[describe(c) for c in r.applied],
+        reconciled=r.reconciled,
     )
 
 

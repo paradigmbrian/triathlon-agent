@@ -4,11 +4,13 @@ import pytest
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
 from tri_coach.allowlist import ANALYST_GARMIN_TOOLS, ANALYST_TP_TOOLS, GARMIN_TOOLS, TP_TOOLS
-from tri_coach.graph.nodes.apply import describe
+from tri_coach.graph.nodes.apply import describe, report_from_nutrition, report_from_planning
 from tri_coach.graph.state import STATE_TYPES
 from tri_coach.models import ApplyReport, Brief, ChangeSet, Proposal, ReviewDecision
 from tri_core.harness.persistence import make_serde
+from tri_nutrition.graph.nodes.apply import ApplyResult as NutritionApplyResult
 from tri_nutrition.nutrition.models import NutritionChange
+from tri_planning.graph.nodes.apply import ApplyResult as PlanningApplyResult
 from tri_planning.planning.models import CalendarChange
 
 
@@ -151,3 +153,47 @@ def test_apply_report_lists_each_applied_change():
         applied_changes=[describe(moved)],
     )
     assert r.line() == "planning: applied 1\n  applied: move w1 -> 2026-09-19: rest day"
+
+
+def test_apply_report_line_includes_reconciled_before_applied():
+    r = ApplyReport(
+        domain="planning",
+        applied=1,
+        skipped=[],
+        remaining=0,
+        error=None,
+        sessions_changed=True,
+        applied_changes=["create 2026-09-14 bike 'Ride': plan"],
+        reconciled=["create 2026-09-07 bike 'Old': found on TrainingPeaks; recorded as applied"],
+    )
+    assert r.line() == (
+        "planning: applied 1\n"
+        "  reconciled: create 2026-09-07 bike 'Old': found on TrainingPeaks; recorded as applied\n"
+        "  applied: create 2026-09-14 bike 'Ride': plan"
+    )
+
+
+def test_report_from_planning_carries_reconciled():
+    r = PlanningApplyResult(
+        applied=[],
+        skipped=[],
+        remaining=[],
+        error=None,
+        tp_plan_applied=False,
+        sessions_changed=False,
+        reconciled=["create 2026-09-07 bike 'Old': found on TrainingPeaks; recorded as applied"],
+    )
+    assert report_from_planning(r).reconciled == r.reconciled
+
+
+def test_report_from_nutrition_carries_reconciled():
+    r = NutritionApplyResult(
+        applied=[],
+        skipped=[],
+        remaining=[],
+        held=[],
+        error=None,
+        profile_updated=False,
+        reconciled=["set_day_targets 2026-09-14: found on Garmin; recorded as applied"],
+    )
+    assert report_from_nutrition(r).reconciled == r.reconciled
