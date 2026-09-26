@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Any, Literal
 
 import psycopg
@@ -190,13 +191,15 @@ def _unchecked(row_id: int, exc: Exception) -> str:
     return f"row {row_id}: could not be checked ({type(exc).__name__}: {first}); left pending"
 
 
-async def reconcile_pending(deps: GraphDeps) -> list[str]:
+async def reconcile_pending(deps: GraphDeps) -> tuple[list[str], dict[tuple[date, str], str]]:
     """Settle `nutrition_changes` rows an earlier apply left `pending`: `applied` when the
-    server shows the change, else `failed`. Returns one report line per row settled or left."""
+    server shows the change, else `failed`. Returns one report line per row settled or left, and
+    the note id of each race note it recorded as applied, by day and title."""
     with deps.connect() as conn:
         rows = repo.pending_changes(conn)
         owned = repo.owned_note_ids(conn)
     lines: list[str] = []
+    notes: dict[tuple[date, str], str] = {}
     for row in rows:
         try:
             change = NutritionChange.model_validate(row["payload"])
@@ -223,6 +226,7 @@ async def reconcile_pending(deps: GraphDeps) -> list[str]:
                 _mark_written(conn, change, note_id)
                 if change.op == "set_race_note" and note_id is not None:
                     owned.add(note_id)
+                    notes[(change.day, str(change.payload["title"]))] = note_id
                 lines.append(f"{_label(change)}: found on {name}; recorded as applied")
             else:
                 err = (
@@ -233,7 +237,21 @@ async def reconcile_pending(deps: GraphDeps) -> list[str]:
                 mark_failed(conn, "nutrition_changes", row["id"], err)
                 lines.append(f"{_label(change)}: {err}; marked failed")
             conn.commit()
-    return lines
+    return lines, notes
+
+
+def _onto_reconciled_note(
+    change: NutritionChange, notes: dict[tuple[date, str], str]
+) -> NutritionChange:
+    """A race-note create for a note reconciled onto TrainingPeaks this pass becomes an update of
+    that note, so its new text does not land in a second note."""
+    if not notes or change.op != "set_race_note" or change.target_key:
+        return change
+    note_id = notes.get((change.day, str(change.payload.get("title"))))
+    if note_id is None:
+        return change
+    reason = f"update race fuel note for {change.day}"
+    return change.model_copy(update={"target_key": note_id, "reason": reason})
 
 
 def _server_down(deps: GraphDeps, change: NutritionChange) -> bool:
@@ -285,10 +303,18 @@ async def apply_changes(
     reconciled first. Changes whose server is down are held (kept in `remaining`); an ownership
     refusal drops the change; a failure stops the batch. A definitively rejected change stays in
     `remaining`; one whose outcome is unknown (a timeout, a server error, or sent but not
-    recorded) leaves it and is reconciled next apply. `overrides` are written to the
-    profile in the Store only when every change went through."""
-    reconciled = await reconcile_pending(deps)
-    todo = list(changes)
+    recorded) leaves it and is reconciled next apply. A race-note create for a note reconciled
+    in this pass (same day and title) updates that note instead. `overrides` are written to the
+    profile in the Store once nothing is left in `remaining`: every change went through or its
+    outcome is unknown; a definitive failure or a held change keeps them pending with it."""
+    reconciled, notes = await reconcile_pending(deps)
+    todo = [_onto_reconciled_note(c, notes) for c in changes]
+    for before, after in zip(changes, todo, strict=True):
+        if after is not before:
+            reconciled.append(
+                f"{_label(before)}: already on TrainingPeaks as note {after.target_key} "
+                "(reconciled); updating it instead of creating another"
+            )
     applied: list[NutritionChange] = []
     skipped: list[str] = []
     held: list[NutritionChange] = []
@@ -322,8 +348,11 @@ async def apply_changes(
         )
         error = held_msg if error is None else f"{error}; {held_msg}"
 
+    # A definitive failure and a held change both stay in `remaining`, so an empty `remaining`
+    # means every change went through or is pending reconciliation (outcome unknown): the
+    # approval stands and the overrides are saved.
     persisted = False
-    if error is None and not remaining and overrides:
+    if not remaining and overrides:
         base = await S.get_profile(store)
         if base is not None:
             await S.put_profile(store, apply_overrides(base, overrides))
@@ -348,7 +377,7 @@ def make_apply_node(deps: GraphDeps) -> Any:
         r = await apply_changes(
             deps, store, changes, str(config["configurable"]["thread_id"]), overrides=overrides
         )
-        clean = r.error is None and not r.remaining
+        clean = not r.remaining  # the overrides were saved; an unknown outcome still clears
         return {
             "pending_changes": r.remaining,
             "pending_violations": (state.get("pending_violations") or {}) if r.remaining else {},

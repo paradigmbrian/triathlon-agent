@@ -11,7 +11,13 @@ from tri_nutrition import store as S
 from tri_nutrition.graph.nodes.apply import ApplyResult, apply_changes, make_apply_node
 from tri_nutrition.graph.state import NutritionState
 from tri_nutrition.nutrition.garmin_calls import day_target_change
-from tri_nutrition.nutrition.models import DayTarget, NutritionProfile, RaceFuelPlan, SessionFuel
+from tri_nutrition.nutrition.models import (
+    DayTarget,
+    NutritionChange,
+    NutritionProfile,
+    RaceFuelPlan,
+    SessionFuel,
+)
 from tri_nutrition.nutrition.tp_calls import race_note_change, session_note_change
 from tri_nutrition.testing import (
     MONDAY,
@@ -245,13 +251,44 @@ async def test_apply_changes_direct_does_not_persist_overrides_on_partial(
     ndb, make_deps, mem_store
 ):
     await S.put_profile(mem_store, NutritionProfile(**PROFILE_ARGS))
+    tomorrow = target(MONDAY + timedelta(days=1))
+    repo.upsert_targets(ndb, [tomorrow])
+    deps = make_deps(ScriptedChatModel(script=[]), garmin=FakeGarmin())
+    r = await apply_changes(
+        deps, mem_store, [day_target_change(tomorrow)], "coach", overrides={"activity_factor": 1.5}
+    )
+    # a definitive failure keeps the change, and the overrides stay pending with it
+    assert r.error is not None and "only hold today" in r.error and r.profile_updated is False
+    assert len(r.remaining) == 1
+    assert (await S.get_profile(mem_store)).activity_factor == 1.35
+
+
+async def test_apply_changes_persists_overrides_when_the_garmin_outcome_is_unknown(
+    ndb, make_deps, mem_store
+):
+    await S.put_profile(mem_store, NutritionProfile(**PROFILE_ARGS))
     repo.upsert_targets(ndb, [target()])
     deps = make_deps(ScriptedChatModel(script=[]), garmin=FakeGarmin(fail_on_call=1))
     r = await apply_changes(
         deps, mem_store, [day_target_change(target())], "coach", overrides={"activity_factor": 1.5}
     )
-    assert r.error is not None and "boom" in r.error and r.profile_updated is False
-    assert (await S.get_profile(mem_store)).activity_factor == 1.35
+    assert r.error is not None and "outcome unknown" in r.error
+    assert r.remaining == [] and r.profile_updated is True
+    assert (await S.get_profile(mem_store)).activity_factor == 1.5
+    assert "profile updated" in r.report(1, {"activity_factor": 1.5})
+    rows = ndb.execute("select status from nutrition_changes").fetchall()
+    assert [row["status"] for row in rows] == ["pending"]
+
+
+async def test_the_node_clears_overrides_saved_after_an_unknown_outcome(ndb, make_deps, mem_store):
+    await S.put_profile(mem_store, NutritionProfile(**PROFILE_ARGS))
+    repo.upsert_targets(ndb, [target()])
+    out = await apply_graph(make_deps, mem_store, FakeGarmin(fail_on_call=1)).ainvoke(
+        state([day_target_change(target())], profile_overrides={"activity_factor": 1.5}), CFG
+    )
+    assert out["pending_changes"] == [] and "outcome unknown" in out["last_error"]
+    assert out["profile_overrides"] is None
+    assert (await S.get_profile(mem_store)).activity_factor == 1.5
 
 
 def _backdate(conn, row_id):
@@ -431,6 +468,60 @@ async def test_a_race_note_whose_record_failed_is_not_sent_again(
     row = _status(ndb, rows[0]["id"])
     assert row["status"] == "applied" and row["target_key"] == "n1"
     assert [c.op for c in r2.applied] == ["set_session_note"] and r2.error is None
+
+
+async def test_a_race_note_reconciled_this_pass_is_updated_not_created_again(
+    ndb, make_deps, mem_store
+):
+    title = "Race fuel: City Tri 2026-10-24"
+    plan = RaceFuelPlan(**race_plan_json(MONDAY + timedelta(days=40)))
+    rid = repo.insert_pending_change(ndb, "t", race_note_change(plan, title, None))
+    _backdate(ndb, rid)
+    newer = RaceFuelPlan(
+        **race_plan_json(MONDAY + timedelta(days=40), note_text="Race fuel: 90 g/h on the bike.")
+    )
+    listed = {"notes": [{"id": "n77", "title": title, "date": "2026-10-24"}]}
+    tp = FakeTp(responses={"tp_list_notes": listed})
+    r = await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp),
+        mem_store,
+        [race_note_change(newer, title, None)],
+        "t",
+        overrides=None,
+    )
+    assert [c[0] for c in tp.calls] == ["tp_list_notes", "tp_update_note"]
+    assert tp.calls[1][1] == {
+        "note_id": "n77",
+        "title": title,
+        "description": "Race fuel: 90 g/h on the bike.",
+    }
+    assert r.error is None and [c.target_key for c in r.applied] == ["n77"]
+    assert r.applied[0].reason == "update race fuel note for 2026-10-24"
+    assert "already on TrainingPeaks as note n77 (reconciled)" in r.report(1, None)
+    rows = ndb.execute("select status, target_key from nutrition_changes order by id").fetchall()
+    assert [(row["status"], row["target_key"]) for row in rows] == [
+        ("applied", "n77"),
+        ("applied", "n77"),
+    ]
+    assert repo.owned_note_ids(ndb) == {"n77"}
+
+
+async def test_a_malformed_race_note_fails_at_its_own_turn_without_reconciled_notes(
+    ndb, make_deps, mem_store
+):
+    bad = NutritionChange(
+        op="set_race_note", target_key="", day=MONDAY, payload={}, reason="create"
+    )
+    tp = FakeTp()
+    with pytest.raises(KeyError):
+        await apply_changes(
+            make_deps(ScriptedChatModel(script=[]), tp=tp),
+            mem_store,
+            [session_change(), bad],
+            "t",
+            overrides=None,
+        )
+    assert [c[0] for c in tp.calls] == ["tp_get_workout_note", "tp_set_workout_note"]
 
 
 async def test_a_pending_row_that_cannot_be_checked_stays_pending(ndb, make_deps, mem_store):

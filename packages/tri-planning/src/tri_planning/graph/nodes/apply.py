@@ -123,16 +123,18 @@ def _unchecked(row_id: int, exc: Exception) -> str:
     return f"row {row_id}: could not be checked ({type(exc).__name__}: {first}); left pending"
 
 
-async def reconcile_pending(deps: GraphDeps) -> list[str]:
+async def reconcile_pending(deps: GraphDeps) -> tuple[list[str], list[CalendarChange]]:
     """Settle `plan_changes` rows an earlier apply left `pending` (the call may have gone
     through while its record did not): `applied` when TrainingPeaks shows the change, else
-    `failed`. Returns one report line per row settled or left."""
+    `failed`. Returns one report line per row settled or left, and the creates it recorded as
+    applied."""
     tp = deps.tp
     assert tp is not None
     with deps.connect() as conn:
         rows = repo.pending_changes(conn)
         recorded = repo.recorded_create_ids(conn)
     lines: list[str] = []
+    found: list[CalendarChange] = []
     for i, row in enumerate(rows):
         try:
             change = CalendarChange.model_validate(row["payload"])
@@ -153,6 +155,7 @@ async def reconcile_pending(deps: GraphDeps) -> list[str]:
                 _mark_week_written(conn, row["plan_id"], change)
                 if change.op == "create" and wid is not None:
                     recorded.add(wid)
+                    found.append(change)
                 lines.append(f"{_label(change)}: found on TrainingPeaks; recorded as applied")
             else:
                 err = {
@@ -163,7 +166,7 @@ async def reconcile_pending(deps: GraphDeps) -> list[str]:
                 mark_failed(conn, "plan_changes", row["id"], err)
                 lines.append(f"{_label(change)}: {err}; marked failed")
             conn.commit()
-    return lines
+    return lines, found
 
 
 async def _record_and_send(
@@ -233,7 +236,9 @@ async def apply_changes(
     reconciled first. Ownership: update/move/delete only agent-authored workouts unless
     `athlete_requested`. Stops at the first failure; the rest stay in `remaining`. A definitive
     rejection stays there too; a change whose outcome is unknown (a timeout, a server error, or
-    sent but not recorded) leaves `remaining` and is reconciled next apply."""
+    sent but not recorded) leaves `remaining` and is reconciled next apply. Each create
+    reconciled as applied in this pass cancels one batch create of the identical workout (every
+    field), which is dropped, not sent."""
     todo = list(changes)
     if deps.tp is None:
         return ApplyResult(
@@ -245,7 +250,9 @@ async def apply_changes(
             sessions_changed=False,
         )
 
-    reconciled = await reconcile_pending(deps)
+    reconciled, found = await reconcile_pending(deps)
+    # each workout reconciled onto TrainingPeaks cancels at most one identical create
+    on_tp = [c.workout for c in found if c.workout is not None]
     owned: set[str] = set()
     if plan_id is not None:
         with deps.connect() as conn:
@@ -258,6 +265,13 @@ async def apply_changes(
     written: set[Any] = set()
 
     for change in todo:
+        if change.op == "create" and change.workout in on_tp:  # already created: never twice
+            on_tp.remove(change.workout)
+            skipped.append(
+                f"{_label(change)}: already on TrainingPeaks (reconciled); not sent again"
+            )
+            remaining.remove(change)
+            continue
         if (
             change.op in OWNED_OPS
             and change.tp_workout_id not in owned
