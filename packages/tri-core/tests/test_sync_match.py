@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import date, datetime
 
 from tri_core.sync.garmin import GarminActivity
@@ -98,3 +99,13 @@ def test_a_linked_activity_is_never_reassigned():
 def test_a_first_leg_matches_on_sport_and_day_whatever_its_duration():
     long_ride = _act("g1", "bike", 3, 10800.0)
     assert match_activities([_wo("w1", "brick", 3, 4800)], [long_ride]) == [("w1", long_ride)]
+
+
+def test_a_brick_leg_is_swim_bike_run_or_multisport():
+    walk = _act("g1", "other", 3, 1800.0, hour=6)
+    bike = _act("g2", "bike", 3, 3600.0, hour=7)
+    run = replace(_act("g3", "run", 3, 1800.0), start_time_local=datetime(2026, 9, 3, 8, 10))
+    assert match_activities([_wo("w1", "brick", 3, 5400)], [walk, bike, run]) == [
+        ("w1", bike),
+        ("w1", run),
+    ]

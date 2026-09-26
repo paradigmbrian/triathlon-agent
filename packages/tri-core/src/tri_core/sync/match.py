@@ -1,5 +1,6 @@
 """Pair Garmin activities with TrainingPeaks workouts on the same day. A `brick` workout takes two
-legs of different sports (or one Garmin multisport activity); every other workout takes one."""
+swim, bike or run legs of different sports (or one Garmin multisport activity); every other
+workout takes one."""
 
 from __future__ import annotations
 
@@ -9,10 +10,13 @@ from typing import Any
 from tri_core.sync.garmin import GarminActivity
 
 BRICK = "brick"
+BRICK_LEGS = ("swim", "bike", "run", BRICK)  # a walk or strength session is never half a brick
 
 
 def _sport_ok(workout_sport: str, activity_sport: str) -> bool:
-    return workout_sport in (BRICK, activity_sport)
+    if workout_sport == BRICK:
+        return activity_sport in BRICK_LEGS
+    return workout_sport == activity_sport
 
 
 def _open(w: dict[str, Any], legs: Sequence[GarminActivity]) -> bool:
