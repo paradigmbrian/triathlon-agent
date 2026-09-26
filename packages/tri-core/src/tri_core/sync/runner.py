@@ -23,6 +23,7 @@ from tri_core.sync.trainingpeaks import fetch_trainingpeaks
 TP_FIRST_RUN_DAYS = 365
 GARMIN_FIRST_RUN_DAYS = 60
 OVERLAP_DAYS = 3
+SYNC_AHEAD_DAYS = 28  # TrainingPeaks only: the 3-week planning and 14-day nutrition horizons
 
 Log = Callable[[str], None]
 Opener = Callable[[], AbstractAsyncContextManager[ToolCaller]]
@@ -52,13 +53,18 @@ def resolve_window(
     full: bool,
     today: date,
     first_run_days: int,
+    *,
+    ahead_days: int = 0,
     overlap_days: int = OVERLAP_DAYS,
 ) -> tuple[date, date]:
+    """[start, end] for one source. The start follows the watermark (the last day whose past is
+    complete); the end is `today + ahead_days`, re-listed on every run and never watermarked."""
+    end = today + timedelta(days=ahead_days)
     if since is not None:
-        return since, today
+        return since, end
     if full or state is None:
-        return today - timedelta(days=first_run_days), today
-    return state.last_synced_date - timedelta(days=overlap_days), today
+        return today - timedelta(days=first_run_days), end
+    return state.last_synced_date - timedelta(days=overlap_days), end
 
 
 def _default_opener(spec_fn: Callable[[Settings], ServerSpec], settings: Settings) -> Opener:
@@ -77,8 +83,16 @@ async def _sync_trainingpeaks(conn: Any, opener: Opener, start: date, end: date,
     if snap.profile is not None:
         repo.upsert_athlete_profile(conn, snap.profile)
         rows += 1
+    restored = repo.count_deleted(conn, [w.tp_workout_id for w in snap.workouts])
     rows += repo.upsert_workouts(conn, snap.workouts)
-    rows += repo.upsert_daily_metrics(conn, snap.fitness)
+    if snap.listing_complete:
+        deleted = repo.mark_missing_deleted(conn, start, end, snap.listed_ids)
+        log(f"trainingpeaks: {deleted} deleted, {restored} restored")
+    else:
+        log(f"trainingpeaks: {restored} restored; a listing failed, deletions not reconciled")
+    # The forward window may carry projected fitness; daily_metrics holds only what happened.
+    today = date.today()
+    rows += repo.upsert_daily_metrics(conn, [f for f in snap.fitness if f.metric_date <= today])
     return rows
 
 
@@ -86,11 +100,17 @@ async def _sync_garmin(conn: Any, opener: Opener, start: date, end: date, log: L
     async with opener() as client:
         snap = await fetch_garmin(client, start, end, log=log)
     rows = repo.upsert_daily_metrics(conn, snap.daily)
+    rows += repo.upsert_garmin_activities(conn, snap.activities)
     workouts = repo.list_workouts_between(conn, start, end)
-    pairs = match_activities(workouts, snap.activities)
+    linked = repo.linked_activities(conn, start, end)
+    pairs = match_activities(workouts, snap.activities, linked=linked)
     for tp_id, act in pairs:
-        repo.set_garmin_match(conn, tp_id, act.id, act.start_time_local)
-    log(f"garmin: matched {len(pairs)} of {len(snap.activities)} activities to TP workouts")
+        repo.link_activity(conn, act.id, tp_id)
+    n_linked = sum(len(v) for v in linked.values())
+    log(
+        f"garmin: {len(snap.activities)} activities; {len(pairs)} newly matched, "
+        f"{n_linked} matched before"
+    )
     return rows + len(pairs)
 
 
@@ -107,21 +127,23 @@ async def run_sync(
     today = date.today()
     open_tp = open_tp or _default_opener(trainingpeaks_spec, settings)
     open_garmin = open_garmin or _default_opener(garmin_spec, settings)
-    plan: list[tuple[str, int, Opener, SourceFn]] = [
-        ("trainingpeaks", TP_FIRST_RUN_DAYS, open_tp, _sync_trainingpeaks),
-        ("garmin", GARMIN_FIRST_RUN_DAYS, open_garmin, _sync_garmin),
+    plan: list[tuple[str, int, int, Opener, SourceFn]] = [
+        ("trainingpeaks", TP_FIRST_RUN_DAYS, SYNC_AHEAD_DAYS, open_tp, _sync_trainingpeaks),
+        ("garmin", GARMIN_FIRST_RUN_DAYS, 0, open_garmin, _sync_garmin),
     ]
     report = SyncReport()
     with connect(settings.database_url) as conn:
-        for source, first_run_days, opener, fn in plan:
+        for source, first_run_days, ahead_days, opener, fn in plan:
             if source not in sources:
                 continue
             state = repo.get_sync_state(conn, source)
-            start, end = resolve_window(state, since, full, today, first_run_days)
+            start, end = resolve_window(
+                state, since, full, today, first_run_days, ahead_days=ahead_days
+            )
             log(f"== {source}: {start} to {end}")
             try:
                 rows = await fn(conn, opener, start, end, log)
-                repo.set_sync_state(conn, source, end, "ok", None)
+                repo.set_sync_state(conn, source, min(end, today), "ok", None)
                 conn.commit()
                 report.results.append(SourceResult(source, "ok", rows))
                 log(f"== {source}: ok, {rows} rows")

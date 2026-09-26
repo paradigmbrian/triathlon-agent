@@ -1,7 +1,7 @@
 # Data layer: sync ahead, tombstones, Garmin activities, record-before-write
 
 **Date:** 2026-09-24
-**Status:** Draft
+**Status:** Implemented (plan 2026-09-25-data-layer.md)
 **Purpose:** Make the `workouts` table say what the TrainingPeaks calendar says, forwards and backwards, keep every Garmin activity so a brick has both legs, and never let a TrainingPeaks or Garmin write succeed without a row that says it happened. Second of five specs; assumes the correctness fixes are in. Line numbers are `main` @ 6540055.
 
 ## 1. Decisions already made
@@ -111,7 +111,7 @@ async def recorded_write(
 ) -> Recorded
 ```
 
-Sequence: open a connection, `insert_pending`, commit; `await call()`; on success open a connection, `mark_applied`, commit; on a call failure update the row to `failed` with the error text and re-raise. If `mark_applied` itself fails, the row stays `pending` with the call already made; the exception propagates as today.
+Sequence: open a connection, `insert_pending`, commit; `await call()`; on success open a connection, `mark_applied`, commit; on a definitive rejection (a validation, auth or not-found error) update the row to `failed` with the error text and re-raise; on any other failure (timeout, server error, dropped connection) leave the row `pending` with the error text for reconciliation and re-raise. If `mark_applied` itself fails, the row stays `pending` with the call already made; the exception propagates as today.
 
 Planning `apply_changes` and nutrition `write_change` use it for every op. `owned_workout_ids` and `owned_note_ids`/`session_note_owned` count rows with `status = 'applied'`.
 
@@ -124,6 +124,7 @@ Reconciliation runs at the start of each apply: `repo.pending_changes(conn)` ret
 - **A brick** matches two activities; both rows link to the workout; `get_activity_splits` on `garmin_activity_id` shows the first leg as today, and the analyst can query `garmin_activities` for the second.
 - **A create that succeeds on TP but fails to record** is a `pending` row; the next apply finds the workout by date and title and marks it applied and owned, instead of creating it again.
 - **A note write whose record fails** is reconciled the same way, so `_check_ownership` no longer raises `PermissionError` on the athlete's own note.
+- **A write that times out** stays `pending`; the next apply finds it on the server (applied) or not (failed), so a timed-out create is never sent twice.
 
 ## 6. Errors
 

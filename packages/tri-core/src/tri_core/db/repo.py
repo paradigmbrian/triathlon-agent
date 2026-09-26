@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from dataclasses import asdict
 from datetime import date, datetime
 from typing import Any
@@ -10,7 +10,13 @@ from typing import Any
 import psycopg
 from psycopg.types.json import Jsonb
 
-from tri_core.db.models import AthleteProfileRow, DailyMetricsRow, SyncState, WorkoutRow
+from tri_core.db.models import (
+    AthleteProfileRow,
+    DailyMetricsRow,
+    GarminActivityRow,
+    SyncState,
+    WorkoutRow,
+)
 
 Conn = psycopg.Connection[dict[str, Any]]
 
@@ -94,9 +100,11 @@ def upsert_workouts(conn: Conn, rows: Iterable[WorkoutRow]) -> int:
     cols = ", ".join(_WORKOUT_COLS)
     placeholders = ", ".join(f"%({c})s" for c in _WORKOUT_COLS)
     updates = ", ".join(f"{c} = excluded.{c}" for c in _WORKOUT_COLS if c != "tp_workout_id")
+    # A workout back in the listing is live again.
     sql = (
         f"insert into workouts ({cols}, synced_at) values ({placeholders}, now()) "
-        f"on conflict (tp_workout_id) do update set {updates}, synced_at = now()"
+        f"on conflict (tp_workout_id) do update set {updates}, deleted_at = null, "
+        "synced_at = now()"
     )
     n = 0
     with conn.cursor() as cur:
@@ -155,12 +163,119 @@ def set_garmin_match(
     )
 
 
-def list_workouts_between(conn: Conn, start: date, end: date) -> list[dict[str, Any]]:
+_ACTIVITY_COLS = [
+    "id",
+    "type_key",
+    "sport",
+    "start_time_local",
+    "duration_sec",
+    "distance_m",
+    "avg_hr",
+    "name",
+    "raw",
+]
+
+
+def upsert_garmin_activities(conn: Conn, rows: Iterable[GarminActivityRow]) -> int:
+    """Every fetched activity, matched or not. `tp_workout_id` is not in the column list, so a
+    re-sync keeps the link."""
+    cols = ", ".join(_ACTIVITY_COLS)
+    placeholders = ", ".join(f"%({c})s" for c in _ACTIVITY_COLS)
+    updates = ", ".join(f"{c} = excluded.{c}" for c in _ACTIVITY_COLS if c != "id")
+    sql = (
+        f"insert into garmin_activities ({cols}, synced_at) values ({placeholders}, now()) "
+        f"on conflict (id) do update set {updates}, synced_at = now()"
+    )
+    n = 0
+    with conn.cursor() as cur:
+        for row in rows:
+            cur.execute(sql, _params(row))
+            n += 1
+    return n
+
+
+def _num(v: Any) -> float | None:
+    return float(v) if v is not None else None
+
+
+def linked_activities(conn: Conn, start: date, end: date) -> dict[str, list[GarminActivityRow]]:
+    rows = conn.execute(
+        f"select tp_workout_id, {', '.join(_ACTIVITY_COLS)} from garmin_activities "
+        "where tp_workout_id is not null and start_time_local::date between %s and %s "
+        "order by start_time_local, id",
+        (start, end),
+    ).fetchall()
+    out: dict[str, list[GarminActivityRow]] = {}
+    for r in rows:
+        out.setdefault(r["tp_workout_id"], []).append(
+            GarminActivityRow(
+                id=r["id"],
+                type_key=r["type_key"],
+                sport=r["sport"],
+                start_time_local=r["start_time_local"],
+                duration_sec=_num(r["duration_sec"]),
+                distance_m=_num(r["distance_m"]),
+                avg_hr=r["avg_hr"],
+                name=r["name"],
+                raw=r["raw"],
+            )
+        )
+    return out
+
+
+def link_activity(conn: Conn, activity_id: str, tp_workout_id: str) -> None:
+    """Link one activity to its workout. The workout's own `garmin_activity_id` is the first
+    linked leg and is never replaced, so `get_activity_splits` readers keep working."""
+    conn.execute(
+        "update garmin_activities set tp_workout_id = %s where id = %s",
+        (tp_workout_id, activity_id),
+    )
+    conn.execute(
+        "update workouts w set garmin_activity_id = a.id, start_time_local = a.start_time_local "
+        "from garmin_activities a "
+        "where a.id = %s and w.tp_workout_id = %s and w.garmin_activity_id is null",
+        (activity_id, tp_workout_id),
+    )
+
+
+def list_workouts_between(
+    conn: Conn, start: date, end: date, *, include_deleted: bool = False
+) -> list[dict[str, Any]]:
+    live = "" if include_deleted else "and deleted_at is null "
     return conn.execute(
-        "select * from workouts where workout_date between %s and %s "
+        f"select * from workouts where workout_date between %s and %s {live}"
         "order by workout_date, tp_workout_id",
         (start, end),
     ).fetchall()
+
+
+def mark_missing_deleted(conn: Conn, start: date, end: date, seen_ids: Collection[str]) -> int:
+    """Tombstone live workouts dated in [start, end] that the TrainingPeaks listing for that
+    window did not return. Rows outside the window are never touched. A tombstoned workout lets
+    go of its Garmin activities (a soft delete never fires the foreign key), so the next Garmin
+    sync can match them to the workout that replaced it."""
+    row = conn.execute(
+        "with gone as ("
+        "  update workouts set deleted_at = now(), garmin_activity_id = null, "
+        "  start_time_local = null "
+        "  where workout_date between %s and %s and deleted_at is null "
+        "  and tp_workout_id <> all(%s) returning tp_workout_id"
+        "), released as ("
+        "  update garmin_activities a set tp_workout_id = null from gone "
+        "  where a.tp_workout_id = gone.tp_workout_id"
+        ") select count(*) as n from gone",
+        (start, end, list(seen_ids)),
+    ).fetchone()
+    return int(row["n"]) if row else 0
+
+
+def count_deleted(conn: Conn, ids: Collection[str]) -> int:
+    row = conn.execute(
+        "select count(*) as n from workouts where deleted_at is not null "
+        "and tp_workout_id = any(%s)",
+        (list(ids),),
+    ).fetchone()
+    return int(row["n"]) if row else 0
 
 
 def get_sync_state(conn: Conn, source: str) -> SyncState | None:

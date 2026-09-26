@@ -23,6 +23,8 @@ class TPSnapshot:
     profile: AthleteProfileRow | None
     workouts: list[WorkoutRow] = field(default_factory=list)
     fitness: list[DailyMetricsRow] = field(default_factory=list)
+    listed_ids: set[str] = field(default_factory=set)  # every id the listing returned
+    listing_complete: bool = True  # False when any chunk's listing did not come back
 
 
 # ---------- pure parsers ----------
@@ -162,12 +164,18 @@ async def fetch_trainingpeaks(
 
     ids: dict[str, None] = {}
     fitness: list[DailyMetricsRow] = []
+    complete = True
     for s, e in date_chunks(start, end, TP_MAX_RANGE_DAYS):
         listed = await client.call_json(
             "tp_get_workouts",
             {"start_date": s.isoformat(), "end_date": e.isoformat(), "workout_filter": "all"},
         )
-        for w in (listed or {}).get("workouts", []):
+        chunk = listed.get("workouts") if isinstance(listed, dict) else None
+        if not isinstance(chunk, list):
+            complete = False
+            log(f"trainingpeaks: {s} to {e}: no workout listing returned")
+            chunk = []
+        for w in chunk:
             ids.setdefault(str(w["id"]), None)
         fit = await client.call_json(
             "tp_get_fitness", {"start_date": s.isoformat(), "end_date": e.isoformat()}
@@ -184,4 +192,10 @@ async def fetch_trainingpeaks(
         if i % 25 == 0:
             log(f"trainingpeaks: {i}/{len(ids)} workout details")
     log(f"trainingpeaks: {len(workouts)} workouts parsed")
-    return TPSnapshot(profile=profile, workouts=workouts, fitness=fitness)
+    return TPSnapshot(
+        profile=profile,
+        workouts=workouts,
+        fitness=fitness,
+        listed_ids=set(ids),
+        listing_complete=complete,
+    )

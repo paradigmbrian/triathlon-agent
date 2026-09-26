@@ -114,7 +114,7 @@ async def load_context(
     ).fetchone()
     hours_row = conn.execute(
         "select coalesce(sum(actual_duration_sec), 0) as sec from workouts "
-        "where completed and workout_date between %s and %s",
+        "where completed and deleted_at is null and workout_date between %s and %s",
         (monday, today),
     ).fetchone()
     profile = await S.get_profile(store)

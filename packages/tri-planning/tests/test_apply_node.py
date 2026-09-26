@@ -1,7 +1,9 @@
 from datetime import timedelta
 
+import psycopg
 import pytest
 
+from tri_core.mcp.client import McpToolError
 from tri_core.testing import ScriptedChatModel
 from tri_planning import repo
 from tri_planning.graph.nodes.apply import ApplyResult, apply_changes, make_apply_node
@@ -77,13 +79,15 @@ async def test_mid_batch_failure_keeps_remainder_pending(nocommit, make_deps):
     tp = FakeTp(fail_on_call=2)
     node = make_apply_node(make_deps(ScriptedChatModel(script=[]), tp=tp))
     out = await node(state(gid, pid, [create(0), create(1, "B"), create(2, "C")]), CFG)
-    assert [c.workout.title for c in out["pending_changes"]] == ["B", "C"]
+    # API_ERROR is ambiguous: B may be on TrainingPeaks, so it waits for reconciliation
+    assert [c.workout.title for c in out["pending_changes"]] == ["C"]
     assert "boom" in out["last_error"] and "phase" not in out
     assert len(repo.owned_workout_ids(nocommit, pid)) == 1
-    row = nocommit.execute(
-        "select count(*) as n from plan_changes where plan_id = %s", (pid,)
-    ).fetchone()
-    assert row["n"] == 1
+    rows = nocommit.execute(
+        "select status, error from plan_changes where plan_id = %s order by id", (pid,)
+    ).fetchall()
+    assert [r["status"] for r in rows] == ["applied", "pending"]
+    assert "boom" in rows[1]["error"]
 
 
 async def test_ownership_refusal_unless_athlete_requested(nocommit, make_deps):
@@ -164,5 +168,266 @@ async def test_apply_changes_direct_stops_at_failure(nocommit, make_deps):
         deps, [create(0), create(1, "B"), create(2, "C")], "coach", plan_id=pid, goal_id=gid
     )
     assert [c.workout.title for c in r.applied] == ["Ride"]
-    assert [c.workout.title for c in r.remaining] == ["B", "C"]
+    assert [c.workout.title for c in r.remaining] == ["C"]  # B's outcome is unknown
     assert r.sessions_changed is True and "boom" in r.error
+
+
+def _backdate(conn, row_id):
+    conn.execute(
+        "update plan_changes set applied_at = now() - interval '5 minutes' where id = %s", (row_id,)
+    )
+
+
+def _listing(*items):
+    return {"tp_get_workouts": {"workouts": list(items), "count": len(items)}}
+
+
+def _listed(wid, title="Ride", sport="Bike", day=MONDAY):
+    return {"id": wid, "date": day.isoformat(), "title": title, "sport": sport}
+
+
+def _status(conn, row_id):
+    return conn.execute(
+        "select status, error, tp_workout_id from plan_changes where id = %s", (row_id,)
+    ).fetchone()
+
+
+async def test_a_pending_create_found_on_tp_is_recorded_as_applied(nocommit, make_deps):
+    gid, pid = seed(nocommit)
+    rid = repo.insert_pending_change(nocommit, pid, "t", create(0))
+    _backdate(nocommit, rid)
+    tp = FakeTp(responses=_listing(_listed("555")))
+    r = await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp), [], "t", plan_id=pid, goal_id=gid
+    )
+    assert tp.calls == [
+        (
+            "tp_get_workouts",
+            {"start_date": "2026-09-14", "end_date": "2026-09-14", "workout_filter": "all"},
+        )
+    ]
+    assert _status(nocommit, rid)["status"] == "applied"
+    assert repo.owned_workout_ids(nocommit, pid) == {"555"}
+    assert "reconciled: create" in r.report(0) and "recorded as applied" in r.report(0)
+
+
+async def test_a_pending_create_missing_on_tp_is_failed(nocommit, make_deps):
+    gid, pid = seed(nocommit)
+    rid = repo.insert_pending_change(nocommit, pid, "t", create(0))
+    _backdate(nocommit, rid)
+    tp = FakeTp(responses=_listing(_listed("555", title="Something else")))
+    r = await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp), [], "t", plan_id=pid, goal_id=gid
+    )
+    row = _status(nocommit, rid)
+    assert (
+        row["status"] == "failed"
+        and row["error"] == "not found on TrainingPeaks after a pending write"
+    )
+    assert repo.owned_workout_ids(nocommit, pid) == set()
+    assert "not found on TrainingPeaks" in r.report(0)
+
+
+async def test_an_ambiguous_pending_create_is_failed(nocommit, make_deps):
+    gid, pid = seed(nocommit)
+    rid = repo.insert_pending_change(nocommit, pid, "t", create(0))
+    _backdate(nocommit, rid)
+    tp = FakeTp(responses=_listing(_listed("555"), _listed("athletes-own")))
+    await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp), [], "t", plan_id=pid, goal_id=gid
+    )
+    row = _status(nocommit, rid)
+    assert row["status"] == "failed" and "more than one" in row["error"]
+    assert repo.owned_workout_ids(nocommit, pid) == set()
+
+
+async def test_a_young_pending_row_is_left_alone(nocommit, make_deps):
+    gid, pid = seed(nocommit)
+    rid = repo.insert_pending_change(nocommit, pid, "t", create(0))
+    tp = FakeTp(responses=_listing(_listed("555")))
+    await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp), [], "t", plan_id=pid, goal_id=gid
+    )
+    assert tp.calls == [] and _status(nocommit, rid)["status"] == "pending"
+
+
+async def test_unreachable_tp_leaves_rows_pending_and_the_apply_goes_on(nocommit, make_deps):
+    gid, pid = seed(nocommit)
+    rid = repo.insert_pending_change(nocommit, pid, "t", create(0))
+    _backdate(nocommit, rid)
+    tp = FakeTp(fail_on_call=1)
+    r = await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp),
+        [create(1, "New")],
+        "t",
+        plan_id=pid,
+        goal_id=gid,
+    )
+    assert _status(nocommit, rid)["status"] == "pending"
+    assert [c[0] for c in tp.calls] == ["tp_get_workouts", "tp_create_workout"]
+    assert [c.workout.title for c in r.applied] == ["New"]
+    assert "left pending" in r.report(1)
+
+
+async def test_ownership_counts_applied_rows_only(nocommit, make_deps):
+    gid, pid = seed(nocommit)
+    repo.insert_change(nocommit, pid, "t", create(0), tp_workout_id="w1", result={})
+    drop = CalendarChange(op="delete", tp_workout_id="w1", workout_date=MONDAY, reason="drop")
+    repo.insert_pending_change(nocommit, pid, "t", drop)
+    assert repo.owned_workout_ids(nocommit, pid) == {"w1"}
+    assert [w["tp_workout_id"] for w in repo.owned_workouts(nocommit, pid)] == ["w1"]
+
+
+async def test_a_change_whose_record_failed_is_not_sent_again(nocommit, make_deps, monkeypatch):
+    gid, pid = seed(nocommit)
+    real = repo.mark_change_applied
+    broken = [True]
+
+    def flaky(conn, row_id, **kw):
+        if broken:
+            broken.pop()
+            raise psycopg.OperationalError("server closed the connection")
+        real(conn, row_id, **kw)
+
+    monkeypatch.setattr(repo, "mark_change_applied", flaky)
+    tp = FakeTp()
+    deps = make_deps(ScriptedChatModel(script=[]), tp=tp)
+    r = await apply_changes(deps, [create(0, "A"), create(1, "B")], "t", plan_id=pid, goal_id=gid)
+    assert [c[1]["title"] for c in tp.calls] == ["A"]
+    assert r.applied == [] and [c.workout.title for c in r.remaining] == ["B"]
+    assert "'A': sent, but its record failed" in r.report(2)
+    assert "reconciled on the next apply" in r.report(2)
+    rows = nocommit.execute(
+        "select id, status from plan_changes where plan_id = %s order by id", (pid,)
+    ).fetchall()
+    assert [row["status"] for row in rows] == ["pending"]
+
+    _backdate(nocommit, rows[0]["id"])
+    tp2 = FakeTp(listings=[[_listed("1001", title="A")]])
+    r2 = await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp2),
+        r.remaining,
+        "t",
+        plan_id=pid,
+        goal_id=gid,
+    )
+    assert [c[0] for c in tp2.calls] == ["tp_get_workouts", "tp_create_workout"]
+    assert tp2.calls[1][1]["title"] == "B"
+    assert _status(nocommit, rows[0]["id"])["status"] == "applied"
+    assert [c.workout.title for c in r2.applied] == ["B"] and r2.error is None
+
+
+async def test_one_unverifiable_pending_row_does_not_abort_the_apply(nocommit, make_deps):
+    gid, pid = seed(nocommit)
+    bad = nocommit.execute(
+        "insert into plan_changes (plan_id, thread_id, operation, payload, status) "
+        "values (%s, 't', 'create', '{\"op\": \"nonsense\"}'::jsonb, 'pending') returning id",
+        (pid,),
+    ).fetchone()["id"]
+    good = repo.insert_pending_change(nocommit, pid, "t", create(0))
+    _backdate(nocommit, bad)
+    _backdate(nocommit, good)
+    tp = FakeTp(listings=[[_listed("555")]])
+    r = await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp),
+        [create(1, "New")],
+        "t",
+        plan_id=pid,
+        goal_id=gid,
+    )
+    assert _status(nocommit, bad)["status"] == "pending"
+    assert _status(nocommit, good)["status"] == "applied"
+    assert [c.workout.title for c in r.applied] == ["New"] and r.error is None
+    assert f"row {bad}: could not be checked (ValidationError" in r.report(1)
+
+
+class _FlakyTp(FakeTp):
+    """Answers like FakeTp, but the nth call raises `error`."""
+
+    def __init__(self, n, error, **kw):
+        super().__init__(**kw)
+        self.n, self.error = n, error
+
+    async def call_json(self, tool, args=None):
+        if len(self.calls) + 1 == self.n:
+            self.calls.append((tool, dict(args or {})))
+            raise self.error
+        return await super().call_json(tool, args)
+
+
+TIMEOUT = McpToolError("tp_create_workout", "NETWORK_ERROR: Request timed out")
+
+
+async def test_a_timed_out_create_is_checked_not_resent(nocommit, make_deps):
+    gid, pid = seed(nocommit)
+    tp = _FlakyTp(1, TIMEOUT)
+    deps = make_deps(ScriptedChatModel(script=[]), tp=tp)
+    r = await apply_changes(deps, [create(0, "A"), create(1, "B")], "t", plan_id=pid, goal_id=gid)
+    assert [c[1]["title"] for c in tp.calls] == ["A"]
+    assert r.applied == [] and [c.workout.title for c in r.remaining] == ["B"]
+    assert "'A': McpToolError: tp_create_workout: NETWORK_ERROR" in r.error
+    assert "outcome unknown, it will be checked on the next apply" in r.report(2)
+    rows = nocommit.execute(
+        "select id, status, error from plan_changes where plan_id = %s order by id", (pid,)
+    ).fetchall()
+    assert [row["status"] for row in rows] == ["pending"]
+    assert "Request timed out" in rows[0]["error"]
+
+    _backdate(nocommit, rows[0]["id"])
+    tp2 = FakeTp(listings=[[_listed("1001", title="A")]])
+    r2 = await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp2),
+        r.remaining,
+        "t",
+        plan_id=pid,
+        goal_id=gid,
+    )
+    assert [c[0] for c in tp2.calls] == ["tp_get_workouts", "tp_create_workout"]
+    assert tp2.calls[1][1]["title"] == "B"
+    row = _status(nocommit, rows[0]["id"])
+    assert row["status"] == "applied" and row["error"] is None
+    assert repo.owned_workout_ids(nocommit, pid) >= {"1001"}
+    assert [c.workout.title for c in r2.applied] == ["B"] and r2.error is None
+
+
+async def test_a_definitive_rejection_is_failed_and_kept(nocommit, make_deps):
+    gid, pid = seed(nocommit)
+    bad = McpToolError("tp_create_workout", "VALIDATION_ERROR: title too long")
+    tp = _FlakyTp(1, bad)
+    r = await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp),
+        [create(0, "A"), create(1, "B")],
+        "t",
+        plan_id=pid,
+        goal_id=gid,
+    )
+    assert [c.workout.title for c in r.remaining] == ["A", "B"]
+    assert "'A' failed: tp_create_workout: VALIDATION_ERROR" in r.error
+    rows = nocommit.execute("select status from plan_changes where plan_id = %s", (pid,)).fetchall()
+    assert [row["status"] for row in rows] == ["failed"]
+
+
+async def test_a_failed_weeks_written_record_is_reported_not_raised(
+    nocommit, make_deps, monkeypatch
+):
+    gid, pid = seed(nocommit)
+    repo.set_week_designed(
+        nocommit, pid, MONDAY, PlannedWeek(week_start=MONDAY, sessions=[], coach_note="n")
+    )
+
+    def down(*a, **kw):
+        raise psycopg.OperationalError("server closed the connection")
+
+    monkeypatch.setattr(repo, "mark_weeks_written", down)
+    tp = _FlakyTp(2, TIMEOUT)
+    r = await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp),
+        [create(0, "A"), create(1, "B")],
+        "t",
+        plan_id=pid,
+        goal_id=gid,
+    )
+    assert [c.workout.title for c in r.applied] == ["A"] and r.remaining == []
+    assert "outcome unknown" in r.error
+    assert "weeks written not recorded (OperationalError" in r.error
+    assert "2026-09-14" in r.error

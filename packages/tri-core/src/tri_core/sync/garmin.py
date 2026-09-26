@@ -7,7 +7,7 @@ from dataclasses import dataclass, field, fields
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from tri_core.db.models import DailyMetricsRow
+from tri_core.db.models import DailyMetricsRow, GarminActivityRow
 from tri_core.sync import ToolCaller
 from tri_core.sync.dates import date_chunks
 from tri_core.sync.sports import normalize_garmin_sport
@@ -16,17 +16,7 @@ SLEEP_MAX_NIGHTS = 90
 ACTIVITY_PAGE_SIZE = 200
 
 
-@dataclass
-class GarminActivity:
-    id: str
-    type_key: str | None
-    sport: str
-    start_time_local: datetime
-    duration_sec: float | None
-    distance_m: float | None
-    avg_hr: int | None
-    name: str | None
-    raw: dict[str, Any]
+GarminActivity = GarminActivityRow  # parsed from the activity list; stored as it is
 
 
 @dataclass

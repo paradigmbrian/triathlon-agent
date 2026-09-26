@@ -3,7 +3,8 @@ from datetime import date, datetime
 import pytest
 
 from tri_core.db import repo
-from tri_core.db.models import AthleteProfileRow, DailyMetricsRow, WorkoutRow
+from tri_core.db.models import AthleteProfileRow, DailyMetricsRow, GarminActivityRow, WorkoutRow
+from tri_core.sync.match import match_activities
 
 pytestmark = pytest.mark.db
 
@@ -127,3 +128,96 @@ def test_sync_state_roundtrip(db):
     repo.set_sync_state(db, "garmin", date(2026, 9, 2), "error", "boom")
     st = repo.get_sync_state(db, "garmin")
     assert st is not None and st.last_error == "boom" and st.last_synced_date == date(2026, 9, 2)
+
+
+def test_mark_missing_deleted_stays_inside_the_window(db):
+    repo.upsert_workouts(
+        db,
+        [
+            _workout(tp_workout_id="w1", workout_date=date(2026, 9, 1)),
+            _workout(tp_workout_id="w2", workout_date=date(2026, 9, 2)),
+            _workout(tp_workout_id="w3", workout_date=date(2026, 9, 10)),
+        ],
+    )
+    assert repo.mark_missing_deleted(db, date(2026, 9, 1), date(2026, 9, 5), {"w1"}) == 1
+    live = repo.list_workouts_between(db, date(2026, 9, 1), date(2026, 9, 10))
+    assert [r["tp_workout_id"] for r in live] == ["w1", "w3"]
+    every = repo.list_workouts_between(
+        db, date(2026, 9, 1), date(2026, 9, 10), include_deleted=True
+    )
+    assert [(r["tp_workout_id"], r["deleted_at"] is not None) for r in every] == [
+        ("w1", False),
+        ("w2", True),
+        ("w3", False),
+    ]
+    # already tombstoned: not counted again
+    assert repo.mark_missing_deleted(db, date(2026, 9, 1), date(2026, 9, 5), {"w1"}) == 0
+
+
+def test_upsert_restores_a_tombstoned_workout(db):
+    repo.upsert_workouts(db, [_workout()])
+    repo.mark_missing_deleted(db, date(2026, 9, 1), date(2026, 9, 1), set())
+    assert repo.count_deleted(db, ["w1"]) == 1
+    repo.upsert_workouts(db, [_workout(title="Back")])
+    assert repo.count_deleted(db, ["w1"]) == 0
+    row = repo.list_workouts_between(db, date(2026, 9, 1), date(2026, 9, 1))[0]
+    assert row["title"] == "Back" and row["deleted_at"] is None
+
+
+def _activity(id="g1", sport="bike", hour=6, dur=3600.0):
+    return GarminActivityRow(
+        id=id,
+        type_key="cycling" if sport == "bike" else "running",
+        sport=sport,
+        start_time_local=datetime(2026, 9, 1, hour),
+        duration_sec=dur,
+        distance_m=None,
+        avg_hr=None,
+        name=None,
+        raw={"id": id},
+    )
+
+
+def test_upsert_garmin_activities_keeps_the_link(db):
+    repo.upsert_workouts(db, [_workout(sport="brick")])
+    assert repo.upsert_garmin_activities(db, [_activity()]) == 1
+    repo.link_activity(db, "g1", "w1")
+    assert repo.upsert_garmin_activities(db, [_activity(dur=3700.0)]) == 1
+    row = db.execute("select * from garmin_activities where id = 'g1'").fetchone()
+    assert row["tp_workout_id"] == "w1" and float(row["duration_sec"]) == 3700.0
+
+
+def test_link_activity_sets_the_first_leg_on_the_workout(db):
+    repo.upsert_workouts(db, [_workout(sport="brick")])
+    repo.upsert_garmin_activities(
+        db, [_activity(), _activity(id="g2", sport="run", hour=7, dur=1200.0)]
+    )
+    repo.link_activity(db, "g1", "w1")
+    repo.link_activity(db, "g2", "w1")
+    w = repo.list_workouts_between(db, date(2026, 9, 1), date(2026, 9, 1))[0]
+    assert w["garmin_activity_id"] == "g1" and w["start_time_local"] == datetime(2026, 9, 1, 6)
+    legs = repo.linked_activities(db, date(2026, 9, 1), date(2026, 9, 1))
+    assert [a.id for a in legs["w1"]] == ["g1", "g2"]
+    assert legs["w1"][1].duration_sec == 1200.0
+
+
+def test_a_tombstoned_workout_releases_its_garmin_activity(db):
+    day = date(2026, 9, 1)
+    repo.upsert_workouts(db, [_workout(actual_duration_sec=3600)])
+    repo.upsert_garmin_activities(db, [_activity()])
+    repo.link_activity(db, "g1", "w1")
+    # w1 was replaced in TrainingPeaks by w2 (the athlete re-logged the same ride)
+    repo.upsert_workouts(db, [_workout(tp_workout_id="w2", actual_duration_sec=3600)])
+    assert repo.mark_missing_deleted(db, day, day, {"w2"}) == 1
+    gone = repo.list_workouts_between(db, day, day, include_deleted=True)[0]
+    assert gone["tp_workout_id"] == "w1"
+    assert gone["garmin_activity_id"] is None and gone["start_time_local"] is None
+    assert repo.linked_activities(db, day, day) == {}
+
+    workouts = repo.list_workouts_between(db, day, day)
+    pairs = match_activities(workouts, [_activity()], linked=repo.linked_activities(db, day, day))
+    for tp_id, act in pairs:
+        repo.link_activity(db, act.id, tp_id)
+    assert [(tp_id, a.id) for tp_id, a in pairs] == [("w2", "g1")]
+    w2 = repo.list_workouts_between(db, day, day)[0]
+    assert w2["tp_workout_id"] == "w2" and w2["garmin_activity_id"] == "g1"

@@ -10,6 +10,8 @@ from tri_coach.context import (
     render_context,
 )
 from tri_coach.models import ChangeSet, Proposal
+from tri_core.db import repo as crepo
+from tri_core.testing import workout_row
 from tri_nutrition import repo as nrepo
 from tri_nutrition import store as S
 from tri_nutrition.nutrition.models import DayTarget, NutritionProfile
@@ -230,3 +232,13 @@ async def test_priorities_is_clipped_at_priorities_chars(ldb, mem_store, registr
     assert ctx.labs.priorities.endswith("…")
     assert len(ctx.labs.priorities) <= PRIORITIES_CHARS
     assert ctx.labs.priorities in render_context(ctx)
+
+
+async def test_week_hours_skip_deleted_workouts(nocommit, mem_store):
+    crepo.upsert_workouts(
+        nocommit,
+        [workout_row("keep", MONDAY), workout_row("gone", MONDAY, actual_duration_sec=7200)],
+    )
+    crepo.mark_missing_deleted(nocommit, MONDAY, MONDAY, {"keep"})
+    ctx = await load_context(nocommit, mem_store, MONDAY, None)
+    assert ctx.actual_hours == 1.0

@@ -6,6 +6,7 @@ from tri_analyze.repo import AthleteContext, load_athlete_context
 from tri_analyze.testing import TODAY, athlete_context, seed_daily_metrics, seed_workouts
 from tri_core.db import repo
 from tri_core.db.models import AthleteProfileRow
+from tri_core.testing import workout_row
 
 
 def test_athlete_context_fixture_and_overrides():
@@ -124,3 +125,11 @@ def test_load_athlete_context_reads_profile_and_windows(db):
 def test_load_athlete_context_with_empty_tables(db):
     ctx = load_athlete_context(db, TODAY)
     assert ctx.profile is None and ctx.recent_days == [] and ctx.recent_workouts == []
+
+
+@pytest.mark.db
+def test_context_skips_deleted_workouts(db):
+    repo.upsert_workouts(db, [workout_row("keep", TODAY), workout_row("gone", TODAY)])
+    repo.mark_missing_deleted(db, TODAY, TODAY, {"keep"})
+    ctx = load_athlete_context(db, TODAY)
+    assert [w["title"] for w in ctx.recent_workouts] == ["ride keep"]

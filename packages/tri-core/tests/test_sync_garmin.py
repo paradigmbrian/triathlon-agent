@@ -193,3 +193,10 @@ async def test_fetch_garmin_tolerates_empty_days():
     )
     snap = await fetch_garmin(client, date(2026, 9, 1), date(2026, 9, 1), log=lambda m: None)
     assert snap.daily == [] and snap.activities == []
+
+
+def test_garmin_activity_is_the_db_row_type():
+    from tri_core.db.models import GarminActivityRow
+    from tri_core.sync.garmin import GarminActivity
+
+    assert GarminActivity is GarminActivityRow

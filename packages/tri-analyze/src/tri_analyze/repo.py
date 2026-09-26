@@ -33,7 +33,8 @@ def load_athlete_context(conn: Conn, today: date) -> AthleteContext:
     workouts_rows = conn.execute(
         "select workout_date, sport, title, completed, planned_tss, actual_tss, "
         "planned_duration_sec, actual_duration_sec from workouts "
-        "where workout_date between %s and %s order by workout_date, tp_workout_id",
+        "where workout_date between %s and %s and deleted_at is null "
+        "order by workout_date, tp_workout_id",
         (today - timedelta(days=7), today + timedelta(days=7)),
     ).fetchall()
 

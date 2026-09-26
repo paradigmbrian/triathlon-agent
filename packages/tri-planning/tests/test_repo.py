@@ -3,7 +3,9 @@ from datetime import date, timedelta
 import pytest
 
 from tri_core.db import repo as core_repo
+from tri_core.db import repo as crepo
 from tri_core.db.models import DailyMetricsRow
+from tri_core.testing import workout_row
 from tri_planning import repo
 from tri_planning.planning.models import (
     CalendarChange,
@@ -154,3 +156,10 @@ def test_fitness_snapshot_scales_the_days_present(pdb):
     core_repo.upsert_daily_metrics(pdb, rest)
     # 14 days of 70 is a 490 TSS week, not 14 * 70 / 4
     assert repo.fitness_snapshot(pdb, as_of).recent_weekly_tss == pytest.approx(490)
+
+
+def test_recent_sessions_skip_deleted_workouts(pdb):
+    day = date(2026, 9, 15)
+    crepo.upsert_workouts(pdb, [workout_row("keep", day), workout_row("gone", day)])
+    crepo.mark_missing_deleted(pdb, day, day, {"keep"})
+    assert [s["title"] for s in repo.recent_sessions(pdb, day, day)] == ["ride keep"]

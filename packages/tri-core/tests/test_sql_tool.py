@@ -128,3 +128,12 @@ def test_run_query_cuts_a_wide_result_at_a_row_boundary(url):
     assert all(row == ["x" * 3000] for row in out["rows"])  # whole rows, never a cut string
     assert out["truncated"] is True
     assert "narrow" in out["note"]
+
+
+def test_schema_doc_documents_tombstones_and_activities():
+    assert "deleted_at" in SCHEMA_DOC and "garmin_activities" in SCHEMA_DOC
+    assert "status" in SCHEMA_DOC.split("plan_changes:")[1]
+    examples = SCHEMA_DOC.split("Examples:")[1]
+    for query in examples.split("--")[1:]:
+        if "from workouts" in query:
+            assert "deleted_at is null" in query, query

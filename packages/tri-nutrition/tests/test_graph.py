@@ -120,18 +120,18 @@ async def test_edit_replaces_change_set(ndb, make_deps, mem_store):
     assert sent["carbs_grams"] == 300 and sent["calorie_goal"] != 9999  # consistency fix applied
 
 
-async def test_garmin_failure_keeps_today_pending_then_reproposes(ndb, make_deps, mem_store):
+async def test_garmin_failure_leaves_today_for_reconciliation(ndb, make_deps, mem_store):
     g = FakeGarmin(fail_on_call=1)
-    model = ScriptedChatModel(script=[*intake_script(), AIMessage(content="Trying again.")])
+    model = ScriptedChatModel(script=intake_script())
     graph = make_graph(make_deps, mem_store, model, g, horizon=4)
     await graph.ainvoke({"messages": [HumanMessage("go")]}, CFG)
     out = await graph.ainvoke(APPROVE, CFG)
-    assert len(out["pending_changes"]) == 1 and "boom" in out["last_error"]
-    g.fail_on_call = None
-    out = await graph.ainvoke({"messages": [HumanMessage("try again")]}, CFG)
-    assert "__interrupt__" in out and len(out["__interrupt__"][0].value["changes"]) == 1
-    out = await graph.ainvoke(APPROVE, CFG)
-    assert out["pending_changes"] == [] and len(g.calls) == 2  # 1 failed + 1 retried
+    # a Garmin error is ambiguous: the write may have landed, so it is not re-proposed; its
+    # pending row is settled by the next apply's reconciliation
+    assert out["pending_changes"] == [] and "boom" in out["last_error"]
+    assert "outcome unknown" in out["last_error"] and len(g.calls) == 1
+    rows = ndb.execute("select status from nutrition_changes").fetchall()
+    assert [r["status"] for r in rows] == ["pending"]
 
 
 def test_route_functions():

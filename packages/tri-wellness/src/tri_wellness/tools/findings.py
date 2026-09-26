@@ -35,7 +35,8 @@ Examples:
   where metric_date between date '2026-08-13' and date '2026-08-20' order by 1;
   -- sessions in the 72 h before a draw
   select workout_date, sport, title, actual_duration_sec, actual_tss from workouts
-  where completed and workout_date between date '2026-08-17' and date '2026-08-19' order by 1;
+  where completed and deleted_at is null
+  and workout_date between date '2026-08-17' and date '2026-08-19' order by 1;
 """
 
 _FINDING_EXCLUDE = {"athlete_note"}
