@@ -251,13 +251,22 @@ def list_workouts_between(
 
 def mark_missing_deleted(conn: Conn, start: date, end: date, seen_ids: Collection[str]) -> int:
     """Tombstone live workouts dated in [start, end] that the TrainingPeaks listing for that
-    window did not return. Rows outside the window are never touched."""
-    return conn.execute(
-        "update workouts set deleted_at = now() "
-        "where workout_date between %s and %s and deleted_at is null "
-        "and tp_workout_id <> all(%s)",
+    window did not return. Rows outside the window are never touched. A tombstoned workout lets
+    go of its Garmin activities (a soft delete never fires the foreign key), so the next Garmin
+    sync can match them to the workout that replaced it."""
+    row = conn.execute(
+        "with gone as ("
+        "  update workouts set deleted_at = now(), garmin_activity_id = null, "
+        "  start_time_local = null "
+        "  where workout_date between %s and %s and deleted_at is null "
+        "  and tp_workout_id <> all(%s) returning tp_workout_id"
+        "), released as ("
+        "  update garmin_activities a set tp_workout_id = null from gone "
+        "  where a.tp_workout_id = gone.tp_workout_id"
+        ") select count(*) as n from gone",
         (start, end, list(seen_ids)),
-    ).rowcount
+    ).fetchone()
+    return int(row["n"]) if row else 0
 
 
 def count_deleted(conn: Conn, ids: Collection[str]) -> int:

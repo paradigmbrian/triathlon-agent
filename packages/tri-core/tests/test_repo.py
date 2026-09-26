@@ -4,6 +4,7 @@ import pytest
 
 from tri_core.db import repo
 from tri_core.db.models import AthleteProfileRow, DailyMetricsRow, GarminActivityRow, WorkoutRow
+from tri_core.sync.match import match_activities
 
 pytestmark = pytest.mark.db
 
@@ -198,3 +199,25 @@ def test_link_activity_sets_the_first_leg_on_the_workout(db):
     legs = repo.linked_activities(db, date(2026, 9, 1), date(2026, 9, 1))
     assert [a.id for a in legs["w1"]] == ["g1", "g2"]
     assert legs["w1"][1].duration_sec == 1200.0
+
+
+def test_a_tombstoned_workout_releases_its_garmin_activity(db):
+    day = date(2026, 9, 1)
+    repo.upsert_workouts(db, [_workout(actual_duration_sec=3600)])
+    repo.upsert_garmin_activities(db, [_activity()])
+    repo.link_activity(db, "g1", "w1")
+    # w1 was replaced in TrainingPeaks by w2 (the athlete re-logged the same ride)
+    repo.upsert_workouts(db, [_workout(tp_workout_id="w2", actual_duration_sec=3600)])
+    assert repo.mark_missing_deleted(db, day, day, {"w2"}) == 1
+    gone = repo.list_workouts_between(db, day, day, include_deleted=True)[0]
+    assert gone["tp_workout_id"] == "w1"
+    assert gone["garmin_activity_id"] is None and gone["start_time_local"] is None
+    assert repo.linked_activities(db, day, day) == {}
+
+    workouts = repo.list_workouts_between(db, day, day)
+    pairs = match_activities(workouts, [_activity()], linked=repo.linked_activities(db, day, day))
+    for tp_id, act in pairs:
+        repo.link_activity(db, act.id, tp_id)
+    assert [(tp_id, a.id) for tp_id, a in pairs] == [("w2", "g1")]
+    w2 = repo.list_workouts_between(db, day, day)[0]
+    assert w2["tp_workout_id"] == "w2" and w2["garmin_activity_id"] == "g1"
