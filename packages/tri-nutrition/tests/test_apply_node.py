@@ -464,6 +464,41 @@ async def test_a_race_note_whose_record_failed_is_not_sent_again(
     assert [c.op for c in r2.applied] == ["set_session_note"] and r2.error is None
 
 
+async def test_a_race_note_reconciled_this_pass_is_updated_not_created_again(
+    ndb, make_deps, mem_store
+):
+    title = "Race fuel: City Tri 2026-10-24"
+    plan = RaceFuelPlan(**race_plan_json(MONDAY + timedelta(days=40)))
+    rid = repo.insert_pending_change(ndb, "t", race_note_change(plan, title, None))
+    _backdate(ndb, rid)
+    newer = RaceFuelPlan(
+        **race_plan_json(MONDAY + timedelta(days=40), note_text="Race fuel: 90 g/h on the bike.")
+    )
+    listed = {"notes": [{"id": "n77", "title": title, "date": "2026-10-24"}]}
+    tp = FakeTp(responses={"tp_list_notes": listed})
+    r = await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp),
+        mem_store,
+        [race_note_change(newer, title, None)],
+        "t",
+        overrides=None,
+    )
+    assert [c[0] for c in tp.calls] == ["tp_list_notes", "tp_update_note"]
+    assert tp.calls[1][1] == {
+        "note_id": "n77",
+        "title": title,
+        "description": "Race fuel: 90 g/h on the bike.",
+    }
+    assert r.error is None and [c.target_key for c in r.applied] == ["n77"]
+    assert "already on TrainingPeaks as note n77 (reconciled)" in r.report(1, None)
+    rows = ndb.execute("select status, target_key from nutrition_changes order by id").fetchall()
+    assert [(row["status"], row["target_key"]) for row in rows] == [
+        ("applied", "n77"),
+        ("applied", "n77"),
+    ]
+    assert repo.owned_note_ids(ndb) == {"n77"}
+
+
 async def test_a_pending_row_that_cannot_be_checked_stays_pending(ndb, make_deps, mem_store):
     repo.upsert_targets(ndb, [target()])
     rid = repo.insert_pending_change(ndb, "t", day_target_change(target()))
