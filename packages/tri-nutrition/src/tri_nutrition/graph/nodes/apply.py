@@ -286,7 +286,8 @@ async def apply_changes(
     refusal drops the change; a failure stops the batch. A definitively rejected change stays in
     `remaining`; one whose outcome is unknown (a timeout, a server error, or sent but not
     recorded) leaves it and is reconciled next apply. `overrides` are written to the
-    profile in the Store only when every change went through."""
+    profile in the Store once nothing is left in `remaining`: every change went through or its
+    outcome is unknown; a definitive failure or a held change keeps them pending with it."""
     reconciled = await reconcile_pending(deps)
     todo = list(changes)
     applied: list[NutritionChange] = []
@@ -322,8 +323,11 @@ async def apply_changes(
         )
         error = held_msg if error is None else f"{error}; {held_msg}"
 
+    # A definitive failure and a held change both stay in `remaining`, so an empty `remaining`
+    # means every change went through or is pending reconciliation (outcome unknown): the
+    # approval stands and the overrides are saved.
     persisted = False
-    if error is None and not remaining and overrides:
+    if not remaining and overrides:
         base = await S.get_profile(store)
         if base is not None:
             await S.put_profile(store, apply_overrides(base, overrides))
@@ -348,7 +352,7 @@ def make_apply_node(deps: GraphDeps) -> Any:
         r = await apply_changes(
             deps, store, changes, str(config["configurable"]["thread_id"]), overrides=overrides
         )
-        clean = r.error is None and not r.remaining
+        clean = not r.remaining  # the overrides were saved; an unknown outcome still clears
         return {
             "pending_changes": r.remaining,
             "pending_violations": (state.get("pending_violations") or {}) if r.remaining else {},

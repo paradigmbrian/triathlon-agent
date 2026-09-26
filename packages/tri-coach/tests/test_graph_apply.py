@@ -130,6 +130,38 @@ async def test_nutrition_handoff_proposes_and_apply_persists_overrides(ndb, make
     )
 
 
+async def test_approved_overrides_are_saved_when_the_garmin_outcome_is_unknown(
+    ndb, make_deps, mem_store
+):
+    await S.put_profile(mem_store, NutritionProfile(**PROFILE_ARGS))
+    garmin = FakeGarmin(fail_on_call=1)
+    graph, _ = graph_for(
+        make_deps,
+        mem_store,
+        garmin=garmin,
+        tp=NutritionFakeTp(),
+        coach=[
+            consult("nutrition", "Race block starts Monday; raise activity_factor to 1.45."),
+            propose("Higher activity factor for the race block.", ["p1"]),
+        ],
+        nutrition=[
+            tool_call(
+                "propose_target_changes",
+                {"overrides": {"activity_factor": 1.45}, "reason": "race block"},
+            ),
+            AIMessage(content="Proposed."),
+        ],
+    )
+    await graph.ainvoke({"messages": [HumanMessage("race block starts")]}, CFG)
+    out = await graph.ainvoke(Command(resume={"action": "approve"}), CFG)
+    assert [c[0] for c in garmin.calls] == ["set_nutrition_daily_settings"]
+    assert "outcome unknown" in (out["reports"][0].error or "")
+    assert (await S.get_profile(mem_store)).activity_factor == 1.45
+    assert out["pending"] is None  # nothing held: the write is pending reconciliation
+    rows = ndb.execute("select status from nutrition_changes").fetchall()
+    assert [r["status"] for r in rows] == ["pending"]
+
+
 async def test_bought_plan_is_adopted_after_apply(nocommit, make_deps, mem_store):
     repo.insert_goal(nocommit, TrainingGoal(**{**GOAL_ARGS, "tp_plan_id": "p1"}))
     workouts = [
