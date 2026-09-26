@@ -14,7 +14,8 @@ db/
   models.py       Row dataclasses: AthleteProfileRow, WorkoutRow, DailyMetricsRow,
                   GarminActivityRow, SyncState
   repo.py         upsert_* functions and the few reads the sync needs; callers commit
-  writes.py       recorded_write, mark_failed, pending_rows: pending -> applied | failed
+  writes.py       recorded_write, mark_failed, note_pending_error, pending_rows:
+                  pending -> applied | failed
   sql_tool.py     the agents' read-only SQL tool and SCHEMA_DOC
 ```
 
@@ -45,8 +46,12 @@ backfilled from `workouts.garmin_activity_id` with `raw = '{}'`; a Garmin sync c
 day fills the rest.
 
 **`plan_changes` / `nutrition_changes` `status`**: `pending` (inserted before the call),
-`applied`, or `failed` with `error`. Ownership reads count `applied` rows only. A `pending` row
-older than 60 s is reconciled against the server at the start of the next apply.
+`applied`, or `failed` with `error`. Only a definitive TrainingPeaks rejection (a validation,
+auth or not-found error code) marks a call `failed`; a timeout, server error, dropped connection
+or any Garmin error leaves the row `pending` with its `error` text, because the write may have
+landed, and the caller does not re-propose that change. Ownership reads count `applied` rows
+only. A `pending` row older than 60 s is reconciled against the server at the start of the next
+apply: found becomes `applied` (its `error` cleared), missing becomes `failed`.
 
 **`daily_metrics`** (one row per calendar day): Garmin physiology (sleep seconds and score,
 overnight HRV, resting HR, body battery high/low, stress, training readiness) and the
