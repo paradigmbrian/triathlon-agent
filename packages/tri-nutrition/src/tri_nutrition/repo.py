@@ -8,6 +8,7 @@ from typing import Any
 from psycopg.types.json import Jsonb
 
 from tri_core.db.repo import Conn
+from tri_core.db.writes import pending_rows
 from tri_nutrition.nutrition.models import (
     DayTarget,
     NutritionChange,
@@ -176,10 +177,43 @@ def insert_change(
     return int(row["id"])
 
 
+def insert_pending_change(conn: Conn, thread_id: str, change: NutritionChange) -> int:
+    """The row for a server call about to be made; `mark_change_applied` settles it."""
+    row = conn.execute(
+        """
+        insert into nutrition_changes (thread_id, operation, target_key, payload, reason, status)
+        values (%s, %s, %s, %s, %s, 'pending') returning id
+        """,
+        (
+            thread_id,
+            change.op,
+            change.target_key,
+            Jsonb(change.model_dump(mode="json")),
+            change.reason,
+        ),
+    ).fetchone()
+    assert row is not None
+    return int(row["id"])
+
+
+def mark_change_applied(
+    conn: Conn, row_id: int, result: dict[str, Any] | None, *, target_key: str | None = None
+) -> None:
+    conn.execute(
+        "update nutrition_changes set status = 'applied', result = %s, "
+        "target_key = coalesce(%s, target_key), applied_at = now(), error = null where id = %s",
+        (Jsonb(result) if result is not None else None, target_key, row_id),
+    )
+
+
+def pending_changes(conn: Conn) -> list[dict[str, Any]]:
+    return pending_rows(conn, "nutrition_changes")
+
+
 def owned_note_ids(conn: Conn) -> set[str]:
     rows = conn.execute(
         "select distinct target_key from nutrition_changes "
-        "where operation = 'set_race_note' and target_key <> ''"
+        "where operation = 'set_race_note' and target_key <> '' and status = 'applied'"
     ).fetchall()
     return {r["target_key"] for r in rows}
 
@@ -202,7 +236,7 @@ def mark_fuel_written_for(
 def session_note_owned(conn: Conn, workout_id: str) -> bool:
     row = conn.execute(
         "select 1 as x from nutrition_changes where operation = 'set_session_note' "
-        "and target_key = %s limit 1",
+        "and target_key = %s and status = 'applied' limit 1",
         (workout_id,),
     ).fetchone()
     return row is not None

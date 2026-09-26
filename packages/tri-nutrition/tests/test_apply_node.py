@@ -105,7 +105,8 @@ async def test_garmin_failure_keeps_change_pending(ndb, make_deps, mem_store):
     assert [c.day for c in out["pending_changes"]] == [MONDAY]
     assert "boom" in out["last_error"]
     assert repo.list_targets(ndb, MONDAY, MONDAY)[0].written_to_garmin is False
-    assert ndb.execute("select count(*) as n from nutrition_changes").fetchone()["n"] == 0
+    rows = ndb.execute("select status, error from nutrition_changes").fetchall()
+    assert [r["status"] for r in rows] == ["failed"] and "boom" in rows[0]["error"]
 
 
 async def test_refuses_without_garmin(ndb, make_deps, mem_store):
@@ -247,3 +248,88 @@ async def test_apply_changes_direct_does_not_persist_overrides_on_partial(
     )
     assert r.error is not None and "boom" in r.error and r.profile_updated is False
     assert (await S.get_profile(mem_store)).activity_factor == 1.35
+
+
+def _backdate(conn, row_id):
+    conn.execute(
+        "update nutrition_changes set applied_at = now() - interval '5 minutes' where id = %s",
+        (row_id,),
+    )
+
+
+def _status(conn, row_id):
+    return conn.execute(
+        "select status, error, target_key from nutrition_changes where id = %s", (row_id,)
+    ).fetchone()
+
+
+async def test_a_pending_day_target_found_on_garmin_is_applied(ndb, make_deps, mem_store):
+    repo.upsert_targets(ndb, [target()])
+    rid = repo.insert_pending_change(ndb, "t", day_target_change(target()))
+    _backdate(ndb, rid)
+    g = FakeGarmin(
+        responses={
+            "get_nutrition_daily_settings": {
+                "calorieGoal": 2800,
+                "macroGoals": {"carbs": 280, "protein": 150, "fat": 120},
+            }
+        }
+    )
+    r = await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), garmin=g), mem_store, [], "t", overrides=None
+    )
+    assert g.calls == [("get_nutrition_daily_settings", {"date": "2026-09-14"})]
+    assert _status(ndb, rid)["status"] == "applied"
+    assert repo.list_targets(ndb, MONDAY, MONDAY)[0].written_to_garmin is True
+    assert "recorded as applied" in r.report(0, None)
+
+
+async def test_a_pending_day_target_missing_on_garmin_is_failed(ndb, make_deps, mem_store):
+    repo.upsert_targets(ndb, [target()])
+    rid = repo.insert_pending_change(ndb, "t", day_target_change(target()))
+    _backdate(ndb, rid)
+    g = FakeGarmin()  # answers with no macro goals
+    await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), garmin=g), mem_store, [], "t", overrides=None
+    )
+    row = _status(ndb, rid)
+    assert row["status"] == "failed" and row["error"] == "not found on Garmin after a pending write"
+    assert repo.list_targets(ndb, MONDAY, MONDAY)[0].written_to_garmin is False
+
+
+async def test_a_reconciled_session_note_is_owned(ndb, make_deps, mem_store):
+    fuel = SessionFuel(**session_fuel_json("w1", MONDAY))
+    rid = repo.insert_pending_change(ndb, "t", session_note_change(fuel))
+    _backdate(ndb, rid)
+    assert repo.session_note_owned(ndb, "w1") is False  # pending does not own
+    tp = FakeTp(responses={"tp_get_workout_note": {"note": fuel.note_text}})
+    newer = SessionFuel(**session_fuel_json("w1", MONDAY, note_text="Fuel: 70 g/h."))
+    r = await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp),
+        mem_store,
+        [session_note_change(newer)],
+        "t",
+        overrides=None,
+    )
+    assert _status(ndb, rid)["status"] == "applied"
+    # owned now, so the write skips the ownership read that would have refused it
+    assert [c[0] for c in tp.calls] == ["tp_get_workout_note", "tp_set_workout_note"]
+    assert r.error is None and [c.op for c in r.applied] == ["set_session_note"]
+
+
+async def test_a_pending_race_note_create_takes_the_found_note_id(ndb, make_deps, mem_store):
+    plan = RaceFuelPlan(**race_plan_json(MONDAY + timedelta(days=40)))
+    change = race_note_change(plan, "Race fuel: City Tri 2026-10-24", None)
+    rid = repo.insert_pending_change(ndb, "t", change)
+    _backdate(ndb, rid)
+    listed = {
+        "notes": [{"id": "n77", "title": "Race fuel: City Tri 2026-10-24", "date": "2026-10-24"}]
+    }
+    tp = FakeTp(responses={"tp_list_notes": listed})
+    await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp), mem_store, [], "t", overrides=None
+    )
+    assert tp.calls == [("tp_list_notes", {"start_date": "2026-10-24", "end_date": "2026-10-24"})]
+    row = _status(ndb, rid)
+    assert row["status"] == "applied" and row["target_key"] == "n77"
+    assert "n77" in repo.owned_note_ids(ndb)
