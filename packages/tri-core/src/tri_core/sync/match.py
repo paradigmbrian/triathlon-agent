@@ -40,18 +40,18 @@ def _brick_gap(
     w: dict[str, Any], legs: Sequence[GarminActivity], act: GarminActivity, tolerance_sec: int
 ) -> float | None:
     """How far the brick's legs would fall from its actual duration with `act` added, or None
-    when `act` cannot be a leg. A first leg only has to leave room for the second."""
+    when `act` cannot be a leg. A first leg matches on sport and day alone."""
     if any(leg.sport == act.sport for leg in legs) or (act.sport == BRICK and legs):
         return None
     total = w.get("actual_duration_sec")
     durations = [leg.duration_sec for leg in legs] + [act.duration_sec]
     if total is None or any(d is None for d in durations):
         return 0.0
-    summed = sum(float(d or 0) for d in durations)
     if legs or act.sport == BRICK:  # the brick is complete with this activity
+        summed = sum(float(d or 0) for d in durations)
         gap = abs(float(total) - summed)
         return gap if gap <= tolerance_sec else None
-    return 0.0 if summed <= float(total) + tolerance_sec else None
+    return 0.0
 
 
 def match_activities(

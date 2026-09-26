@@ -93,3 +93,8 @@ def test_a_linked_activity_is_never_reassigned():
     a = _act("g1", "run", 2, 2400.0)
     workouts = [_wo("w1", "run", 2, 2000, gid="g1"), _wo("w2", "run", 2, 2400)]
     assert match_activities(workouts, [a], linked={"w1": [a]}) == []
+
+
+def test_a_first_leg_matches_on_sport_and_day_whatever_its_duration():
+    long_ride = _act("g1", "bike", 3, 10800.0)
+    assert match_activities([_wo("w1", "brick", 3, 4800)], [long_ride]) == [("w1", long_ride)]
