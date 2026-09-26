@@ -52,9 +52,9 @@ or any Garmin error leaves the row `pending` with its `error` text, because the 
 landed, and the caller does not re-propose that change. Ownership reads count `applied` rows
 only. A `pending` row older than 60 s is reconciled against the server at the start of the next
 apply: found becomes `applied` (its `error` cleared), missing becomes `failed`. A change in that
-apply's batch that repeats a create reconciled as applied in the same pass is not sent again: a
-planning `create` (same date, title and sport) is dropped, and a race-note create (same day and
-title) updates the found note instead.
+apply's batch that repeats a create reconciled as applied in the same pass is not sent again: each
+reconciled planning `create` drops one batch `create` of the identical workout, and a race-note
+create (same day and title) updates the found note instead.
 
 **`daily_metrics`** (one row per calendar day): Garmin physiology (sleep seconds and score,
 overnight HRV, resting HR, body battery high/low, stress, training readiness) and the

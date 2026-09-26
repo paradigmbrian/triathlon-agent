@@ -245,10 +245,13 @@ def _onto_reconciled_note(
 ) -> NutritionChange:
     """A race-note create for a note reconciled onto TrainingPeaks this pass becomes an update of
     that note, so its new text does not land in a second note."""
-    if change.op != "set_race_note" or change.target_key:
+    if not notes or change.op != "set_race_note" or change.target_key:
         return change
-    note_id = notes.get((change.day, str(change.payload["title"])))
-    return change if note_id is None else change.model_copy(update={"target_key": note_id})
+    note_id = notes.get((change.day, str(change.payload.get("title"))))
+    if note_id is None:
+        return change
+    reason = f"update race fuel note for {change.day}"
+    return change.model_copy(update={"target_key": note_id, "reason": reason})
 
 
 def _server_down(deps: GraphDeps, change: NutritionChange) -> bool:

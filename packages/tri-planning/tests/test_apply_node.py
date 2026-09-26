@@ -417,6 +417,32 @@ async def test_a_create_reconciled_this_pass_is_not_sent_again(nocommit, make_de
     assert [row["status"] for row in rows] == ["applied", "applied"]
 
 
+async def test_a_reconciled_create_cancels_one_identical_create_only(nocommit, make_deps):
+    gid, pid = seed(nocommit)
+    rid = repo.insert_pending_change(nocommit, pid, "t", create(0, "Easy run"))
+    _backdate(nocommit, rid)
+    other = create(0, "Easy run")
+    assert other.workout is not None
+    other = other.model_copy(
+        update={"workout": other.workout.model_copy(update={"description": "strides"})}
+    )
+    tp = FakeTp(listings=[[_listed("1001", title="Easy run")]])
+    r = await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp),
+        [create(0, "Easy run"), create(0, "Easy run"), other],
+        "t",
+        plan_id=pid,
+        goal_id=gid,
+    )
+    # the reconciled AM cancels one identical create; the PM twin and the variant are sent
+    sent = [c[1] for c in tp.calls if c[0] == "tp_create_workout"]
+    assert len(sent) == 2 and [c.workout.description for c in r.applied] == ["", "strides"]
+    assert r.skipped == [
+        "create 2026-09-14 bike 'Easy run': already on TrainingPeaks (reconciled); not sent again"
+    ]
+    assert r.remaining == [] and r.error is None
+
+
 async def test_a_definitive_rejection_is_failed_and_kept(nocommit, make_deps):
     gid, pid = seed(nocommit)
     bad = McpToolError("tp_create_workout", "VALIDATION_ERROR: title too long")

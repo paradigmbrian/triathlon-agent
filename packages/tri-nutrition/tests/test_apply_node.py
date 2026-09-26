@@ -11,7 +11,13 @@ from tri_nutrition import store as S
 from tri_nutrition.graph.nodes.apply import ApplyResult, apply_changes, make_apply_node
 from tri_nutrition.graph.state import NutritionState
 from tri_nutrition.nutrition.garmin_calls import day_target_change
-from tri_nutrition.nutrition.models import DayTarget, NutritionProfile, RaceFuelPlan, SessionFuel
+from tri_nutrition.nutrition.models import (
+    DayTarget,
+    NutritionChange,
+    NutritionProfile,
+    RaceFuelPlan,
+    SessionFuel,
+)
 from tri_nutrition.nutrition.tp_calls import race_note_change, session_note_change
 from tri_nutrition.testing import (
     MONDAY,
@@ -490,6 +496,7 @@ async def test_a_race_note_reconciled_this_pass_is_updated_not_created_again(
         "description": "Race fuel: 90 g/h on the bike.",
     }
     assert r.error is None and [c.target_key for c in r.applied] == ["n77"]
+    assert r.applied[0].reason == "update race fuel note for 2026-10-24"
     assert "already on TrainingPeaks as note n77 (reconciled)" in r.report(1, None)
     rows = ndb.execute("select status, target_key from nutrition_changes order by id").fetchall()
     assert [(row["status"], row["target_key"]) for row in rows] == [
@@ -497,6 +504,24 @@ async def test_a_race_note_reconciled_this_pass_is_updated_not_created_again(
         ("applied", "n77"),
     ]
     assert repo.owned_note_ids(ndb) == {"n77"}
+
+
+async def test_a_malformed_race_note_fails_at_its_own_turn_without_reconciled_notes(
+    ndb, make_deps, mem_store
+):
+    bad = NutritionChange(
+        op="set_race_note", target_key="", day=MONDAY, payload={}, reason="create"
+    )
+    tp = FakeTp()
+    with pytest.raises(KeyError):
+        await apply_changes(
+            make_deps(ScriptedChatModel(script=[]), tp=tp),
+            mem_store,
+            [session_change(), bad],
+            "t",
+            overrides=None,
+        )
+    assert [c[0] for c in tp.calls] == ["tp_get_workout_note", "tp_set_workout_note"]
 
 
 async def test_a_pending_row_that_cannot_be_checked_stays_pending(ndb, make_deps, mem_store):

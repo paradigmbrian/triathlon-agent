@@ -169,12 +169,6 @@ async def reconcile_pending(deps: GraphDeps) -> tuple[list[str], list[CalendarCh
     return lines, found
 
 
-def _create_key(change: CalendarChange) -> tuple[Any, ...] | None:
-    """What makes two creates the same workout: its date, title and sport."""
-    w = change.workout
-    return (w.date, w.title, w.sport) if change.op == "create" and w is not None else None
-
-
 async def _record_and_send(
     deps: GraphDeps,
     tp: ToolCaller,
@@ -242,8 +236,9 @@ async def apply_changes(
     reconciled first. Ownership: update/move/delete only agent-authored workouts unless
     `athlete_requested`. Stops at the first failure; the rest stay in `remaining`. A definitive
     rejection stays there too; a change whose outcome is unknown (a timeout, a server error, or
-    sent but not recorded) leaves `remaining` and is reconciled next apply. A create equal to
-    one reconciled as applied in this pass (same date, title and sport) is dropped, not sent."""
+    sent but not recorded) leaves `remaining` and is reconciled next apply. Each create
+    reconciled as applied in this pass cancels one batch create of the identical workout (every
+    field), which is dropped, not sent."""
     todo = list(changes)
     if deps.tp is None:
         return ApplyResult(
@@ -256,7 +251,8 @@ async def apply_changes(
         )
 
     reconciled, found = await reconcile_pending(deps)
-    on_tp = {k for k in map(_create_key, found) if k is not None}
+    # each workout reconciled onto TrainingPeaks cancels at most one identical create
+    on_tp = [c.workout for c in found if c.workout is not None]
     owned: set[str] = set()
     if plan_id is not None:
         with deps.connect() as conn:
@@ -269,7 +265,8 @@ async def apply_changes(
     written: set[Any] = set()
 
     for change in todo:
-        if _create_key(change) in on_tp:  # reconciled above: sending it again would duplicate it
+        if change.op == "create" and change.workout in on_tp:  # already created: never twice
+            on_tp.remove(change.workout)
             skipped.append(
                 f"{_label(change)}: already on TrainingPeaks (reconciled); not sent again"
             )
