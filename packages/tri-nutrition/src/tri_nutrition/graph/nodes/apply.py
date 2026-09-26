@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
@@ -28,6 +28,7 @@ from tri_nutrition.tools.garmin import trim_settings
 
 GARMIN_OPS = ("set_day_targets",)
 TP_OPS = ("set_session_note", "set_race_note")
+PENDING_AMBIGUOUS = "more than one matching note on TrainingPeaks; not claimed"
 
 
 def _label(c: NutritionChange) -> str:
@@ -116,8 +117,18 @@ def _grams(v: Any) -> int | None:
     return int(round(float(v))) if v is not None else None
 
 
-async def _verify(server: ToolCaller, change: NutritionChange) -> tuple[bool, str | None]:
-    """Whether a pending change is on its server, and the note id it concerns."""
+Verdict = Literal["applied", "missing", "ambiguous"]
+
+
+def _verdict(found: bool) -> Verdict:
+    return "applied" if found else "missing"
+
+
+async def _verify(
+    server: ToolCaller, change: NutritionChange, owned: set[str]
+) -> tuple[Verdict, str | None]:
+    """Whether a pending change is on its server, and the note id it concerns. A race-note
+    create claims only a note no applied row owns, and only when exactly one matches."""
     p = change.payload
     if change.op == "set_day_targets":
         s = trim_settings(
@@ -125,11 +136,11 @@ async def _verify(server: ToolCaller, change: NutritionChange) -> tuple[bool, st
         )
         got = (_grams(s["carbs_g"]), _grams(s["protein_g"]), _grams(s["fat_g"]))
         want = (_grams(p["carbs_grams"]), _grams(p["protein_grams"]), _grams(p["fat_grams"]))
-        return got == want, None
+        return _verdict(got == want), None
     if change.op == "set_session_note":
         cur = await server.call_json("tp_get_workout_note", {"workout_id": str(p["workout_id"])})
         note = cur.get("note") if isinstance(cur, dict) else None
-        return str(note or "").strip() == str(p["note"]).strip(), None
+        return _verdict(str(note or "").strip() == str(p["note"]).strip()), None
     if change.op == "set_race_note" and change.target_key:
         cur = await server.call_json("tp_get_note", {"note_id": change.target_key})
         note = cur.get("note") if isinstance(cur, dict) else None
@@ -138,16 +149,25 @@ async def _verify(server: ToolCaller, change: NutritionChange) -> tuple[bool, st
             and note.get("title") == p["title"]
             and note.get("description") == p["description"]
         )
-        return same, change.target_key
+        return _verdict(same), change.target_key
     if change.op == "set_race_note":
         day = str(p["date"])
         listed = await server.call_json("tp_list_notes", {"start_date": day, "end_date": day})
         notes = listed.get("notes") if isinstance(listed, dict) else None
-        for n in notes if isinstance(notes, list) else []:
-            if isinstance(n, dict) and n.get("title") == p["title"] and n.get("id") is not None:
-                return True, str(n["id"])
-        return False, None
-    return False, None
+        hits = [
+            str(n["id"])
+            for n in (notes if isinstance(notes, list) else [])
+            if isinstance(n, dict)
+            and n.get("title") == p["title"]
+            and n.get("id") is not None
+            and str(n["id"]) not in owned
+        ]
+        if len(hits) > 1:
+            return "ambiguous", None
+        if hits:
+            return "applied", hits[0]
+        return "missing", None
+    return "missing", None
 
 
 async def reconcile_pending(deps: GraphDeps) -> list[str]:
@@ -155,6 +175,7 @@ async def reconcile_pending(deps: GraphDeps) -> list[str]:
     server shows the change, else `failed`. Returns one report line per row settled or left."""
     with deps.connect() as conn:
         rows = repo.pending_changes(conn)
+        owned = repo.owned_note_ids(conn)
     lines: list[str] = []
     for row in rows:
         change = NutritionChange.model_validate(row["payload"])
@@ -165,17 +186,23 @@ async def reconcile_pending(deps: GraphDeps) -> list[str]:
             lines.append(f"{_label(change)}: {name} unavailable; left pending")
             continue
         try:
-            found, note_id = await _verify(server, change)
+            verdict, note_id = await _verify(server, change, owned)
         except McpToolError as exc:
             lines.append(f"{_label(change)}: {name} unreachable ({exc}); left pending")
             continue
         with deps.connect() as conn:
-            if found:
+            if verdict == "applied":
                 repo.mark_change_applied(conn, row["id"], {"reconciled": True}, target_key=note_id)
                 _mark_written(conn, change, note_id)
+                if change.op == "set_race_note" and note_id is not None:
+                    owned.add(note_id)
                 lines.append(f"{_label(change)}: found on {name}; recorded as applied")
             else:
-                err = f"not found on {name} after a pending write"
+                err = (
+                    PENDING_AMBIGUOUS
+                    if verdict == "ambiguous"
+                    else f"not found on {name} after a pending write"
+                )
                 mark_failed(conn, "nutrition_changes", row["id"], err)
                 lines.append(f"{_label(change)}: {err}; marked failed")
             conn.commit()

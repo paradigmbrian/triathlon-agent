@@ -333,3 +333,48 @@ async def test_a_pending_race_note_create_takes_the_found_note_id(ndb, make_deps
     row = _status(ndb, rid)
     assert row["status"] == "applied" and row["target_key"] == "n77"
     assert "n77" in repo.owned_note_ids(ndb)
+
+
+async def test_a_pending_race_note_create_with_two_matches_is_not_claimed(
+    ndb, make_deps, mem_store
+):
+    plan = RaceFuelPlan(**race_plan_json(MONDAY + timedelta(days=40)))
+    title = "Race fuel: City Tri 2026-10-24"
+    rid = repo.insert_pending_change(ndb, "t", race_note_change(plan, title, None))
+    _backdate(ndb, rid)
+    listed = {
+        "notes": [
+            {"id": "n77", "title": title, "date": "2026-10-24"},
+            {"id": "n78", "title": title, "date": "2026-10-24"},
+        ]
+    }
+    tp = FakeTp(responses={"tp_list_notes": listed})
+    r = await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp), mem_store, [], "t", overrides=None
+    )
+    row = _status(ndb, rid)
+    assert row["status"] == "failed"
+    assert row["error"] == "more than one matching note on TrainingPeaks; not claimed"
+    assert not {"n77", "n78"} & repo.owned_note_ids(ndb)
+    assert "not claimed; marked failed" in r.report(0, None)
+
+
+async def test_a_pending_race_note_create_skips_an_owned_note(ndb, make_deps, mem_store):
+    plan = RaceFuelPlan(**race_plan_json(MONDAY + timedelta(days=40)))
+    title = "Race fuel: City Tri 2026-10-24"
+    owned = repo.insert_pending_change(ndb, "t", race_note_change(plan, title, "n77"))
+    repo.mark_change_applied(ndb, owned, {"success": True})
+    rid = repo.insert_pending_change(ndb, "t", race_note_change(plan, title, None))
+    _backdate(ndb, rid)
+    listed = {
+        "notes": [
+            {"id": "n77", "title": title, "date": "2026-10-24"},
+            {"id": "n78", "title": title, "date": "2026-10-24"},
+        ]
+    }
+    tp = FakeTp(responses={"tp_list_notes": listed})
+    await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp), mem_store, [], "t", overrides=None
+    )
+    row = _status(ndb, rid)
+    assert row["status"] == "applied" and row["target_key"] == "n78"
