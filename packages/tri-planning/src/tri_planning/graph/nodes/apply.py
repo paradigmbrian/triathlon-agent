@@ -8,11 +8,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+import psycopg
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
 
 from tri_core.db.repo import Conn
-from tri_core.db.writes import mark_failed, recorded_write
+from tri_core.db.writes import SentUnrecorded, mark_failed, recorded_write
 from tri_core.mcp.client import McpToolError
 from tri_core.sync import ToolCaller
 from tri_planning import repo
@@ -185,13 +186,28 @@ async def _record_and_send(
         ):
             repo.set_goal_event(conn, goal_id, str(result["event_id"]))
 
-    rec = await recorded_write(
-        deps.connect,
-        table="plan_changes",
-        insert_pending=lambda conn: repo.insert_pending_change(conn, plan_id, thread_id, change),
-        call=lambda: tp.call_json(name, args),
-        mark_applied=mark_applied,
-    )
+    sent = False
+
+    async def send() -> Any:
+        nonlocal sent
+        result = await tp.call_json(name, args)
+        sent = True
+        return result
+
+    try:
+        rec = await recorded_write(
+            deps.connect,
+            table="plan_changes",
+            insert_pending=lambda conn: repo.insert_pending_change(
+                conn, plan_id, thread_id, change
+            ),
+            call=send,
+            mark_applied=mark_applied,
+        )
+    except psycopg.Error as exc:
+        if sent:
+            raise SentUnrecorded(exc) from exc
+        raise
     return rec.result
 
 
@@ -252,6 +268,10 @@ async def apply_changes(
                 thread_id=thread_id,
                 goal_id=goal_id,
             )
+        except SentUnrecorded as exc:  # the database is unhealthy: stop, but never re-send it
+            error = f"{_label(change)}: {exc}"
+            remaining.remove(change)
+            break
         except (McpToolError, ValueError) as exc:
             error = f"{_label(change)} failed: {exc}"
             break

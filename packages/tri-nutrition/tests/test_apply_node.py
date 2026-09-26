@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+import psycopg
 import pytest
 from langgraph.graph import END, START, StateGraph
 
@@ -378,3 +379,52 @@ async def test_a_pending_race_note_create_skips_an_owned_note(ndb, make_deps, me
     )
     row = _status(ndb, rid)
     assert row["status"] == "applied" and row["target_key"] == "n78"
+
+
+async def test_a_race_note_whose_record_failed_is_not_sent_again(
+    ndb, make_deps, mem_store, monkeypatch
+):
+    plan = RaceFuelPlan(**race_plan_json(MONDAY + timedelta(days=40)))
+    title = "Race fuel: City Tri 2026-10-24"
+    real = repo.mark_change_applied
+    broken = [True]
+
+    def flaky(conn, row_id, result, **kw):
+        if broken:
+            broken.pop()
+            raise psycopg.OperationalError("server closed the connection")
+        real(conn, row_id, result, **kw)
+
+    monkeypatch.setattr(repo, "mark_change_applied", flaky)
+    tp = FakeTp()
+    r = await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp),
+        mem_store,
+        [race_note_change(plan, title, None), session_change()],
+        "t",
+        overrides=None,
+    )
+    assert [c[0] for c in tp.calls] == ["tp_create_note"]
+    assert r.applied == [] and [c.op for c in r.remaining] == ["set_session_note"]
+    assert "set_race_note 2026-10-24: sent, but its record failed" in r.report(2, None)
+    rows = ndb.execute("select id, status from nutrition_changes order by id").fetchall()
+    assert [row["status"] for row in rows] == ["pending"]
+
+    _backdate(ndb, rows[0]["id"])
+    listed = {"notes": [{"id": "n1", "title": title, "date": "2026-10-24"}]}
+    tp2 = FakeTp(responses={"tp_list_notes": listed})
+    r2 = await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp2),
+        mem_store,
+        r.remaining,
+        "t",
+        overrides=None,
+    )
+    assert [c[0] for c in tp2.calls] == [
+        "tp_list_notes",
+        "tp_get_workout_note",
+        "tp_set_workout_note",
+    ]
+    row = _status(ndb, rows[0]["id"])
+    assert row["status"] == "applied" and row["target_key"] == "n1"
+    assert [c.op for c in r2.applied] == ["set_session_note"] and r2.error is None

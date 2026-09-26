@@ -8,12 +8,13 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+import psycopg
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.store.base import BaseStore
 
 from tri_core.db.repo import Conn
-from tri_core.db.writes import mark_failed, recorded_write
+from tri_core.db.writes import SentUnrecorded, mark_failed, recorded_write
 from tri_core.mcp.client import McpToolError
 from tri_core.sync import ToolCaller
 from tri_nutrition import repo
@@ -83,20 +84,34 @@ async def _record_and_send(
         repo.mark_change_applied(conn, row_id, _as_payload(result), target_key=note_id)
         _mark_written(conn, change, note_id)
 
-    rec = await recorded_write(
-        deps.connect,
-        table="nutrition_changes",
-        insert_pending=lambda conn: repo.insert_pending_change(conn, thread_id, change),
-        call=lambda: server.call_json(name, args),
-        mark_applied=mark_applied,
-    )
+    sent = False
+
+    async def send() -> Any:
+        nonlocal sent
+        result = await server.call_json(name, args)
+        sent = True
+        return result
+
+    try:
+        rec = await recorded_write(
+            deps.connect,
+            table="nutrition_changes",
+            insert_pending=lambda conn: repo.insert_pending_change(conn, thread_id, change),
+            call=send,
+            mark_applied=mark_applied,
+        )
+    except psycopg.Error as exc:
+        if sent:
+            raise SentUnrecorded(exc) from exc
+        raise
     return _as_payload(rec.result)
 
 
 async def write_change(deps: GraphDeps, thread_id: str, change: NutritionChange) -> dict[str, Any]:
     """Send one change to its server with its audit row recorded first, and mark the target
-    written. Raises McpToolError/ValueError on failure and PermissionError on an ownership
-    refusal; neither refusal leaves a row."""
+    written. Raises McpToolError/ValueError on failure, SentUnrecorded when the call went through
+    but its row stayed pending, and PermissionError on an ownership refusal; neither refusal
+    leaves a row."""
     if change.op in GARMIN_OPS:
         if deps.garmin is None:
             raise McpToolError("set_nutrition_daily_settings", "Garmin server unavailable")
@@ -274,6 +289,10 @@ async def apply_changes(
             skipped.append(f"{_label(change)}: {exc}; dropped")
             remaining.remove(change)
             continue
+        except SentUnrecorded as exc:  # the database is unhealthy: stop, but never re-send it
+            error = f"{_label(change)}: {exc}"
+            remaining.remove(change)
+            break
         except (McpToolError, ValueError) as exc:
             error = f"{_label(change)} failed: {exc}"
             break

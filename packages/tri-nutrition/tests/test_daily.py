@@ -1,7 +1,9 @@
 from datetime import timedelta
 
+import psycopg
 import pytest
 
+from tri_core.db.writes import SentUnrecorded
 from tri_core.testing import ScriptedChatModel
 from tri_nutrition import daily, repo
 from tri_nutrition import store as S
@@ -43,3 +45,19 @@ async def test_propose_and_write_today(ndb, make_deps, mem_store):
 async def test_without_profile(ndb, make_deps, mem_store):
     h = await daily.propose_today(make_deps(ScriptedChatModel(script=[])), mem_store)
     assert h.error and "no nutrition profile" in h.summary()
+
+
+async def test_write_today_reports_a_record_failure(ndb, make_deps, mem_store, monkeypatch):
+    await S.put_profile(mem_store, NutritionProfile(**PROFILE_ARGS))
+    g = FakeGarmin()
+    deps = make_deps(ScriptedChatModel(script=[]), garmin=g, horizon=1)
+    h = await daily.propose_today(deps, mem_store)
+
+    def broken(*args, **kw):
+        raise psycopg.OperationalError("server closed the connection")
+
+    monkeypatch.setattr(repo, "mark_change_applied", broken)
+    with pytest.raises(SentUnrecorded, match="sent, but its record failed"):
+        await daily.write_today(deps, h)
+    assert len(g.calls) == 1
+    assert ndb.execute("select status from nutrition_changes").fetchone()["status"] == "pending"

@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+import psycopg
 import pytest
 
 from tri_core.testing import ScriptedChatModel
@@ -273,3 +274,42 @@ async def test_ownership_counts_applied_rows_only(nocommit, make_deps):
     repo.insert_pending_change(nocommit, pid, "t", drop)
     assert repo.owned_workout_ids(nocommit, pid) == {"w1"}
     assert [w["tp_workout_id"] for w in repo.owned_workouts(nocommit, pid)] == ["w1"]
+
+
+async def test_a_change_whose_record_failed_is_not_sent_again(nocommit, make_deps, monkeypatch):
+    gid, pid = seed(nocommit)
+    real = repo.mark_change_applied
+    broken = [True]
+
+    def flaky(conn, row_id, **kw):
+        if broken:
+            broken.pop()
+            raise psycopg.OperationalError("server closed the connection")
+        real(conn, row_id, **kw)
+
+    monkeypatch.setattr(repo, "mark_change_applied", flaky)
+    tp = FakeTp()
+    deps = make_deps(ScriptedChatModel(script=[]), tp=tp)
+    r = await apply_changes(deps, [create(0, "A"), create(1, "B")], "t", plan_id=pid, goal_id=gid)
+    assert [c[1]["title"] for c in tp.calls] == ["A"]
+    assert r.applied == [] and [c.workout.title for c in r.remaining] == ["B"]
+    assert "'A': sent, but its record failed" in r.report(2)
+    assert "reconciled on the next apply" in r.report(2)
+    rows = nocommit.execute(
+        "select id, status from plan_changes where plan_id = %s order by id", (pid,)
+    ).fetchall()
+    assert [row["status"] for row in rows] == ["pending"]
+
+    _backdate(nocommit, rows[0]["id"])
+    tp2 = FakeTp(listings=[[_listed("1001", title="A")]])
+    r2 = await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp2),
+        r.remaining,
+        "t",
+        plan_id=pid,
+        goal_id=gid,
+    )
+    assert [c[0] for c in tp2.calls] == ["tp_get_workouts", "tp_create_workout"]
+    assert tp2.calls[1][1]["title"] == "B"
+    assert _status(nocommit, rows[0]["id"])["status"] == "applied"
+    assert [c.workout.title for c in r2.applied] == ["B"] and r2.error is None

@@ -25,6 +25,17 @@ class Recorded:
     result: Any
 
 
+class SentUnrecorded(Exception):
+    """The call went through but its row could not be marked applied: the row stays `pending`
+    for the next apply to reconcile, and the change must not be sent again."""
+
+    def __init__(self, cause: Exception) -> None:
+        super().__init__(
+            f"sent, but its record failed ({type(cause).__name__}: {cause}); "
+            "it will be reconciled on the next apply"
+        )
+
+
 def mark_failed(conn: Conn, table: ChangeTable, row_id: int, error: str) -> None:
     conn.execute(
         sql.SQL("update {} set status = 'failed', error = %s where id = %s").format(
