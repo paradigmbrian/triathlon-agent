@@ -127,3 +127,37 @@ def test_sync_state_roundtrip(db):
     repo.set_sync_state(db, "garmin", date(2026, 9, 2), "error", "boom")
     st = repo.get_sync_state(db, "garmin")
     assert st is not None and st.last_error == "boom" and st.last_synced_date == date(2026, 9, 2)
+
+
+def test_mark_missing_deleted_stays_inside_the_window(db):
+    repo.upsert_workouts(
+        db,
+        [
+            _workout(tp_workout_id="w1", workout_date=date(2026, 9, 1)),
+            _workout(tp_workout_id="w2", workout_date=date(2026, 9, 2)),
+            _workout(tp_workout_id="w3", workout_date=date(2026, 9, 10)),
+        ],
+    )
+    assert repo.mark_missing_deleted(db, date(2026, 9, 1), date(2026, 9, 5), {"w1"}) == 1
+    live = repo.list_workouts_between(db, date(2026, 9, 1), date(2026, 9, 10))
+    assert [r["tp_workout_id"] for r in live] == ["w1", "w3"]
+    every = repo.list_workouts_between(
+        db, date(2026, 9, 1), date(2026, 9, 10), include_deleted=True
+    )
+    assert [(r["tp_workout_id"], r["deleted_at"] is not None) for r in every] == [
+        ("w1", False),
+        ("w2", True),
+        ("w3", False),
+    ]
+    # already tombstoned: not counted again
+    assert repo.mark_missing_deleted(db, date(2026, 9, 1), date(2026, 9, 5), {"w1"}) == 0
+
+
+def test_upsert_restores_a_tombstoned_workout(db):
+    repo.upsert_workouts(db, [_workout()])
+    repo.mark_missing_deleted(db, date(2026, 9, 1), date(2026, 9, 1), set())
+    assert repo.count_deleted(db, ["w1"]) == 1
+    repo.upsert_workouts(db, [_workout(title="Back")])
+    assert repo.count_deleted(db, ["w1"]) == 0
+    row = repo.list_workouts_between(db, date(2026, 9, 1), date(2026, 9, 1))[0]
+    assert row["title"] == "Back" and row["deleted_at"] is None

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from dataclasses import asdict
 from datetime import date, datetime
 from typing import Any
@@ -94,9 +94,11 @@ def upsert_workouts(conn: Conn, rows: Iterable[WorkoutRow]) -> int:
     cols = ", ".join(_WORKOUT_COLS)
     placeholders = ", ".join(f"%({c})s" for c in _WORKOUT_COLS)
     updates = ", ".join(f"{c} = excluded.{c}" for c in _WORKOUT_COLS if c != "tp_workout_id")
+    # A workout back in the listing is live again.
     sql = (
         f"insert into workouts ({cols}, synced_at) values ({placeholders}, now()) "
-        f"on conflict (tp_workout_id) do update set {updates}, synced_at = now()"
+        f"on conflict (tp_workout_id) do update set {updates}, deleted_at = null, "
+        "synced_at = now()"
     )
     n = 0
     with conn.cursor() as cur:
@@ -155,12 +157,35 @@ def set_garmin_match(
     )
 
 
-def list_workouts_between(conn: Conn, start: date, end: date) -> list[dict[str, Any]]:
+def list_workouts_between(
+    conn: Conn, start: date, end: date, *, include_deleted: bool = False
+) -> list[dict[str, Any]]:
+    live = "" if include_deleted else "and deleted_at is null "
     return conn.execute(
-        "select * from workouts where workout_date between %s and %s "
+        f"select * from workouts where workout_date between %s and %s {live}"
         "order by workout_date, tp_workout_id",
         (start, end),
     ).fetchall()
+
+
+def mark_missing_deleted(conn: Conn, start: date, end: date, seen_ids: Collection[str]) -> int:
+    """Tombstone live workouts dated in [start, end] that the TrainingPeaks listing for that
+    window did not return. Rows outside the window are never touched."""
+    return conn.execute(
+        "update workouts set deleted_at = now() "
+        "where workout_date between %s and %s and deleted_at is null "
+        "and tp_workout_id <> all(%s)",
+        (start, end, list(seen_ids)),
+    ).rowcount
+
+
+def count_deleted(conn: Conn, ids: Collection[str]) -> int:
+    row = conn.execute(
+        "select count(*) as n from workouts where deleted_at is not null "
+        "and tp_workout_id = any(%s)",
+        (list(ids),),
+    ).fetchone()
+    return int(row["n"]) if row else 0
 
 
 def get_sync_state(conn: Conn, source: str) -> SyncState | None:
