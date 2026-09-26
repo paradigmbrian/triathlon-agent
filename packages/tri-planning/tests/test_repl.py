@@ -118,6 +118,18 @@ async def test_chat_loop_review_dialogue_resumes_with_decision():
     assert graph.inputs[1].resume == {"action": "approve"}
 
 
+def test_render_changes_prints_violations_under_the_summary():
+    payload = {
+        "summary": "week one",
+        "changes": [change().model_dump(mode="json")],
+        "violations": {"2026-09-14": ["hard sessions on consecutive days"]},
+        "last_error": None,
+    }
+    text = render_changes(payload)
+    line = "violations, week of 2026-09-14: hard sessions on consecutive days"
+    assert text.index("week one") < text.index(line) < text.index("Ride")
+
+
 async def test_chat_loop_edit_uses_editor_callback():
     graph = StubGraph([[interrupt_event([change()])], []])
     inputs = iter(["go", "edit", "/quit"])
@@ -131,3 +143,17 @@ async def test_chat_loop_edit_uses_editor_callback():
     await chat_loop(graph, read=read, out=lambda s: None, edit=edit)
     resume = graph.inputs[1].resume
     assert resume["action"] == "edit" and resume["changes"][0]["reason"] == "edited"
+
+
+async def test_chat_loop_a_bare_slash_lists_the_commands():
+    graph = StubGraph([])
+    inputs = iter(["/", "/  ", "/quit"])
+
+    async def read():
+        return next(inputs, None)
+
+    buf = []
+    await chat_loop(graph, read=read, out=buf.append)
+    text = "".join(buf)
+    assert text.count("commands: /pending, /quit\n") == 2
+    assert graph.inputs == []

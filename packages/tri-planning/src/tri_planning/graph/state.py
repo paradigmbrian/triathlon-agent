@@ -21,6 +21,9 @@ class PlanningState(TypedDict, total=False):
     plan_id: int | None
     pending_changes: list[CalendarChange]
     pending_summary: str | None
+    pending_violations: dict[str, list[str]]  # week_start ISO -> validator violations
+    # week_start ISO -> that violating designed week's changes; absent in older checkpoints
+    pending_violating_changes: dict[str, list[CalendarChange]]
     review_decision: ReviewDecision | None
     last_error: str | None
     changes_from: Literal["targets", "design", "adjust"] | None

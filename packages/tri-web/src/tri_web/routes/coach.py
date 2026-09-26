@@ -14,7 +14,16 @@ from tri_coach.repl import paused_review
 from tri_web import review as R
 from tri_web.events import Busy, sse_response, start_turn
 from tri_web.runtime import Runtime, cfg
-from tri_web.schemas import EditRejected, NoReview, ReviewIn, SchemaOut, TurnIn, ValidateIn, YamlOut
+from tri_web.schemas import (
+    EditRejected,
+    NoReview,
+    Paused,
+    ReviewIn,
+    SchemaOut,
+    TurnIn,
+    ValidateIn,
+    YamlOut,
+)
 from tri_web.thread import ThreadView, thread_snapshot
 
 router = APIRouter()
@@ -42,6 +51,10 @@ async def get_thread(request: Request) -> ThreadView:
 @router.post("/turns")
 async def post_turn(body: TurnIn, request: Request) -> StreamingResponse:
     rt = _runtime(request)
+    if rt.lock.locked():
+        raise Busy(rt.running or "turn")
+    if paused_review(await rt.graph.aget_state(cfg(rt))) is not None:
+        raise Paused()  # a new input would restart the graph and drop the waiting review
     run = await start_turn(rt, {"messages": [HumanMessage(body.text)]}, kind="turn")
     return sse_response(run)
 

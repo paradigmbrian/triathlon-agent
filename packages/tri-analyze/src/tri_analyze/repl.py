@@ -60,9 +60,13 @@ async def chat_loop(
         if not line:
             continue
         if line.startswith("/"):
-            name = line[1:].split()[0]
+            name = (line[1:].split() or [""])[0]
             if name == "quit":
                 return
+            if not name:
+                names = ", ".join(f"/{n}" for n in sorted(["quit", *commands]))
+                out(f"commands: {names}\n")
+                continue
             handler = commands.get(name)
             if handler is None:
                 out(f"unknown command: /{name}\n")

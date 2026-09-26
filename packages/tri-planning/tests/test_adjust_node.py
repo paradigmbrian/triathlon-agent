@@ -8,7 +8,11 @@ from langchain_core.tools import tool
 from tri_core.testing import ScriptedChatModel, tool_call
 from tri_planning import repo
 from tri_planning.graph.nodes import adjust as adjust_node
-from tri_planning.graph.nodes.adjust import changes_from_messages, make_adjust_node
+from tri_planning.graph.nodes.adjust import (
+    changes_from_messages,
+    make_adjust_node,
+    violating_changes_from_messages,
+)
 from tri_planning.planning.models import (
     CalendarChange,
     FitnessSnapshot,
@@ -49,11 +53,11 @@ def seed(conn):
     return gid, pid, targets
 
 
-def design_result(week_start="2026-09-21", title="S"):
+def design_result(week_start="2026-09-21", title="S", violations=()):
     return {
         "week_start": week_start,
         "coach_note": "n",
-        "violations": [],
+        "violations": list(violations),
         "changes": [
             {
                 "op": "create",
@@ -73,9 +77,9 @@ def design_result(week_start="2026-09-21", title="S"):
     }
 
 
-def design_message(week_start="2026-09-21", title="S", call_id="1"):
+def design_message(week_start="2026-09-21", title="S", call_id="1", violations=()):
     return ToolMessage(
-        content=json.dumps(design_result(week_start, title)),
+        content=json.dumps(design_result(week_start, title, violations)),
         name="design_next_week",
         tool_call_id=call_id,
     )
@@ -93,9 +97,10 @@ def test_changes_from_messages_merges_tool_results():
         ),
         AIMessage(content="done"),
     ]
-    changes, summary = changes_from_messages(msgs)
+    changes, summary, violations = changes_from_messages(msgs)
     assert [c.op for c in changes] == ["create", "delete"] and summary == "lighter"
-    assert changes_from_messages([AIMessage(content="no changes")]) == ([], None)
+    assert violations == {}
+    assert changes_from_messages([AIMessage(content="no changes")]) == ([], None, {})
 
 
 def test_changes_from_messages_keeps_only_the_last_design_of_a_week():
@@ -105,7 +110,7 @@ def test_changes_from_messages_keeps_only_the_last_design_of_a_week():
         design_message(week_start="2026-09-28", title="week after", call_id="3"),
         AIMessage(content="done"),
     ]
-    changes, summary = changes_from_messages(msgs)
+    changes, summary, _ = changes_from_messages(msgs)
     assert [c.workout.title for c in changes] == ["second try", "week after"]
     assert summary.count("2026-09-21") == 1 and "2026-09-28" in summary
 
@@ -121,7 +126,7 @@ def test_changes_from_messages_notes_designed_weeks_when_the_proposal_has_no_sum
             content=json.dumps(proposal), name="propose_calendar_changes", tool_call_id="2"
         ),
     ]
-    changes, summary = changes_from_messages(msgs)
+    changes, summary, _ = changes_from_messages(msgs)
     assert [c.op for c in changes] == ["create", "delete"]
     assert summary is not None and "2026-09-21" in summary
 
@@ -141,6 +146,7 @@ async def test_turn_without_proposal_clears_pending_changes(nocommit, make_deps)
     )
     assert out["pending_changes"] == [] and out["changes_from"] is None
     assert out["pending_summary"] is None and out["review_decision"] is None
+    assert out["pending_violations"] == {}
     assert out["messages"][-1].content.startswith("All on track")
 
 
@@ -243,6 +249,58 @@ async def test_adjust_binds_only_read_and_propose_tools(nocommit, make_deps, mon
     assert not any(
         name.startswith(("tp_create", "tp_update", "tp_delete", "tp_apply")) for name in bound[0]
     )
+
+
+def test_changes_from_messages_keys_violations_by_week_and_drops_them_on_redesign():
+    msgs = [
+        design_message(violations=["hard sessions on consecutive days"], call_id="1"),
+        design_message(week_start="2026-09-28", title="clean", call_id="2"),
+        AIMessage(content="done"),
+    ]
+    _, _, violations = changes_from_messages(msgs)
+    assert violations == {"2026-09-21": ["hard sessions on consecutive days"]}
+    redesigned = [*msgs[:1], design_message(title="second try", call_id="3")]
+    assert changes_from_messages(redesigned)[2] == {}
+
+
+def test_violating_changes_are_keyed_by_the_designed_week_whatever_their_dates():
+    # The model dated the violating week's session outside its target week.
+    stray = design_result(violations=["hard sessions on consecutive days"])
+    stray["changes"][0]["workout_date"] = stray["changes"][0]["workout"]["date"] = "2026-09-28"
+    msgs = [
+        ToolMessage(content=json.dumps(stray), name="design_next_week", tool_call_id="1"),
+        design_message(week_start="2026-10-05", title="clean", call_id="2"),
+    ]
+    changes, _, _ = changes_from_messages(msgs)
+    assert violating_changes_from_messages(msgs) == {"2026-09-21": changes[:1]}
+    redesigned = [*msgs, design_message(title="second try", call_id="3")]
+    assert violating_changes_from_messages(redesigned) == {}
+
+
+async def test_design_violations_become_pending_violations(nocommit, make_deps):
+    gid, pid, targets = seed(nocommit)
+    bad = week_json(
+        MONDAY + timedelta(weeks=1), targets[1].target_tss, hard_on_consecutive_days=True
+    )
+    model = ScriptedChatModel(
+        script=[
+            tool_call("design_next_week", {}),
+            tool_call("PlannedWeek", bad),
+            tool_call("PlannedWeek", bad),  # the retry is as bad
+            AIMessage(content="Next week designed."),
+        ]
+    )
+    node = make_adjust_node(
+        make_deps(model, tp=FakeTp(), today=MONDAY + timedelta(days=3), horizon=3)
+    )
+    out = await node(
+        {"goal_id": gid, "plan_id": pid, "phase": "active", "messages": [HumanMessage("check in")]},
+        CFG,
+    )
+    assert list(out["pending_violations"]) == ["2026-09-21"]
+    assert any("consecutive" in v for v in out["pending_violations"]["2026-09-21"])
+    assert len(out["pending_changes"]) == 3
+    assert out["pending_violating_changes"] == {"2026-09-21": out["pending_changes"]}
 
 
 async def test_directed_brief_ends_on_the_proposal_and_merges_the_designed_week(

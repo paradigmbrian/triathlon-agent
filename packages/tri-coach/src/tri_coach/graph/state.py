@@ -23,7 +23,8 @@ from tri_planning.planning.models import CalendarChange, PlannedSession
 class CoachState(TypedDict, total=False):
     messages: Annotated[list[AnyMessage], add_messages]
     brief: Brief | None  # set by a handoff tool, consumed by planning/nutrition
-    proposals: list[Proposal]  # accumulated this turn
+    proposals: list[Proposal]  # accumulated this turn; apply empties it
+    next_proposal_id: int  # the number the next proposal takes; ids keep counting past an apply
     proposal_request: ProposalRequest | None  # set by propose_changes, consumed by review
     pending: ChangeSet | None  # what review shows; remainder after a partial apply
     carried: list[Proposal]  # held proposals the change set did not name; review -> apply

@@ -25,9 +25,15 @@ from tri_planning.planning.targets import week_monday
 from tri_planning.planning.tp_calls import event_change
 from tri_planning.prompts.design import DESIGN_SYSTEM, render_design_prompt
 
+NO_WEEK = "the designer returned no week in two attempts"
+
 
 def window_weeks(weeks: list[PlanWeekRow], today: date, horizon: int) -> list[PlanWeekRow]:
-    first = week_monday(today)
+    """The next `horizon` unwritten plan weeks from this week on. A plan that starts next
+    Monday gets its full horizon; a week before the plan is not a plan week."""
+    if not weeks:
+        return []
+    first = max(week_monday(today), weeks[0].week_start)
     last = first + timedelta(weeks=horizon - 1)
     return [w for w in weeks if first <= w.week_start <= last and not w.written_to_tp]
 
@@ -46,20 +52,26 @@ async def design_week(
         config, {"tags": [f"week_start:{target.week_start}", f"phase:{target.phase}"]}
     )
 
-    async def one(prompt: str) -> PlannedWeek:
+    async def one(prompt: str) -> PlannedWeek | None:
         out = await designer.ainvoke(
             [SystemMessage(DESIGN_SYSTEM), HumanMessage(prompt)], config=cfg
         )
-        assert isinstance(out, PlannedWeek)
-        return out
+        return out if isinstance(out, PlannedWeek) else None
 
-    week = await one(render_design_prompt(goal, target, thresholds, previous, note, None, None))
+    first = render_design_prompt(goal, target, thresholds, previous, note, None, None)
+    week = await one(first)
+    if week is None:
+        week = await one(first)  # a reply without the structured week gets one more try
+    if week is None:
+        empty = PlannedWeek(week_start=target.week_start, sessions=[], coach_note=NO_WEEK)
+        return empty, [NO_WEEK]
     violations = validate.week(week, target, goal)
     if violations:
-        week = await one(
+        retry = await one(
             render_design_prompt(goal, target, thresholds, previous, note, violations, week)
         )
-        violations = validate.week(week, target, goal)
+        if retry is not None:
+            week, violations = retry, validate.week(retry, target, goal)
     return week, violations
 
 

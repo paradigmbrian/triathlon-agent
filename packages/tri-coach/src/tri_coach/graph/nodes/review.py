@@ -32,21 +32,22 @@ def review_node(state: CoachState) -> dict[str, Any]:
                 HumanMessage("[review] nothing to review; call propose_changes with proposal ids")
             ]
         }
-    missing = [i for i in request.ids if i not in proposals]
-    if missing or not request.ids:
+    ids = list(dict.fromkeys(request.ids))  # a repeated id would apply its changes twice
+    missing = [i for i in ids if i not in proposals]
+    if missing or not ids:
         what = ", ".join(missing) if missing else "none given"
         return _refusal(
             f"unknown proposal ids {what}; propose again with ids from this "
             "turn or a held id from the context block"
         )
-    empty = [i for i in request.ids if not proposals[i].changes]
+    empty = [i for i in ids if not proposals[i].changes]
     if empty:
         return _refusal(
             f"{', '.join(empty)} carry no changes (a question, or nothing to write); answer the "
             "question or consult again, and propose only proposals with changes"
         )
-    pending = ChangeSet(narration=request.narration, proposals=[proposals[i] for i in request.ids])
-    carried = [p for p in held_proposals if p.id not in request.ids]
+    pending = ChangeSet(narration=request.narration, proposals=[proposals[i] for i in ids])
+    carried = [p for p in held_proposals if p.id not in ids]
     raw = interrupt(
         {
             "narration": pending.narration,

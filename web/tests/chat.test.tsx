@@ -4,13 +4,13 @@ import { useTurnStream } from "../src/components/chat/useTurnStream";
 import { useThread, type ThreadView } from "../src/api/queries";
 import { renderWith, threadEmpty } from "./fixtures";
 
-function Harness() {
+function Harness({ paused = false }: { paused?: boolean }) {
   const stream = useTurnStream();
   const thread = useThread();
   return (
     <>
       <output data-testid="probe" data-status={stream.state.status} data-running={thread.data?.running ?? "none"} />
-      <Chat thread={thread.data} stream={stream} gate={null} />
+      <Chat thread={thread.data} stream={stream} gate={null} paused={paused} />
     </>
   );
 }
@@ -118,4 +118,15 @@ test("a busy 409 hands the text back to the composer; it sends once the run ends
   expect(await messages.findByText("move my run")).toBeInTheDocument();
   expect(messages.getByText("thinking…")).toBeInTheDocument();
   expect(screen.getByLabelText("Message")).toHaveValue("");
+});
+
+test("a paused review disables the composer with the hint to answer it first", async () => {
+  stubServer(() => threadEmpty(), () => openStream());
+  renderWith(<Harness paused />);
+  const probe = screen.getByTestId("probe");
+  await waitFor(() => expect(probe).toHaveAttribute("data-running", "none"));
+  expect(probe).toHaveAttribute("data-status", "idle");
+  expect(screen.getByLabelText("Message")).toBeDisabled();
+  expect(screen.getByText("answer the review first")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
 });

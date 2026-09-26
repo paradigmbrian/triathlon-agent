@@ -136,3 +136,73 @@ async def test_checkin_yes_reports_a_failed_apply():
     buf = []
     assert await run_checkin(g, phase="active", yes=True, out=buf.append) == 1
     assert "apply did not complete: TrainingPeaks server unavailable" in "".join(buf)
+
+
+VIOLATING = (
+    (),
+    "updates",
+    {
+        "__interrupt__": (
+            Interrupt(
+                value={
+                    "summary": "s",
+                    "changes": [
+                        {"op": "create", "workout_date": "2026-09-22", "reason": "next week"},
+                        {"op": "delete", "tp_workout_id": "w1", "reason": "sick"},
+                    ],
+                    "violations": {"2026-09-21": ["hard sessions on consecutive days"]},
+                    "last_error": None,
+                }
+            ),
+        )
+    },
+)
+
+
+async def test_checkin_yes_skips_weeks_with_violations_and_exits_one():
+    g = StubGraph([[VIOLATING], [APPLIED]])
+    buf = []
+    assert await run_checkin(g, phase="active", yes=True, out=buf.append) == 1
+    resume = g.inputs[1].resume
+    assert resume["action"] == "edit" and [c["op"] for c in resume["changes"]] == ["delete"]
+    text = "".join(buf)
+    assert "skipping week of 2026-09-21: hard sessions on consecutive days" in text
+
+
+STRAY = {"op": "create", "workout_date": "2026-09-28", "reason": "next week"}
+CLEAN = {"op": "create", "workout_date": "2026-10-06", "reason": "the week after"}
+VIOLATING_BY_ORIGIN = (
+    (),
+    "updates",
+    {
+        "__interrupt__": (
+            Interrupt(
+                value={
+                    "summary": "s",
+                    "changes": [
+                        STRAY,
+                        CLEAN,
+                        {"op": "delete", "tp_workout_id": "w1", "reason": "sick"},
+                    ],
+                    # The violating week's session is dated outside its target week.
+                    "violations": {"2026-09-21": ["hard sessions on consecutive days"]},
+                    "violating_changes": {"2026-09-21": [STRAY]},
+                    "last_error": None,
+                }
+            ),
+        )
+    },
+)
+
+
+async def test_checkin_yes_skips_a_violating_weeks_changes_by_origin_not_date():
+    g = StubGraph([[VIOLATING_BY_ORIGIN], [APPLIED]])
+    buf = []
+    assert await run_checkin(g, phase="active", yes=True, out=buf.append) == 1
+    resume = g.inputs[1].resume
+    assert resume["action"] == "edit"
+    assert [(c["op"], c["workout_date"]) for c in resume["changes"]] == [
+        ("create", "2026-10-06"),
+        ("delete", None),
+    ]
+    assert "skipping week of 2026-09-21: hard sessions on consecutive days" in "".join(buf)

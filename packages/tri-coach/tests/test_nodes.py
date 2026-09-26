@@ -8,7 +8,7 @@ from langchain_core.messages import AIMessage
 from langgraph.errors import GraphInterrupt
 from langgraph.graph import END
 
-from tri_coach.graph.graph import after_apply
+from tri_coach.graph.graph import after_apply, start_node
 from tri_coach.graph.nodes.apply import _regeneration_due
 from tri_coach.graph.nodes.nutrition import (
     FOLLOW_ON,
@@ -16,8 +16,9 @@ from tri_coach.graph.nodes.nutrition import (
     make_nutrition_node,
     proposal_from_regenerate,
 )
-from tri_coach.graph.nodes.planning import make_planning_node
+from tri_coach.graph.nodes.planning import make_planning_node, proposal_from_planning
 from tri_coach.models import ApplyReport, Brief
+from tri_planning.planning.models import CalendarChange
 
 CONFIG = {"configurable": {"thread_id": "coach"}}
 
@@ -150,6 +151,37 @@ def test_a_regeneration_that_changes_nothing_or_breaks_a_bound_says_so():
     assert "state the violations" in follow_on_message(bad).content
 
 
+def test_start_resets_the_proposal_counter():
+    assert start_node({})["next_proposal_id"] == 1
+
+
+async def test_proposal_ids_continue_from_the_turn_counter():
+    graph = Recorder({"pending_changes": [], "messages": [AIMessage(content="Which day?")]})
+    node = make_planning_node(graph)
+    brief = Brief(domain="planning", instruction="x", tool_call_id="c1", message_id="m1")
+    out = await node({"brief": brief, "proposals": [], "next_proposal_id": 2}, CONFIG)
+    assert out["proposals"][0].id == "p2" and out["next_proposal_id"] == 3
+
+
+async def test_the_follow_on_after_an_apply_is_not_numbered_p1_again():
+    change = {
+        "op": "set_day_targets",
+        "target_key": "2026-09-14",
+        "day": "2026-09-14",
+        "payload": {"calorie_goal": 2800},
+        "reason": "easy day",
+    }
+    graph = Recorder(
+        {"pending_changes": [change], "pending_summary": "Daily targets", "last_error": None}
+    )
+    node = make_nutrition_node(graph)
+    brief = Brief(domain="nutrition", instruction="regenerate", regenerate=True)
+    # apply consumed p1 and emptied `proposals`; the counter is what carries the numbering
+    out = await node({"brief": brief, "proposals": [], "next_proposal_id": 2}, CONFIG)
+    assert out["proposals"][0].id == "p2" and out["next_proposal_id"] == 3
+    assert "call propose_changes with p2" in out["messages"][0].content
+
+
 async def test_consultations_carry_a_domain_tag():
     graph = Recorder({"pending_changes": [], "messages": [AIMessage(content="Which day?")]})
     node = make_planning_node(graph)
@@ -157,3 +189,21 @@ async def test_consultations_carry_a_domain_tag():
     out = await node({"brief": brief, "proposals": []}, CONFIG)
     assert "domain:planning" in graph.configs[0]["tags"]
     assert out["messages"][0].id == "m1" and out["proposals"][0].question == "Which day?"
+
+
+def test_planning_violations_of_designed_weeks_reach_the_proposal():
+    out = {
+        "pending_changes": [CalendarChange(op="delete", tp_workout_id="w1", reason="sick")],
+        "pending_summary": "s",
+        "pending_violations": {
+            "2026-09-28": ["week over target by 12%"],
+            "2026-09-21": ["hard sessions on consecutive days", "no rest day"],
+        },
+        "last_error": "TrainingPeaks server unavailable",
+    }
+    assert proposal_from_planning(out, "p1").violations == [
+        "TrainingPeaks server unavailable",
+        "week of 2026-09-21: hard sessions on consecutive days",
+        "week of 2026-09-21: no rest day",
+        "week of 2026-09-28: week over target by 12%",
+    ]

@@ -5,9 +5,9 @@ import Composer from "./Composer";
 import { Bubble } from "./Message";
 import type { useTurnStream } from "./useTurnStream";
 
-type Props = { thread: ThreadView | undefined; stream: ReturnType<typeof useTurnStream>; gate: ReactNode };
+type Props = { thread: ThreadView | undefined; stream: ReturnType<typeof useTurnStream>; gate: ReactNode; paused: boolean };
 
-export default function Chat({ thread, stream, gate }: Props) {
+export default function Chat({ thread, stream, gate, paused }: Props) {
   const { state } = stream;
   const scroller = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
@@ -21,13 +21,16 @@ export default function Chat({ thread, stream, gate }: Props) {
   };
   const busy = state.status === "busy";
   // A lost stream stays busy while the thread catches up; the lost sentence wins over the busy one.
+  // While a review waits at the gate the server refuses a turn (409 paused), so the composer says so.
   const hint = state.lost
     ? "connection lost, reloading the conversation"
     : busy
       ? `a ${state.busyWith} is running`
-      : thread?.stuck
-        ? "the last run stopped early, send any message to continue"
-        : undefined;
+      : paused
+        ? "answer the review first"
+        : thread?.stuck
+          ? "the last run stopped early, send any message to continue"
+          : undefined;
   return (
     // Below md the Today column scrolls as a whole and the chat keeps a viewport-tall pane
     // (minus the top bar); from md it fills whatever the card column leaves beside it.
@@ -70,7 +73,7 @@ export default function Chat({ thread, stream, gate }: Props) {
       <Composer
         key={state.draft?.id ?? "composer"}
         initialText={state.draft?.text}
-        disabled={busy || state.status === "streaming"}
+        disabled={busy || state.status === "streaming" || paused}
         hint={hint}
         onSend={(t) => void stream.send(t)}
       />

@@ -20,10 +20,16 @@ def review_node(state: PlanningState) -> dict[str, Any]:
     changes = state.get("pending_changes") or []
     if not changes:
         return {"review_decision": None, "messages": [AIMessage("No calendar changes to review.")]}
+    violating = state.get("pending_violating_changes")
     raw = interrupt(
         {
             "summary": state.get("pending_summary") or "",
             "changes": [c.model_dump(mode="json") for c in changes],
+            "violations": state.get("pending_violations") or {},
+            # None when the checkpoint predates this key: check-in --yes then skips by date.
+            "violating_changes": None
+            if violating is None
+            else {w: [c.model_dump(mode="json") for c in cs] for w, cs in violating.items()},
             "last_error": state.get("last_error"),
         }
     )
@@ -32,6 +38,10 @@ def review_node(state: PlanningState) -> dict[str, Any]:
     if decision.action == "reject":
         note = decision.note or "no note given"
         update["messages"] = [HumanMessage(f"Plan review rejected: {note}")]
+        if state.get("changes_from") not in ("design", "adjust"):
+            # Nothing re-proposes after this reject; the set must not linger for route_start.
+            update["pending_changes"] = []
+            update["pending_summary"] = None
     elif decision.action == "edit" and decision.changes is not None:
         update["pending_changes"] = decision.changes
     return update

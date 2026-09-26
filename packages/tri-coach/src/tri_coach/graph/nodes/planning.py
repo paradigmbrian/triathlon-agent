@@ -19,6 +19,10 @@ from tri_planning.prompts.adjust import BRIEF_PREFIX
 def proposal_from_planning(out: dict[str, Any], pid: str) -> Proposal:
     changes = list(out.get("pending_changes") or [])
     violations = [out["last_error"]] if out.get("last_error") else []
+    week_violations: dict[str, list[str]] = out.get("pending_violations") or {}
+    violations += [
+        f"week of {week}: {v}" for week in sorted(week_violations) for v in week_violations[week]
+    ]
     if not changes:
         return Proposal(
             id=pid,
@@ -59,10 +63,12 @@ def make_planning_node(graph: Any) -> Any:
             merge_configs(config, {"tags": ["domain:planning"]}),
         )
         proposals = list(state.get("proposals") or [])
-        proposal = proposal_from_planning(out, f"p{len(proposals) + 1}")
+        n = state.get("next_proposal_id") or 1
+        proposal = proposal_from_planning(out, f"p{n}")
         return {
             "brief": None,
             "proposals": [*proposals, proposal],
+            "next_proposal_id": n + 1,
             "messages": [result_message(brief, proposal)],
         }
 

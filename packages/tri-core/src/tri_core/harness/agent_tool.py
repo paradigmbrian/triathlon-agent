@@ -1,5 +1,6 @@
 """An agent run as a tool: each call prepares the agent, runs it on a throwaway thread and returns
-its final text, or the failure as text. Interrupts and other graph control flow propagate."""
+its final text, or the failure as text. Interrupts and other graph control flow propagate. The run
+is tagged `tool:<name>` so a caller streaming the parent graph can tell whose events they are."""
 
 from __future__ import annotations
 
@@ -42,6 +43,7 @@ def agent_tool(
                 {
                     "configurable": {"thread_id": f"{thread_prefix}-{uuid4()}"},
                     "recursion_limit": recursion_limit,
+                    "tags": [f"tool:{name}"],
                 },
                 **kwargs,
             )

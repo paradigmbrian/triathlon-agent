@@ -129,7 +129,10 @@ async def apply_changes(
 
     if plan_id is not None and written:
         with deps.connect() as conn:
-            repo.mark_weeks_written(conn, plan_id, sorted(written))
+            # Only a designed week is on the calendar as a plan week; a one-off create in an
+            # undesigned week must not stop the design node from designing it.
+            designed = {w.week_start for w in repo.list_weeks(conn, plan_id) if w.designed}
+            repo.mark_weeks_written(conn, plan_id, sorted(written & designed))
             conn.commit()
 
     return ApplyResult(

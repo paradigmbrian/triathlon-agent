@@ -8,6 +8,7 @@ model can't read.
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 from typing import Any
 
 import psycopg
@@ -71,6 +72,7 @@ Examples:
 """
 
 _ALLOWED_HEADS = ("select", "with")
+MAX_CHARS = 8000  # of the rows' JSON; whole rows only, so a wide result is cut early
 
 
 def validate_select(sql: str) -> str:
@@ -91,6 +93,8 @@ def validate_select(sql: str) -> str:
 def _json_safe(v: Any) -> Any:
     if isinstance(v, int | float | str | bool) or v is None:
         return v
+    if isinstance(v, Decimal):
+        return float(v)  # numeric columns (ctl, atl, tsb) are numbers to the model, not text
     if isinstance(v, list | dict):
         return json.loads(json.dumps(v, default=str))
     return str(v)
@@ -120,12 +124,26 @@ def run_readonly_query(
     except psycopg.Error as exc:
         return {"error": f"sql error: {exc}".strip()}
     rows = [[_json_safe(v) for v in r] for r in fetched[:max_rows]]
-    return {
+    kept: list[list[Any]] = []
+    size = 2  # the enclosing brackets
+    for row in rows:
+        size += len(json.dumps(row, default=str)) + 1
+        if size > MAX_CHARS:
+            break
+        kept.append(row)
+    truncated = len(fetched) > max_rows or len(kept) < len(rows)
+    out: dict[str, Any] = {
         "columns": columns,
-        "rows": rows,
-        "row_count": len(rows),
-        "truncated": len(fetched) > max_rows,
+        "rows": kept,
+        "row_count": len(kept),
+        "truncated": truncated,
     }
+    if truncated:
+        out["note"] = (
+            f"result cut at {len(kept)} rows (caps: {max_rows} rows, {MAX_CHARS} characters); "
+            "narrow the query: fewer columns, a shorter window, or aggregate"
+        )
+    return out
 
 
 def make_query_tool(url: str, extra_doc: str = "") -> BaseTool:
@@ -139,7 +157,9 @@ def make_query_tool(url: str, extra_doc: str = "") -> BaseTool:
         Use this for anything about past workouts, planned vs actual, weekly volume, training
         load (CTL/ATL/TSB), sleep, HRV, readiness, and the athlete's zones and thresholds.
         Do arithmetic in SQL (sums, averages, group by week), not in your head.
-        Rows are capped at 200; aggregate rather than listing raw rows for long windows.
+        Rows are capped at 200 and the result at 8,000 characters, cut at whole rows; a cut
+        result has "truncated": true and a note. Pick columns, aggregate, or shorten the window
+        rather than listing raw rows for long windows.
         """
         return json.dumps(run_readonly_query(url, sql), default=str)
 

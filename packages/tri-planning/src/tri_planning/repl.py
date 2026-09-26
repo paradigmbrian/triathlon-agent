@@ -40,6 +40,11 @@ def render_changes(payload: dict[str, Any]) -> str:
     lines: list[str] = []
     if payload.get("summary"):
         lines += [str(payload["summary"]), ""]
+    violations: dict[str, list[str]] = payload.get("violations") or {}
+    for week in sorted(violations):
+        lines.append(f"violations, week of {week}: " + "; ".join(violations[week]))
+    if violations:
+        lines.append("")
     if payload.get("last_error"):
         lines += [f"previous apply stopped: {payload['last_error']}", ""]
     by_week: dict[str, list[CalendarChange]] = defaultdict(list)
@@ -151,9 +156,13 @@ async def chat_loop(
         if not line:
             continue
         if line.startswith("/"):
-            name = line[1:].split()[0]
+            name = (line[1:].split() or [""])[0]
             if name == "quit":
                 return
+            if not name:
+                names = ", ".join(f"/{n}" for n in sorted(["quit", "pending", *commands]))
+                out(f"commands: {names}\n")
+                continue
             if name == "pending":
                 snap = await graph.aget_state({"configurable": {"thread_id": thread_id}})
                 changes = snap.values.get("pending_changes") or []
@@ -163,6 +172,7 @@ async def chat_loop(
                     pending = {
                         "summary": snap.values.get("pending_summary") or "",
                         "changes": [c.model_dump(mode="json") for c in changes],
+                        "violations": snap.values.get("pending_violations") or {},
                         "last_error": snap.values.get("last_error"),
                     }
                 continue

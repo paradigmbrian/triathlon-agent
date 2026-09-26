@@ -26,10 +26,10 @@ pytestmark = pytest.mark.db
 CFG = {"configurable": {"thread_id": "t"}}
 
 
-def seed(conn, **over):
+def seed(conn, start=MONDAY, **over):
     goal = TrainingGoal(**{**GOAL_ARGS, **over})
     gid = repo.insert_goal(conn, goal)
-    targets = build(goal, FitnessSnapshot(ctl=45, recent_weekly_tss=300), MONDAY)
+    targets = build(goal, FitnessSnapshot(ctl=45, recent_weekly_tss=300), start)
     pid = repo.insert_plan(conn, gid, "generated", None, targets)
     return gid, pid, targets
 
@@ -160,3 +160,50 @@ def test_make_deps_takes_an_optional_design_model():
     settings = PlanningSettings(_env_file=None)
     assert real_make_deps(settings, agent, None).design_model is None
     assert real_make_deps(settings, agent, None, design_model=designer).design_model is designer
+
+
+def test_window_starts_at_the_first_plan_week_when_today_is_before_it():
+    rows = [
+        PlanWeekRow(
+            plan_id=1,
+            week_start=MONDAY + timedelta(weeks=i),
+            phase="base",
+            target_tss=1,
+            target_hours=1,
+            designed=None,
+            written_to_tp=False,
+        )
+        for i in range(1, 6)
+    ]
+    # a Wednesday; the plan starts the Monday after it
+    picked = window_weeks(rows, MONDAY + timedelta(days=2), 3)
+    assert [w.week_start for w in picked] == [MONDAY + timedelta(weeks=i) for i in (1, 2, 3)]
+    assert window_weeks([], MONDAY, 3) == []
+
+
+async def test_horizon_three_on_a_wednesday_designs_three_weeks(nocommit, make_deps):
+    gid, pid, targets = seed(nocommit, start=MONDAY + timedelta(weeks=1))
+    model = ScriptedChatModel(
+        script=[structured(week_json(t.week_start, t.target_tss)) for t in targets[:3]]
+    )
+    node = make_design_node(make_deps(model, today=MONDAY + timedelta(days=2), horizon=3))
+    out = await node({"goal_id": gid, "plan_id": pid, "messages": []}, CFG)
+    assert model.calls == 3 and len(out["pending_changes"]) == 9
+
+
+async def test_a_reply_without_a_week_is_retried_once_then_reported(nocommit, make_deps):
+    gid, pid, targets = seed(nocommit)
+    model = ScriptedChatModel(
+        script=[
+            AIMessage(content="I need more information."),
+            structured(week_json(MONDAY, targets[0].target_tss)),
+        ]
+    )
+    out = await node_out(make_deps(model), gid, pid)
+    assert model.calls == 2 and "VIOLATIONS" not in out["pending_summary"]
+    assert len(out["pending_changes"]) == 3
+
+    model = ScriptedChatModel(script=[AIMessage(content="no"), AIMessage(content="still no")])
+    out = await node_out(make_deps(model), gid, pid)
+    assert model.calls == 2 and out["pending_changes"] == []
+    assert "VIOLATIONS" in out["pending_summary"] and "no week" in out["pending_summary"]

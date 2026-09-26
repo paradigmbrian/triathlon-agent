@@ -111,8 +111,9 @@ reported and its changes are held unverified, while the other domain still runs.
 tagged `checkin`. The prompt's checklist reads through the analyst: planned versus actual, RPE
 and feeling, readiness and HRV against baseline, TSB, designed weeks, logged intake against
 targets, weight trend, and targets remaining. It writes a `checkin` memory entry that lasts two
-weeks, then proposes or reports a clean week. Exit codes match `tri-planning check-in`: 0 done,
-1 a model error or an incomplete apply, 2 neither an active plan nor a nutrition profile, and
+weeks, then proposes or reports a clean week. Exit codes use the numbers of `tri-planning
+check-in`, but `--yes` here does not skip a designed week with validator violations (they are
+listed on the proposal), so 1 never means that: 0 done, 1 a model error or an incomplete apply, 2 neither an active plan nor a nutrition profile, and
 3 paused, or refused while a review or a held change set is pending or the thread stopped mid-run.
 `--yes` approves the change set and its nutrition follow-on, at most two gates; a second gate that
 is not the nutrition follow-on pauses.
