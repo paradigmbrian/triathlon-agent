@@ -72,6 +72,19 @@ class DailyMetricsRow:
 
 
 @dataclass(slots=True)
+class GarminActivityRow:
+    id: str
+    type_key: str | None
+    sport: str
+    start_time_local: datetime
+    duration_sec: float | None
+    distance_m: float | None
+    avg_hr: int | None
+    name: str | None
+    raw: dict[str, Any]
+
+
+@dataclass(slots=True)
 class SyncState:
     source: str
     last_synced_date: date
