@@ -29,10 +29,10 @@ steps in order and report each in one or two lines:
    from daily_metrics where metric_date >= current_date - 8 order by metric_date. Flag a
    low-intake day followed by poor readiness or sleep the next day.
 5. query_training_db: select workout_date, sport, title, feeling, rpe, comments from workouts
-   where workout_date between current_date - 7 and current_date - 1 and (comments is not null or
-   feeling is not null) order by workout_date. Comments about the gut, cramps, bonking or nausea
-   are fueling feedback: ask what was taken (in a check-in run, use what the comment says) and
-   call record_fuel_feedback once per session.
+   where workout_date between current_date - 7 and current_date - 1 and deleted_at is null
+   and (comments is not null or feeling is not null) order by workout_date. Comments about the
+   gut, cramps, bonking or nausea are fueling feedback: ask what was taken (in a check-in run,
+   use what the comment says) and call record_fuel_feedback once per session.
 6. When the athlete is present, ask how fueling went on the long and hard sessions since the last
    check-in and record each answer with record_fuel_feedback; a product that worked (outcome ok)
    may be added as new_product.

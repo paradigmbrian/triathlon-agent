@@ -38,9 +38,9 @@ class SentUnrecorded(Exception):
 
 def mark_failed(conn: Conn, table: ChangeTable, row_id: int, error: str) -> None:
     conn.execute(
-        sql.SQL("update {} set status = 'failed', error = %s where id = %s").format(
-            sql.Identifier(table)
-        ),
+        sql.SQL(
+            "update {} set status = 'failed', error = %s where id = %s and status = 'pending'"
+        ).format(sql.Identifier(table)),
         (error[:2000], row_id),
     )
 

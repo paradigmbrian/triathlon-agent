@@ -118,6 +118,11 @@ def _mark_week_written(conn: Conn, plan_id: int | None, change: CalendarChange) 
         repo.mark_weeks_written(conn, plan_id, [week])
 
 
+def _unchecked(row_id: int, exc: Exception) -> str:
+    first = str(exc).splitlines()[0] if str(exc) else ""
+    return f"row {row_id}: could not be checked ({type(exc).__name__}: {first}); left pending"
+
+
 async def reconcile_pending(deps: GraphDeps) -> list[str]:
     """Settle `plan_changes` rows an earlier apply left `pending` (the call may have gone
     through while its record did not): `applied` when TrainingPeaks shows the change, else
@@ -129,14 +134,17 @@ async def reconcile_pending(deps: GraphDeps) -> list[str]:
         recorded = repo.recorded_create_ids(conn)
     lines: list[str] = []
     for i, row in enumerate(rows):
-        change = CalendarChange.model_validate(row["payload"])
         try:
+            change = CalendarChange.model_validate(row["payload"])
             verdict, wid = await _verify(tp, change, recorded)
         except McpToolError as exc:
             lines.append(
                 f"TrainingPeaks unreachable ({exc}); {len(rows) - i} pending change(s) left pending"
             )
             break
+        except Exception as exc:  # noqa: BLE001 - one bad row stays pending; the apply goes on
+            lines.append(_unchecked(row["id"], exc))
+            continue
         with deps.connect() as conn:
             if verdict == "applied":
                 repo.mark_change_applied(
@@ -220,9 +228,11 @@ async def apply_changes(
     goal_id: int | None,
     tp_plan_applied: bool = False,
 ) -> ApplyResult:
-    """Send each change to TrainingPeaks in order, recording every success in `plan_changes`
-    under `thread_id`. Ownership: update/move/delete only agent-authored workouts unless
-    `athlete_requested`. Stops at the first server error; the rest stay in `remaining`."""
+    """Send each change to TrainingPeaks in order, recording every attempt in `plan_changes`
+    under `thread_id` (pending, then applied or failed); pending rows from earlier applies are
+    reconciled first. Ownership: update/move/delete only agent-authored workouts unless
+    `athlete_requested`. Stops at the first server error, or at a change sent but not recorded
+    (it leaves `remaining` and is reconciled next apply); the rest stay in `remaining`."""
     todo = list(changes)
     if deps.tp is None:
         return ApplyResult(

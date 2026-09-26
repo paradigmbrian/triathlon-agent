@@ -428,3 +428,27 @@ async def test_a_race_note_whose_record_failed_is_not_sent_again(
     row = _status(ndb, rows[0]["id"])
     assert row["status"] == "applied" and row["target_key"] == "n1"
     assert [c.op for c in r2.applied] == ["set_session_note"] and r2.error is None
+
+
+async def test_a_pending_row_that_cannot_be_checked_stays_pending(ndb, make_deps, mem_store):
+    repo.upsert_targets(ndb, [target()])
+    rid = repo.insert_pending_change(ndb, "t", day_target_change(target()))
+    _backdate(ndb, rid)
+    g = FakeGarmin(
+        responses={
+            "get_nutrition_daily_settings": {
+                "calorieGoal": 2800,
+                "macroGoals": {"carbs": "lots", "protein": 150, "fat": 120},
+            }
+        }
+    )
+    r = await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), garmin=g),
+        mem_store,
+        [day_target_change(target())],
+        "t",
+        overrides=None,
+    )
+    assert _status(ndb, rid)["status"] == "pending"
+    assert f"row {rid}: could not be checked (ValueError" in r.report(1, None)
+    assert [c.op for c in r.applied] == ["set_day_targets"] and r.error is None

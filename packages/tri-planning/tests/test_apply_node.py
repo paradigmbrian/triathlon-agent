@@ -313,3 +313,27 @@ async def test_a_change_whose_record_failed_is_not_sent_again(nocommit, make_dep
     assert tp2.calls[1][1]["title"] == "B"
     assert _status(nocommit, rows[0]["id"])["status"] == "applied"
     assert [c.workout.title for c in r2.applied] == ["B"] and r2.error is None
+
+
+async def test_one_unverifiable_pending_row_does_not_abort_the_apply(nocommit, make_deps):
+    gid, pid = seed(nocommit)
+    bad = nocommit.execute(
+        "insert into plan_changes (plan_id, thread_id, operation, payload, status) "
+        "values (%s, 't', 'create', '{\"op\": \"nonsense\"}'::jsonb, 'pending') returning id",
+        (pid,),
+    ).fetchone()["id"]
+    good = repo.insert_pending_change(nocommit, pid, "t", create(0))
+    _backdate(nocommit, bad)
+    _backdate(nocommit, good)
+    tp = FakeTp(listings=[[_listed("555")]])
+    r = await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp),
+        [create(1, "New")],
+        "t",
+        plan_id=pid,
+        goal_id=gid,
+    )
+    assert _status(nocommit, bad)["status"] == "pending"
+    assert _status(nocommit, good)["status"] == "applied"
+    assert [c.workout.title for c in r.applied] == ["New"] and r.error is None
+    assert f"row {bad}: could not be checked (ValidationError" in r.report(1)

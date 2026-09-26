@@ -50,11 +50,12 @@ battery, stress, resting HR) and `get_training_readiness` → paginated activity
 Every fetched activity is upserted into `garmin_activities` first, matched or not. Matching is
 then: same calendar day, same sport family, workout completed and not deleted, closest actual
 duration within 120 s. A workout with no duration matches only when it is the sole candidate
-that day. A `brick` takes two legs of different sports: the first matches on sport and day
-alone, and the two together must land within 120 s of the brick's duration; a Garmin
-multisport activity fills a brick on its own. A single-sport workout that fits beats a brick
-leg. Activities already linked on an earlier sync count as their workout's legs and are never
-reassigned. `workouts.garmin_activity_id` keeps the first linked leg.
+that day. A `brick` takes two legs of different sports, each a swim, bike, run or multisport
+activity (a walk is never a leg): the first matches on sport and day alone, and the two
+together must land within 120 s of the brick's duration; a Garmin multisport activity fills a
+brick on its own. A single-sport workout that fits beats a brick leg. Activities already
+linked on an earlier sync count as their workout's legs and are never reassigned.
+`workouts.garmin_activity_id` keeps the first linked leg.
 
 ## Runner semantics (`runner.py`)
 

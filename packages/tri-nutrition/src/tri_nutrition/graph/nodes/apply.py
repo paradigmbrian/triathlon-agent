@@ -185,6 +185,11 @@ async def _verify(
     return "missing", None
 
 
+def _unchecked(row_id: int, exc: Exception) -> str:
+    first = str(exc).splitlines()[0] if str(exc) else ""
+    return f"row {row_id}: could not be checked ({type(exc).__name__}: {first}); left pending"
+
+
 async def reconcile_pending(deps: GraphDeps) -> list[str]:
     """Settle `nutrition_changes` rows an earlier apply left `pending`: `applied` when the
     server shows the change, else `failed`. Returns one report line per row settled or left."""
@@ -193,7 +198,11 @@ async def reconcile_pending(deps: GraphDeps) -> list[str]:
         owned = repo.owned_note_ids(conn)
     lines: list[str] = []
     for row in rows:
-        change = NutritionChange.model_validate(row["payload"])
+        try:
+            change = NutritionChange.model_validate(row["payload"])
+        except Exception as exc:  # noqa: BLE001 - one bad row stays pending; the apply goes on
+            lines.append(_unchecked(row["id"], exc))
+            continue
         garmin = change.op in GARMIN_OPS
         server = deps.garmin if garmin else deps.tp
         name = "Garmin" if garmin else "TrainingPeaks"
@@ -204,6 +213,9 @@ async def reconcile_pending(deps: GraphDeps) -> list[str]:
             verdict, note_id = await _verify(server, change, owned)
         except McpToolError as exc:
             lines.append(f"{_label(change)}: {name} unreachable ({exc}); left pending")
+            continue
+        except Exception as exc:  # noqa: BLE001 - one bad row stays pending; the apply goes on
+            lines.append(_unchecked(row["id"], exc))
             continue
         with deps.connect() as conn:
             if verdict == "applied":
@@ -268,9 +280,11 @@ async def apply_changes(
     *,
     overrides: dict[str, Any] | None,
 ) -> ApplyResult:
-    """Send each change to its server in order, recording every success in `nutrition_changes`
-    under `thread_id`. Changes whose server is down are held (kept in `remaining`); an ownership
-    refusal drops the change; a server error stops the batch. `overrides` are written to the
+    """Send each change to its server in order, recording every attempt in `nutrition_changes`
+    under `thread_id` (pending, then applied or failed); pending rows from earlier applies are
+    reconciled first. Changes whose server is down are held (kept in `remaining`); an ownership
+    refusal drops the change; a server error, or a change sent but not recorded (it leaves
+    `remaining` and is reconciled next apply), stops the batch. `overrides` are written to the
     profile in the Store only when every change went through."""
     reconciled = await reconcile_pending(deps)
     todo = list(changes)

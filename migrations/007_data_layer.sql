@@ -22,8 +22,9 @@ create index if not exists garmin_activities_workout_idx on garmin_activities (t
 create index if not exists garmin_activities_day_idx on garmin_activities ((start_time_local::date));
 
 -- One row per activity already matched; the next Garmin sync fills the rest inside its window.
+-- A brick's one matched activity has an unknown sport ('other') until that sync rewrites it.
 insert into garmin_activities (id, tp_workout_id, sport, start_time_local, raw)
-select garmin_activity_id, tp_workout_id, sport,
+select garmin_activity_id, tp_workout_id, case when sport = 'brick' then 'other' else sport end,
        coalesce(start_time_local, workout_date::timestamp), '{}'::jsonb
 from workouts
 where garmin_activity_id is not null

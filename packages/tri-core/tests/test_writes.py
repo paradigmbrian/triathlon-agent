@@ -146,3 +146,11 @@ def test_pending_rows_skips_young_and_settled_rows(db):
     mark_failed(db, "plan_changes", done, "x")
     assert [r["id"] for r in pending_rows(db, "plan_changes")] == [old]
     assert young not in [r["id"] for r in pending_rows(db, "plan_changes")]
+
+
+def test_mark_failed_never_overwrites_an_applied_row(db):
+    rid = _insert(db)
+    _mark(db, rid, {"workout_id": 9})
+    mark_failed(db, "plan_changes", rid, "late failure")
+    row = _row(db, rid)
+    assert row["status"] == "applied" and row["error"] is None
