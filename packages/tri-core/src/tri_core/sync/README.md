@@ -47,17 +47,25 @@ battery, stress, resting HR) and `get_training_readiness` → paginated activity
 
 ## Matching Garmin activities to TP workouts (`match.py`)
 
-TP does not expose a start time, so matching is: same calendar day, same sport family (a TP
-`brick` accepts any Garmin sport), workout must be completed, closest actual duration within
-120 s. A workout with no duration matches only when it is the sole candidate that day. Each
-side is matched at most once and already-matched workouts are skipped. On the first real run
-this matched 30 of 30 completed workouts; the 12 leftover Garmin activities had no TP record.
+Every fetched activity is upserted into `garmin_activities` first, matched or not. Matching is
+then: same calendar day, same sport family, workout completed and not deleted, closest actual
+duration within 120 s. A workout with no duration matches only when it is the sole candidate
+that day. A `brick` takes two legs of different sports: the first matches on sport and day
+alone, and the two together must land within 120 s of the brick's duration; a Garmin
+multisport activity fills a brick on its own. A single-sport workout that fits beats a brick
+leg. Activities already linked on an earlier sync count as their workout's legs and are never
+reassigned. `workouts.garmin_activity_id` keeps the first linked leg.
 
 ## Runner semantics (`runner.py`)
 
 - **Windows.** `resolve_window` picks `[start, end]` per source: `--since` wins; otherwise a
   first run uses the source's default (TP 365 days, Garmin 60 days); otherwise incremental
-  from the watermark minus a 3-day overlap so late-edited workouts are picked up.
+  from the watermark minus a 3-day overlap so late-edited workouts are picked up. TrainingPeaks
+  ends at `today + SYNC_AHEAD_DAYS` (28), Garmin at today. The watermark records
+  `min(end, today)`: the forward window is re-listed on every run.
+- **Deletions.** After the TP upsert, workouts in `[start, end]` missing from the listing get
+  `deleted_at`; a reappearing id clears it. If any listing chunk fails, nothing is tombstoned
+  that run. Fitness rows after today are not stored.
 - **Isolation.** Each source runs in its own try/except. A Garmin failure rolls back only
   Garmin's rows; TP's commit stands. `sync_state` records `ok`/`error` and the message.
 - **Idempotent.** Every write is an upsert on the natural key. Rerunning is always safe.
@@ -72,7 +80,8 @@ TrainingPeaks provides the year of training load, which is what long trends need
 
 ## Knobs
 
-- `TP_FIRST_RUN_DAYS`, `GARMIN_FIRST_RUN_DAYS`, `OVERLAP_DAYS` at the top of `runner.py`.
+- `TP_FIRST_RUN_DAYS`, `GARMIN_FIRST_RUN_DAYS`, `OVERLAP_DAYS`, `SYNC_AHEAD_DAYS` at the top
+  of `runner.py`.
 - `tolerance_sec` argument of `match_activities`.
 - Sport vocabulary in `sports.py`: `swim | bike | run | brick | strength | race | rest | other`.
 

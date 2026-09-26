@@ -1,7 +1,7 @@
 # Data layer: sync ahead, tombstones, Garmin activities, record-before-write
 
 **Date:** 2026-09-24
-**Status:** Draft
+**Status:** Implemented (plan 2026-09-25-data-layer.md)
 **Purpose:** Make the `workouts` table say what the TrainingPeaks calendar says, forwards and backwards, keep every Garmin activity so a brick has both legs, and never let a TrainingPeaks or Garmin write succeed without a row that says it happened. Second of five specs; assumes the correctness fixes are in. Line numbers are `main` @ 6540055.
 
 ## 1. Decisions already made
