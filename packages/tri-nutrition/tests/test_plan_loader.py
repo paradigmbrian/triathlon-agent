@@ -2,6 +2,8 @@ from datetime import timedelta
 
 import pytest
 
+from tri_core.db import repo as crepo
+from tri_core.testing import workout_row
 from tri_nutrition import plan_loader as L
 from tri_nutrition.testing import MONDAY, seed_ftp, seed_goal_and_plan, seed_workouts, session_json
 
@@ -248,3 +250,17 @@ def test_load_horizon_attaches_ids_and_goal_fields(pdb):
     sessions, ctx = L.load_horizon(pdb, MONDAY, 7)
     assert ctx.source == "plan" and sessions[0].tp_workout_id == "w1"
     assert ctx.event_name == "City Tri" and ctx.goal_type == "olympic"
+
+
+def test_loaders_skip_deleted_workouts(pdb):
+    later = MONDAY + timedelta(days=1)
+    crepo.upsert_workouts(
+        pdb,
+        [
+            workout_row("keep", later, completed=False, actual_duration_sec=None),
+            workout_row("gone", later, completed=False, actual_duration_sec=None),
+        ],
+    )
+    crepo.mark_missing_deleted(pdb, later, later, {"keep"})
+    assert [w["tp_workout_id"] for w in L._planned_workouts(pdb, MONDAY, later)] == ["keep"]
+    assert [w["tp_workout_id"] for w in L._workouts_between(pdb, later, later)] == ["keep"]

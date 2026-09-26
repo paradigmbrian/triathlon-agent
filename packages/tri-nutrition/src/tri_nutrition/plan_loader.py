@@ -96,7 +96,8 @@ def attach_workout_ids(sessions: list[Session], rows: list[dict[str, Any]]) -> l
 def _workouts_between(conn: Conn, start: date, end: date) -> list[dict[str, Any]]:
     return conn.execute(
         "select tp_workout_id, workout_date, sport, title, completed from workouts "
-        "where workout_date between %s and %s order by workout_date, tp_workout_id",
+        "where workout_date between %s and %s and deleted_at is null "
+        "order by workout_date, tp_workout_id",
         (start, end),
     ).fetchall()
 
@@ -126,6 +127,7 @@ def _planned_workouts(conn: Conn, start: date, end: date) -> list[dict[str, Any]
         "select tp_workout_id, workout_date, sport, title, planned_duration_sec, "
         "planned_distance_m, planned_tss, planned_if, completed from workouts "
         "where (not completed or workout_date = %s) and workout_date between %s and %s "
+        "and deleted_at is null "
         "order by workout_date",
         (start, start, end),
     ).fetchall()

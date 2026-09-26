@@ -28,7 +28,7 @@ def _sessions(conn: Conn, drawn_on: date) -> list[dict[str, Any]]:
         f"""
         select workout_date, sport, title, actual_duration_sec, actual_tss
         from workouts
-        where completed and workout_date between %s and %s
+        where completed and deleted_at is null and workout_date between %s and %s
         -- hardness first: a session over evaluate.py's HARD_SESSION_TSS/HARD_SESSION_MIN
         -- outranks every non-qualifying session, so a hard session can never be cut by
         -- `limit`; ties break by actual TSS, then duration, then most recent workout_date

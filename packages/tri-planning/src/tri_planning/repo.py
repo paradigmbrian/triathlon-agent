@@ -319,7 +319,8 @@ def recent_sessions(conn: Conn, start: date, end: date) -> list[dict[str, Any]]:
     return conn.execute(
         "select workout_date, sport, title, completed, planned_tss, actual_tss, "
         "planned_duration_sec, actual_duration_sec, rpe, feeling from workouts "
-        "where workout_date between %s and %s order by workout_date, tp_workout_id",
+        "where workout_date between %s and %s and deleted_at is null "
+        "order by workout_date, tp_workout_id",
         (start, end),
     ).fetchall()
 

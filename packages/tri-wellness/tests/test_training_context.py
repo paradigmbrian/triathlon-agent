@@ -2,6 +2,8 @@ from datetime import date, timedelta
 
 import pytest
 
+from tri_core.db import repo as crepo
+from tri_core.testing import workout_row
 from tri_wellness.labs.training_context import load_training_context
 from tri_wellness.testing import seed_daily_metrics, seed_workouts
 
@@ -227,3 +229,9 @@ def test_baseline_window_includes_day_minus_thirty_excludes_day_minus_thirty_one
     )
     t = load_training_context(db, D)
     assert t.sleep_30d_avg_sec == 25000
+
+
+def test_sessions_skip_deleted_workouts(db):
+    crepo.upsert_workouts(db, [workout_row("keep", day(-1)), workout_row("gone", day(-1))])
+    crepo.mark_missing_deleted(db, day(-1), day(-1), {"keep"})
+    assert [s["title"] for s in load_training_context(db, D).last_sessions] == ["ride keep"]

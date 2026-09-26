@@ -22,7 +22,8 @@ Tables (Postgres). All dates are the athlete's local calendar day.
 athlete_profile (single row): ftp_watts, run_threshold_pace_sec_per_km, swim_css_sec_per_100m,
   lthr_bpm, max_hr_bpm, hr_zones jsonb, power_zones jsonb, pace_zones jsonb, weight_kg.
 
-workouts (one row per TrainingPeaks workout; planned and actual on the same row):
+workouts (one row per TrainingPeaks workout; planned and actual on the same row; planned rows
+  run 28 days ahead of today):
   tp_workout_id text PK, workout_date date, sport text ('swim','bike','run','brick','strength',
   'race','rest','other'), sport_raw text, title, description (coach's plan text),
   completed bool,
@@ -31,8 +32,15 @@ workouts (one row per TrainingPeaks workout; planned and actual on the same row)
   normalized_power, avg_power, avg_hr, avg_cadence, elevation_gain_m, calories,
   feeling int (0-10), rpe int (0-10), comments jsonb (athlete/coach comments),
   structure jsonb (planned intervals, may be null),
-  garmin_activity_id text (use with get_activity_splits / get_activity for lap detail),
-  start_time_local timestamp (from Garmin), raw jsonb (full TP payload).
+  garmin_activity_id text (the first matched Garmin activity; use with get_activity_splits /
+  get_activity for lap detail), start_time_local timestamp (from Garmin),
+  raw jsonb (full TP payload),
+  deleted_at timestamptz (a workout removed from TrainingPeaks; filter `deleted_at is null`
+  unless asked about removals).
+
+garmin_activities (every synced Garmin activity, matched or not; a brick has two):
+  id text PK, tp_workout_id text (null when no workout matched), sport, type_key,
+  start_time_local timestamp, duration_sec, distance_m, avg_hr, name, raw jsonb.
 
 daily_metrics (one row per day):
   metric_date date PK, sleep_seconds, sleep_score, hrv_overnight_avg, resting_hr,
@@ -48,22 +56,29 @@ training_plans: id, goal_id, source ('generated'|'tp_plan'), start_date, end_dat
 plan_weeks: plan_id, week_start (Monday), phase, target_tss, target_hours, designed jsonb,
   written_to_tp.
 plan_changes: plan_id, thread_id, operation, tp_workout_id, workout_date, payload jsonb,
-  result jsonb, reason, applied_at  (audit of every calendar write; a workout is
-  agent-authored iff its id is here).
+  result jsonb, reason, applied_at, status ('pending'|'applied'|'failed'), error  (audit of
+  every calendar write; a workout is agent-authored iff its id is here with status 'applied').
 
 Examples:
   -- yesterday's completed sessions
   select workout_date, sport, title, actual_duration_sec, actual_tss, avg_hr, garmin_activity_id
-  from workouts where completed and workout_date = current_date - 1;
+  from workouts where completed and deleted_at is null and workout_date = current_date - 1;
   -- planned vs actual this week
   select workout_date, sport, title, planned_tss, actual_tss, planned_duration_sec,
          actual_duration_sec
-  from workouts where workout_date >= date_trunc('week', current_date) order by 1;
+  from workouts where deleted_at is null and workout_date >= date_trunc('week', current_date)
+  order by 1;
   -- weekly run volume for the last 12 weeks
   select date_trunc('week', workout_date)::date as wk, round(sum(actual_distance_m)/1000, 1) as km,
          sum(actual_duration_sec)/3600.0 as hours
-  from workouts where sport='run' and completed and workout_date >= current_date - 84
+  from workouts where sport='run' and completed and deleted_at is null
+    and workout_date >= current_date - 84
   group by 1 order by 1;
+  -- both legs of yesterday's brick
+  select a.start_time_local, a.sport, a.duration_sec, a.id
+  from garmin_activities a join workouts w on w.tp_workout_id = a.tp_workout_id
+  where w.sport = 'brick' and w.deleted_at is null and w.workout_date = current_date - 1
+  order by 1;
   -- load and recovery, last 14 days
   select metric_date, tss_day, ctl, atl, tsb, sleep_score, hrv_overnight_avg, training_readiness
   from daily_metrics where metric_date >= current_date - 14 order by 1;
