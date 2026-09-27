@@ -15,7 +15,7 @@ import yaml
 from langchain_core.messages import HumanMessage
 from langgraph.types import Command
 
-from tri_core.harness.turns import GraphTurnPrinter, run_graph_turn
+from tri_core.harness.turns import GraphTurnPrinter, paused_review, run_graph_turn
 from tri_core.harness.turns import Out as Out
 from tri_planning.planning.models import CalendarChange, ReviewDecision
 from tri_planning.planning.targets import week_monday
@@ -135,7 +135,9 @@ async def chat_loop(
     commands = dict(commands or {})
     names = ", ".join(sorted(["quit", "pending", *commands]))
     out(f"tri-planning chat. Type a message, /quit to exit, /<command> for: {names}\n")
-    pending: dict[str, Any] | None = None
+    # A review the athlete walked away from is still paused in the checkpoint: finish it first,
+    # or the next typed message restarts the graph and the review is shown again without it.
+    pending = paused_review(await graph.aget_state({"configurable": {"thread_id": thread_id}}))
     while True:
         if pending is not None:
             decision = await _review_dialogue(pending, read, out, edit)
@@ -166,7 +168,10 @@ async def chat_loop(
             if name == "pending":
                 snap = await graph.aget_state({"configurable": {"thread_id": thread_id}})
                 changes = snap.values.get("pending_changes") or []
-                if not changes:
+                paused = paused_review(snap)
+                if paused is not None:
+                    pending = paused
+                elif not changes:
                     out("nothing pending\n")
                 else:
                     pending = {

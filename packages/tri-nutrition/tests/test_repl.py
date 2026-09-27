@@ -206,3 +206,79 @@ async def test_checkin_run_exits_1_on_a_refusal_with_nothing_to_review():
     printed: list[str] = []
     code = await checkin_run(_RefusedTurn(), thread_id="n", out=printed.append, approve=True)
     assert code == 1 and "not proposed w2: product Mystery" in "".join(printed)
+
+
+class PausedGraph(StubGraph):
+    """A thread the athlete left at review: the first state read is the waiting review."""
+
+    def __init__(self, turns, payload):
+        super().__init__(turns)
+        self.payload = payload
+        self.reads = 0
+
+    async def aget_state(self, config):
+        self.reads += 1
+        if self.reads == 1:
+            waiting = SimpleNamespace(interrupts=(Interrupt(value=self.payload),))
+            return SimpleNamespace(next=("review",), values={}, tasks=(waiting,))
+        return await super().aget_state(config)
+
+
+def waiting_payload():
+    return interrupt_event([change()])[2]["__interrupt__"][0].value
+
+
+async def test_chat_loop_opens_a_waiting_review_before_reading_a_message():
+    done = ((), "updates", {"apply": {"messages": [AIMessage(content="Garmin: applied 1 of 1")]}})
+    graph = PausedGraph([[done]], waiting_payload())
+    inputs = iter(["approve", "/quit"])
+
+    async def read():
+        return next(inputs, None)
+
+    buf = []
+    await chat_loop(graph, read=read, out=buf.append)
+    assert "approve / reject" in "".join(buf)
+    assert len(graph.inputs) == 1 and isinstance(graph.inputs[0], Command)
+    assert graph.inputs[0].resume == {"action": "approve"}
+
+
+async def test_quitting_at_a_waiting_review_leaves_it_waiting():
+    graph = PausedGraph([], waiting_payload())
+    inputs = iter(["/quit"])
+
+    async def read():
+        return next(inputs, None)
+
+    await chat_loop(graph, read=read, out=lambda s: None)
+    assert graph.inputs == []
+
+
+class _Busy:
+    """A thread that is not idle: `state` is what aget_state returns; a turn must not start."""
+
+    def __init__(self, state) -> None:
+        self.state = state
+        self.turned = False
+
+    async def astream(self, payload, config=None, **kwargs):
+        self.turned = True
+        return
+        yield
+
+    async def aget_state(self, config):
+        return self.state
+
+
+async def test_checkin_run_never_starts_a_turn_on_a_thread_that_is_not_idle():
+    # a partial apply's remainder: next is empty, the changes wait in state
+    remainder = SimpleNamespace(next=(), values={"pending_changes": [change()]}, tasks=())
+    graph = _Busy(remainder)
+    printed: list[str] = []
+    assert await checkin_run(graph, thread_id="n", out=printed.append, approve=True) == 3
+    assert not graph.turned and "already waiting at review" in "".join(printed)
+    # a run that stopped mid-graph
+    graph = _Busy(SimpleNamespace(next=("fuel",), values={}, tasks=()))
+    printed.clear()
+    assert await checkin_run(graph, thread_id="n", out=printed.append, approve=True) == 3
+    assert not graph.turned and "stopped mid-run at fuel" in "".join(printed)

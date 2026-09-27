@@ -1,4 +1,5 @@
 from datetime import date
+from types import SimpleNamespace
 
 import anthropic
 import httpx
@@ -156,4 +157,51 @@ async def test_chat_loop_a_bare_slash_lists_the_commands():
     await chat_loop(graph, read=read, out=buf.append)
     text = "".join(buf)
     assert text.count("commands: /pending, /quit\n") == 2
+    assert graph.inputs == []
+
+
+class PausedGraph(StubGraph):
+    """A thread the athlete left at review: the first state read is the waiting review."""
+
+    def __init__(self, turns, payload):
+        super().__init__(turns)
+        self.payload = payload
+        self.reads = 0
+
+    async def aget_state(self, config):
+        self.reads += 1
+        if self.reads == 1:
+            waiting = SimpleNamespace(interrupts=(Interrupt(value=self.payload),))
+            return SimpleNamespace(next=("review",), values={}, tasks=(waiting,))
+        return await super().aget_state(config)
+
+
+def waiting_payload():
+    return interrupt_event([change()])[2]["__interrupt__"][0].value
+
+
+async def test_chat_loop_opens_a_waiting_review_before_reading_a_message():
+    done_ev = ((), "updates", {"apply": {"messages": [AIMessage(content="applied 1 of 1")]}})
+    graph = PausedGraph([[done_ev]], waiting_payload())
+    inputs = iter(["approve", "/quit"])
+
+    async def read():
+        return next(inputs, None)
+
+    buf = []
+    await chat_loop(graph, read=read, out=buf.append)
+    assert "Ride" in "".join(buf)
+    # "approve" answered the review; it was never sent as a new message
+    assert len(graph.inputs) == 1 and isinstance(graph.inputs[0], Command)
+    assert graph.inputs[0].resume == {"action": "approve"}
+
+
+async def test_quitting_at_a_waiting_review_leaves_it_waiting():
+    graph = PausedGraph([], waiting_payload())
+    inputs = iter(["/quit"])
+
+    async def read():
+        return next(inputs, None)
+
+    await chat_loop(graph, read=read, out=lambda s: None)
     assert graph.inputs == []

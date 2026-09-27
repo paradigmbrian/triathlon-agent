@@ -15,7 +15,7 @@ import yaml
 from langchain_core.messages import HumanMessage
 from langgraph.types import Command
 
-from tri_core.harness.turns import GraphTurnPrinter, run_graph_turn
+from tri_core.harness.turns import GraphTurnPrinter, paused_review, run_graph_turn
 from tri_core.harness.turns import Out as Out
 from tri_nutrition.nutrition.models import (
     DayTarget,
@@ -166,7 +166,9 @@ async def chat_loop(
     commands = dict(commands or {})
     names = ", ".join(sorted(["quit", "pending", *commands]))
     out(f"tri-nutrition chat. Type a message, /quit to exit, /<command> for: {names}\n")
-    pending: dict[str, Any] | None = None
+    # A review the athlete walked away from is still paused in the checkpoint: finish it first,
+    # or the next typed message restarts the graph and the review is shown again without it.
+    pending = paused_review(await graph.aget_state({"configurable": {"thread_id": thread_id}}))
     while True:
         if pending is not None:
             decision = await _review_dialogue(pending, read, out, edit)
@@ -197,12 +199,16 @@ async def chat_loop(
             if name == "pending":
                 snap = await graph.aget_state({"configurable": {"thread_id": thread_id}})
                 changes = snap.values.get("pending_changes") or []
-                if not changes:
+                paused = paused_review(snap)
+                if paused is not None:
+                    pending = paused
+                elif not changes:
                     out("nothing pending\n")
                 else:
                     pending = {
                         "summary": snap.values.get("pending_summary") or "",
                         "changes": [c.model_dump(mode="json") for c in changes],
+                        "violations": snap.values.get("pending_violations") or {},
                         "last_error": snap.values.get("last_error"),
                     }
                 continue
@@ -260,18 +266,29 @@ async def checkin_run(graph: Any, *, thread_id: str, out: Out, approve: bool) ->
     """One unattended check-in. 0: nothing pending, or approved in full; 1: a plan was not
     proposed for violations, or approved with the violating changes skipped (each printed with
     its violations); 3: a change set waits at review, either this run's without `approve`, or
-    one an earlier run left, which is never approved here."""
+    one an earlier run left, which is never approved here, or the thread is not idle (a partial
+    apply's remainder, a run stopped mid-graph)."""
     cfg = {"configurable": {"thread_id": thread_id}}
     snap = await graph.aget_state(cfg)
-    if snap.next == ("review",):
-        values = snap.values or {}
-        pending = {
+    values = snap.values or {}
+    waiting = paused_review(snap)
+    if waiting is None and values.get("pending_changes"):
+        # a partial apply's remainder, or a run stopped before its interrupt
+        waiting = {
             "summary": values.get("pending_summary") or "",
-            "changes": [c.model_dump(mode="json") for c in values.get("pending_changes") or []],
+            "changes": [c.model_dump(mode="json") for c in values["pending_changes"]],
+            "violations": values.get("pending_violations") or {},
             "last_error": values.get("last_error"),
         }
-        out("a change set is already waiting at review:\n" + render_review(pending) + "\n")
+    if waiting is not None:
+        out("a change set is already waiting at review:\n" + render_review(waiting) + "\n")
         out(ALREADY_PAUSED_HINT + "\n")
+        return 3
+    if snap.next:
+        out(
+            f"the nutrition thread stopped mid-run at {', '.join(snap.next)}; "
+            "send any message in `tri-nutrition chat` to clear it\n"
+        )
         return 3
     request = {"messages": [HumanMessage(CHECKIN_REQUEST)]}
     printer = await run_turn(graph, request, thread_id, out)
