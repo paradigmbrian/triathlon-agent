@@ -12,8 +12,10 @@ from langsmith import Client, aevaluate
 from tri_analyze.config import AnalyzeSettings
 from tri_analyze.evals.cases import CASES
 from tri_analyze.evals.evaluators import make_judge, pulls_splits, states_window, uses_sql
+from tri_analyze.evals.seed import clear_database, seed_database
 from tri_analyze.evals.target import make_target
 from tri_analyze.prompts.analyst import PROMPT_VERSION
+from tri_core.config import reader_url
 from tri_core.evals import errored, pass_rates, render_pass_rates, scored_counts
 from tri_core.llm import ModelProvider, Role, eval_metadata
 
@@ -48,27 +50,37 @@ async def run_eval(
     prefix: str | None = None,
     recreate: bool = False,
     log: Callable[[str], None] = print,
+    eval_db_url: str | None = None,
 ) -> tuple[dict[str, float], int]:
     """Returns the pass rate per evaluator key and the number of errored examples. The analyst
-    runs on its role's model and the judge on the judge role's."""
+    runs on its role's model and the judge on the judge role's. The history in evals/seed.py is
+    seeded into the eval database (the test database unless given) and the tables are emptied
+    afterwards, pass or fail."""
+    url = eval_db_url or settings.test_database_url
+    if url == settings.database_url:
+        raise ValueError("refusing to seed the athlete's database; use the test database")
     client = Client(api_key=settings.langsmith_api_key)
     ensure_dataset(client, recreate=recreate)
     evaluators: list[Any] = [uses_sql, pulls_splits, states_window]
     if judge:
         evaluators.append(make_judge(models(Role.JUDGE)))
-    results = await aevaluate(
-        make_target(models(Role.ANALYST)),
-        data=DATASET_NAME,
-        evaluators=evaluators,
-        experiment_prefix=prefix or f"analyst-v{PROMPT_VERSION}",
-        metadata={
-            "prompt_version": PROMPT_VERSION,
-            **eval_metadata(settings, Role.ANALYST, judge=judge),
-        },
-        client=client,
-        max_concurrency=2,
-    )
-    rows: list[Any] = [row async for row in results]
+    seed_database(url)
+    try:
+        results = await aevaluate(
+            make_target(models(Role.ANALYST), reader_url(url)),
+            data=DATASET_NAME,
+            evaluators=evaluators,
+            experiment_prefix=prefix or f"analyst-v{PROMPT_VERSION}",
+            metadata={
+                "prompt_version": PROMPT_VERSION,
+                **eval_metadata(settings, Role.ANALYST, judge=judge),
+            },
+            client=client,
+            max_concurrency=2,
+        )
+        rows: list[Any] = [row async for row in results]
+    finally:
+        clear_database(url)
     dict_rows = [dict(r) for r in rows]
     rates = pass_rates(dict_rows)
     errors = errored(dict_rows)

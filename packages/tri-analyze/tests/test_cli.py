@@ -143,4 +143,28 @@ def test_eval_exit_code_follows_rates_and_errors(monkeypatch):
     assert runner.invoke(app, ["eval"]).exit_code == 1
     stub({}, 0)
     assert runner.invoke(app, ["eval"]).exit_code == 1
+
+
+def test_eval_refuses_the_athletes_database(monkeypatch):
+    settings = AnalyzeSettings(_env_file=None, anthropic_api_key="k", langsmith_api_key="ls")
+    monkeypatch.setattr(cli, "get_analyze_settings", lambda: settings)
+    result = runner.invoke(app, ["eval", "--eval-db", settings.database_url])
+    assert result.exit_code == 2 and "athlete's database" in result.output
+
+
+def test_eval_passes_the_eval_database_through(monkeypatch):
+    monkeypatch.setattr(
+        cli,
+        "get_analyze_settings",
+        lambda: AnalyzeSettings(_env_file=None, anthropic_api_key="k", langsmith_api_key="ls"),
+    )
+    seen: list[dict] = []
+
+    async def run_eval(settings, model, **kw):
+        seen.append(kw)
+        return {"uses_sql": 1.0}, 0
+
+    monkeypatch.setattr("tri_analyze.evals.run.run_eval", run_eval)
+    result = runner.invoke(app, ["eval", "--eval-db", "postgresql://u:p@h:1/evaldb"])
+    assert result.exit_code == 0 and seen[-1]["eval_db_url"] == "postgresql://u:p@h:1/evaldb"
     assert seen[-1]["prefix"] is None and seen[-1]["recreate"] is False

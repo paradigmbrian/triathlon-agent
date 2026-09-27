@@ -135,14 +135,25 @@ def eval_cmd(
         "--recreate-dataset",
         help="Delete and re-create the LangSmith dataset from the cases in code",
     ),
+    eval_db: str | None = typer.Option(
+        None,
+        "--eval-db",
+        help="Postgres URL the eval seeds and empties (default: TEST_DATABASE_URL); never the "
+        "athlete's database",
+    ),
 ) -> None:
     """Run the analyst over the feedback dataset in LangSmith and print the pass rate per
-    evaluator (exit 1 when any evaluator is below 100% or any example errored)."""
-    raise typer.Exit(code=asyncio.run(_eval(prefix=prefix, recreate=recreate)))
+    evaluator (exit 1 when any evaluator is below 100% or any example errored). The analyst's SQL
+    runs against a history seeded into the test database (or --eval-db), which is emptied
+    afterwards."""
+    raise typer.Exit(code=asyncio.run(_eval(prefix=prefix, recreate=recreate, eval_db=eval_db)))
 
 
-async def _eval(*, prefix: str | None, recreate: bool) -> int:
+async def _eval(*, prefix: str | None, recreate: bool, eval_db: str | None) -> int:
+    import psycopg
+
     from tri_analyze.evals.run import run_eval
+    from tri_analyze.evals.seed import EvalDatabaseInUse
     from tri_core.llm import make_model
 
     settings = get_analyze_settings()
@@ -152,13 +163,21 @@ async def _eval(*, prefix: str | None, recreate: bool) -> int:
     if not settings.anthropic_api_key:
         console.print("ANTHROPIC_API_KEY is not set in .env", style="red")
         return 2
-    rates, errors = await run_eval(
-        settings,
-        lambda role: make_model(settings, role),
-        prefix=prefix,
-        recreate=recreate,
-        log=lambda m: _out(m + "\n"),
-    )
+    if eval_db is not None and eval_db == settings.database_url:
+        console.print("refusing: --eval-db is the athlete's database", style="red")
+        return 2
+    try:
+        rates, errors = await run_eval(
+            settings,
+            lambda role: make_model(settings, role),
+            prefix=prefix,
+            recreate=recreate,
+            log=lambda m: _out(m + "\n"),
+            eval_db_url=eval_db,
+        )
+    except (psycopg.OperationalError, EvalDatabaseInUse, ValueError) as exc:
+        console.print(f"eval database: {exc}", style="red")
+        return 2
     return 0 if rates and errors == 0 and all(r == 1.0 for r in rates.values()) else 1
 
 
