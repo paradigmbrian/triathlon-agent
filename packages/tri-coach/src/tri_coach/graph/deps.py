@@ -14,6 +14,7 @@ from langchain_core.tools import BaseTool
 from tri_coach.allowlist import ANALYST_GARMIN_TOOLS, ANALYST_TP_TOOLS
 from tri_coach.config import CoachSettings
 from tri_coach.servers import Servers
+from tri_core.config import readonly_url
 from tri_core.db.connection import connect as core_connect
 from tri_core.db.repo import Conn
 from tri_core.db.sql_tool import make_query_tool
@@ -40,7 +41,7 @@ class CoachDeps:
         BaseChatModel  # the analyst run inside ask_analyst (scripted separately in tests)
     )
     connect: ConnectFactory
-    db_url: str
+    readonly_db_url: str  # the SQL tool's tri_reader URL
     planning_deps: PlanningDeps
     nutrition_deps: NutritionDeps
     analyst_tools: list[BaseTool]
@@ -77,6 +78,7 @@ def make_deps(
     """`models` maps each role to its model: `lambda role: make_model(settings, role)` in the
     CLI and tri-web, one fake for every role in tests."""
     url = settings.database_url
+    reader = readonly_url(settings)
     connect = lambda: core_connect(url)  # noqa: E731
     planning = make_planning_deps(
         get_planning_settings(),
@@ -99,10 +101,10 @@ def make_deps(
         model=models(Role.COACH),
         analyst_model=models(Role.ANALYST),
         connect=connect,
-        db_url=url,
+        readonly_db_url=reader,
         planning_deps=planning,
         nutrition_deps=nutrition,
-        analyst_tools=analyst_tools_for(servers, url, today, connect),
+        analyst_tools=analyst_tools_for(servers, reader, today, connect),
         wellness_model=models(Role.WELLNESS_CHAT),
         wellness_registry=registry,
         max_consults=settings.tri_coach_max_consults_per_domain,

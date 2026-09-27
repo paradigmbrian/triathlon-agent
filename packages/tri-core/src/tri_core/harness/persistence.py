@@ -1,7 +1,7 @@
 """Postgres persistence for every graph. The checkpointer makes `interrupt()` durable: every
 super-step writes a checkpoint keyed by thread_id, and `Command(resume=...)` in a fresh process
 picks up from it. The Store holds what must outlive any thread. The app never creates tables;
-scripts/setup_checkpointer.py does."""
+`uv run tri migrate` does."""
 
 from __future__ import annotations
 
@@ -15,14 +15,14 @@ from langgraph.store.postgres.aio import AsyncPostgresStore
 
 SETUP_HINT = (
     "checkpoint tables are missing; run once per database:\n"
-    "  uv run python scripts/setup_checkpointer.py $DATABASE_URL\n"
-    "  uv run python scripts/setup_checkpointer.py $TEST_DATABASE_URL"
+    "  uv run tri migrate\n"
+    "  uv run tri migrate --test"
 )
 
 STORE_SETUP_HINT = (
     "LangGraph store tables are missing; run once per database:\n"
-    "  uv run python scripts/setup_checkpointer.py $DATABASE_URL\n"
-    "  uv run python scripts/setup_checkpointer.py $TEST_DATABASE_URL"
+    "  uv run tri migrate\n"
+    "  uv run tri migrate --test"
 )
 
 

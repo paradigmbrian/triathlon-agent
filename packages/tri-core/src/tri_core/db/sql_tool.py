@@ -134,6 +134,8 @@ def run_readonly_query(
             conn.rollback()
     except errors.ReadOnlySqlTransaction as exc:
         return {"error": f"rejected by read-only transaction: {exc}".strip()}
+    except errors.InsufficientPrivilege:
+        return {"error": "rejected: not permitted for the read-only role"}
     except errors.QueryCanceled:
         return {"error": f"statement timeout after {timeout_ms} ms; narrow the query"}
     except psycopg.Error as exc:

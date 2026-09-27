@@ -273,7 +273,9 @@ def test_the_fuel_node_plans_with_the_fuel_model_when_one_is_set(monkeypatch):
 
     monkeypatch.setattr(fuel_node, "structured", spy)
     agent, fueler = ScriptedChatModel(script=[]), ScriptedChatModel(script=[])
-    deps = GraphDeps(model=agent, connect=lambda: contextlib.nullcontext(None), db_url="unused")
+    deps = GraphDeps(
+        model=agent, connect=lambda: contextlib.nullcontext(None), readonly_db_url="unused"
+    )
     make_fuel_node(deps)
     deps.fuel_model = fueler
     make_fuel_node(deps)

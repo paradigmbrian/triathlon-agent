@@ -8,8 +8,11 @@ from tri_analyze.prompts.analyst import TOOL_GUIDE
 from tri_coach.config import CoachSettings
 from tri_coach.graph.deps import analyst_tools_for, make_deps
 from tri_coach.servers import Servers, open_servers
+from tri_core.config import readonly_url
 from tri_core.mcp.caller import ToolsCaller
 from tri_core.testing import ScriptedChatModel
+from tri_nutrition.config import get_nutrition_settings
+from tri_planning.config import get_planning_settings
 
 
 def named(*names):
@@ -135,3 +138,13 @@ def test_make_deps_loads_the_wellness_registry_only_when_sex_is_set(monkeypatch)
     monkeypatch.setenv("TRI_ATHLETE_SEX", "male")
     deps = make_deps(CoachSettings(_env_file=None), lambda _: model, servers)
     assert deps.wellness_registry is not None and deps.wellness_registry.sex == "male"
+
+
+def test_make_deps_points_every_sql_tool_at_the_reader_role(monkeypatch):
+    monkeypatch.delenv("TRI_READONLY_DATABASE_URL", raising=False)
+    model = ScriptedChatModel(script=[])
+    s = CoachSettings(_env_file=None, database_url="postgresql://o:p@h:1/x")
+    deps = make_deps(s, lambda _: model, Servers())
+    assert deps.readonly_db_url == "postgresql://tri_reader:tri_reader@h:1/x"
+    assert deps.planning_deps.readonly_db_url == readonly_url(get_planning_settings())
+    assert deps.nutrition_deps.readonly_db_url == readonly_url(get_nutrition_settings())

@@ -192,6 +192,7 @@ def chat() -> None:
 async def _chat() -> None:
     from langchain_core.tools import BaseTool
 
+    from tri_core.config import readonly_url
     from tri_core.db.connection import connect
     from tri_core.db.sql_tool import make_query_tool
     from tri_core.harness.agents import build_chat_agent
@@ -210,7 +211,7 @@ async def _chat() -> None:
     url = settings.database_url
     registry = load_registry(settings.tri_athlete_sex)
     tools: list[BaseTool] = [
-        make_query_tool(url, WELLNESS_SCHEMA_DOC),
+        make_query_tool(readonly_url(settings), WELLNESS_SCHEMA_DOC),
         *make_findings_tools(lambda: connect(url), registry),
     ]
     with connect(url) as conn:

@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from tri_core.config import Settings
+from tri_core.config import Settings, reader_url, readonly_url
 
 
 def test_defaults_when_env_empty(monkeypatch):
@@ -48,3 +48,33 @@ def test_an_unknown_effort_is_rejected(monkeypatch):
     monkeypatch.setenv("TRI_EFFORT_COACH", "extreme")
     with pytest.raises(ValidationError, match="tri_effort_coach"):
         Settings(_env_file=None)
+
+
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        (
+            "postgresql://tri_analyze:tri_analyze@localhost:5435/tri_analyze",
+            "postgresql://tri_reader:tri_reader@localhost:5435/tri_analyze",
+        ),
+        ("postgresql://localhost/x", "postgresql://tri_reader:tri_reader@localhost/x"),
+        (
+            "postgresql://u:p@h:1/x?sslmode=require",
+            "postgresql://tri_reader:tri_reader@h:1/x?sslmode=require",
+        ),
+    ],
+)
+def test_reader_url_swaps_only_the_credentials(url, expected):
+    assert reader_url(url) == expected
+
+
+def test_readonly_url_derives_from_database_url_when_unset(monkeypatch):
+    monkeypatch.delenv("TRI_READONLY_DATABASE_URL", raising=False)
+    s = Settings(_env_file=None, database_url="postgresql://a:b@h:1/x")
+    assert s.tri_readonly_database_url is None
+    assert readonly_url(s) == "postgresql://tri_reader:tri_reader@h:1/x"
+
+
+def test_readonly_url_prefers_the_explicit_setting(monkeypatch):
+    monkeypatch.setenv("TRI_READONLY_DATABASE_URL", "postgresql://ro:pw@h:1/x")
+    assert readonly_url(Settings(_env_file=None)) == "postgresql://ro:pw@h:1/x"

@@ -63,6 +63,7 @@ async def _chat(*, no_live: bool) -> int:
     from tri_analyze.repl import chat_loop
     from tri_analyze.repo import AthleteContext, load_athlete_context
     from tri_analyze.tools.live import open_live_tools
+    from tri_core.config import readonly_url
     from tri_core.db.connection import connect
     from tri_core.db.sql_tool import make_query_tool
     from tri_core.llm import Role, make_model
@@ -91,7 +92,7 @@ async def _chat(*, no_live: bool) -> int:
             live_tools = await stack.enter_async_context(
                 open_live_tools(settings, lambda m: _out(m + "\n"))
             )
-        tools: list[BaseTool] = [make_query_tool(settings.database_url), *live_tools]
+        tools: list[BaseTool] = [make_query_tool(readonly_url(settings)), *live_tools]
         agent = build_agent(make_model(settings, Role.ANALYST), tools)
 
         async def cmd_tools() -> str:

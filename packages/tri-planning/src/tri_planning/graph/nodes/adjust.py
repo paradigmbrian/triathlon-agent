@@ -72,7 +72,7 @@ def changes_from_messages(
 
 
 def make_adjust_node(deps: GraphDeps) -> Any:
-    query = make_query_tool(deps.db_url)
+    query = make_query_tool(deps.readonly_db_url)
     change_tool = make_change_tool()
     tp_tools = make_tp_read_tools(deps.tp)
 

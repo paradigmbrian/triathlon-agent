@@ -1,8 +1,9 @@
 import json
 
+import psycopg
 import pytest
 
-from tri_core.config import Settings
+from tri_core.config import Settings, reader_url
 from tri_core.db.sql_tool import (
     SCHEMA_DOC,
     make_query_tool,
@@ -137,3 +138,45 @@ def test_schema_doc_documents_tombstones_and_activities():
     for query in examples.split("--")[1:]:
         if "from workouts" in query:
             assert "deleted_at is null" in query, query
+
+
+@pytest.fixture
+def reader(db):
+    """The test database as tri_reader. Skips until migrations/010_reader_role.sql is applied to
+    the test database: the role is cluster-wide but its grants are per database."""
+    ok = db.execute(
+        "select case when exists (select 1 from pg_roles where rolname = 'tri_reader') "
+        "then has_table_privilege('tri_reader', 'sync_state', 'select') else false end as ok"
+    ).fetchone()["ok"]
+    if not ok:
+        pytest.skip("tri_reader is not set up here: Brian runs `uv run tri migrate --test`")
+    return reader_url(Settings().test_database_url)
+
+
+@pytest.mark.db
+def test_the_reader_role_selects_in_read_only_transactions(reader):
+    out = run_readonly_query(
+        reader,
+        "select current_user as u, current_setting('default_transaction_read_only') as ro, "
+        "count(*) as n from sync_state",
+    )
+    assert out["columns"] == ["u", "ro", "n"]
+    assert out["rows"][0][:2] == ["tri_reader", "on"]
+
+
+@pytest.mark.db
+def test_the_reader_role_cannot_terminate_another_backend(db, reader):
+    pid = db.info.backend_pid  # the owner role's connection
+    out = run_readonly_query(reader, f"select pg_terminate_backend({pid})")
+    assert out == {"error": "rejected: not permitted for the read-only role"}
+    assert db.execute("select 1 as one").fetchone()["one"] == 1  # still connected
+
+
+@pytest.mark.db
+def test_the_reader_role_refuses_a_write_even_in_a_read_write_transaction(reader):
+    # Through run_readonly_query the read-only transaction answers first; here the role
+    # alone has to refuse.
+    with psycopg.connect(reader) as conn:
+        conn.execute("set transaction read write")
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            conn.execute("insert into sync_state values ('x', current_date, now(), 'ok', null)")

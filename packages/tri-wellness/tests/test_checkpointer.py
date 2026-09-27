@@ -36,7 +36,7 @@ async def test_second_process_resumes_the_ingest_thread_from_postgres(
 ):
     url = Settings().test_database_url
     if not checkpointer_ready(url):
-        pytest.skip("run scripts/setup_checkpointer.py against the test database")
+        pytest.skip("run `uv run tri migrate --test`")
     thread = {"configurable": {"thread_id": f"ingest:test-{uuid.uuid4()}"}}
     src = {"source_path": str(tiny_pdf), "source_kind": "pdf", "drawn_on_hint": None}
     script = [tool_call("ExtractedPanel", load_extracted("pdf_panel"))]

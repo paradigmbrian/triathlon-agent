@@ -17,10 +17,13 @@ db/
   writes.py       recorded_write, mark_failed, note_pending_error, pending_rows:
                   pending -> applied | failed
   sql_tool.py     the agents' read-only SQL tool and SCHEMA_DOC
+  migrate.py      discover, plan, apply_migrations, ensure_langgraph_tables: tri migrate
 ```
 
-Schema lives in `migrations/*.sql` at the repo root. **Migrations are applied by hand with
-psql** (see the top-level README); the assistant writes them, Brian runs them.
+Schema lives in `migrations/*.sql` at the repo root, applied by `uv run tri migrate` (`--test`
+for the test database) and recorded in `schema_migrations` with each file's sha256. An applied
+file is never edited: a change is a new file. The assistant writes migrations; Brian runs
+`tri migrate`.
 
 ## Tables
 
@@ -87,8 +90,8 @@ payload, so a field that was not modeled can still be queried with `->>` without
 
 ## Test database
 
-`tri_analyze_test` on the same container, created once by hand and migrated with the same
-files. The `db` fixture in `tri_core.testing.fixtures` (registered by the root `conftest.py`) opens a connection, yields it, and rolls back
+`tri_analyze_test` on the same container, created once by hand (`create database
+tri_analyze_test`) and migrated with `uv run tri migrate --test`. The `db` fixture in `tri_core.testing.fixtures` (registered by the root `conftest.py`) opens a connection, yields it, and rolls back
 after every test, so tests never leave rows behind. When Postgres is down the fixture skips
 with a clear message instead of failing.
 
@@ -96,4 +99,8 @@ with a clear message instead of failing.
 
 The assistant never runs `INSERT/UPDATE/DELETE` or DDL against the store. Writes happen only
 through `tri sync`, which Brian runs, and through tests inside rolled-back
-transactions. The agent's `query_training_db` tool runs on a `read_only=True` connection.
+transactions. The agents' `query_training_db` tool connects as `tri_reader` (migration 010:
+SELECT only, read-only transactions, no `pg_signal_backend`) through `readonly_url(settings)`,
+on a `read_only=True` connection, after `validate_select`'s lexical check. `tri_reader` can also
+SELECT LangGraph's checkpoint and store tables and `schema_migrations` (010's grant covers every
+table in `public`); that is the athlete's own data and is accepted.

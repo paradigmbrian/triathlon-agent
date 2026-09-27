@@ -30,7 +30,10 @@ def goal_id_from_messages(messages: Sequence[AnyMessage]) -> int | None:
 
 
 def make_intake_node(deps: GraphDeps) -> Any:
-    tools = [make_query_tool(deps.db_url), *make_goal_tools(deps.connect, deps.tp, deps.today)]
+    tools = [
+        make_query_tool(deps.readonly_db_url),
+        *make_goal_tools(deps.connect, deps.tp, deps.today),
+    ]
     agent = make_subagent(deps.model, tools, render_intake_prompt(deps.today()))
 
     async def intake(state: PlanningState, config: RunnableConfig) -> dict[str, Any]:

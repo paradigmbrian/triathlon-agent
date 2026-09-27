@@ -12,6 +12,7 @@ from typing import Any
 
 from langsmith import Client, aevaluate
 
+from tri_core.config import readonly_url
 from tri_core.db.repo import Conn
 from tri_core.llm import ModelProvider, Role, eval_metadata
 from tri_planning.config import PlanningSettings
@@ -70,7 +71,7 @@ async def run_eval(
     deps = GraphDeps(
         model=designer,
         connect=_no_database,
-        db_url=settings.database_url,
+        readonly_db_url=readonly_url(settings),
         design_model=designer,
     )
     results = await aevaluate(

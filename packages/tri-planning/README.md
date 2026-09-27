@@ -79,8 +79,8 @@ In chat: `/status` (goal, phase, this week's target vs actual, weeks on the cale
 (re-show a paused change set), `/sync`, `/quit`. At review: `approve`, `reject <note>`, or
 `edit` (opens the change set as YAML in `$EDITOR`).
 
-One-time setup after the migrations: `uv run python scripts/setup_checkpointer.py <DATABASE_URL>`
-for both databases (creates LangGraph's checkpoint tables).
+One-time setup: `uv run tri migrate && uv run tri migrate --test` (also creates LangGraph's
+checkpoint tables).
 
 ## Adjusting
 

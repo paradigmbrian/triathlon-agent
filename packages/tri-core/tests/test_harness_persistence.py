@@ -17,14 +17,10 @@ from tri_core.harness.persistence import (
 from tri_core.testing.fakes import StateSample
 
 UNREACHABLE = "postgresql://nobody:nothing@127.0.0.1:1/nope"
-TAIL = (
-    "run once per database:\n"
-    "  uv run python scripts/setup_checkpointer.py $DATABASE_URL\n"
-    "  uv run python scripts/setup_checkpointer.py $TEST_DATABASE_URL"
-)
+TAIL = "run once per database:\n  uv run tri migrate\n  uv run tri migrate --test"
 
 
-def test_setup_hints_keep_todays_text():
+def test_setup_hints_name_tri_migrate():
     assert SETUP_HINT == "checkpoint tables are missing; " + TAIL
     assert STORE_SETUP_HINT == "LangGraph store tables are missing; " + TAIL
 
@@ -48,7 +44,7 @@ def test_readiness_checks_are_false_when_the_database_is_unreachable():
 async def test_checkpointer_and_store_open_against_the_test_database():
     url = Settings().test_database_url
     if not (checkpointer_ready(url) and store_ready(url)):
-        pytest.skip("run scripts/setup_checkpointer.py against the test database")
+        pytest.skip("run `uv run tri migrate --test`")
     thread = {"configurable": {"thread_id": f"harness-{uuid.uuid4()}"}}
     async with open_checkpointer(url, [StateSample]) as saver:
         assert await saver.aget_tuple(thread) is None
