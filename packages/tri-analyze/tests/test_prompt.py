@@ -128,7 +128,7 @@ def test_render_feedback_rules_present_and_version_is_1():
     assert FEEDBACK_RULES in text
     for phrase in ("planned vs", "zones", "CTL/ATL/TSB", "takeaway", "SQL"):
         assert phrase.lower() in text.lower(), phrase
-    assert PROMPT_VERSION == "1"
+    assert PROMPT_VERSION == "2"
 
 
 def test_render_is_deterministic_and_pure():
@@ -136,3 +136,8 @@ def test_render_is_deterministic_and_pure():
     first = render_system_prompt(ctx, STANDALONE)
     assert first == render_system_prompt(ctx, STANDALONE)
     assert first == render_system_prompt(athlete_context(), list(STANDALONE))
+
+
+def test_the_rules_ask_for_shown_arithmetic_and_a_literal_today():
+    assert "show the arithmetic" in FEEDBACK_RULES
+    assert "never use current_date" in FEEDBACK_RULES

@@ -109,8 +109,9 @@ AsyncEvaluator = Callable[
 class FeedbackJudgement(BaseModel):
     grounded: bool = Field(
         description=(
-            "every number in the answer appears in the system prompt's context or in the tool "
-            "results, and data that is missing is stated as missing rather than guessed"
+            "every number in the answer appears in the context or the tool results, or is "
+            "derived from them by a unit conversion or arithmetic the answer shows (for example "
+            "800 m in 200 s gives 4:10/km); missing data is stated as missing"
         )
     )
     covers_rules: bool = Field(
@@ -139,9 +140,11 @@ analyst's system prompt (the athlete's context, the bound tools and the feedback
 athlete's question, the tool results the analyst received, and the analyst's answer.
 
 Grounded: every number in the answer (durations, distances, watts, paces, heart rates, TSS,
-scores, dates) appears in the system prompt's context or in the tool results, possibly after
-a unit conversion or an arithmetic step you can verify; when the tool results are empty or
-lack what the question needs, the answer says so instead of inventing figures.
+scores, dates) appears in the system prompt's context or in the tool results, or is derived
+from them by a unit conversion or arithmetic the answer shows (for example "800 m in 200 s,
+4:10/km"). A derived number whose arithmetic is not shown, or a number that appears nowhere, is
+ungrounded: list each in problems with what you expected to find. When the tool results are
+empty or lack what the question needs, the answer says so instead of inventing figures.
 
 Feedback quality applies to a session review: the five feedback rules are covered, the
 athlete's own comments, feeling and RPE are used when the tool results carry them, there are

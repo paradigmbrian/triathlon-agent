@@ -454,3 +454,12 @@ async def test_run_eval_without_the_judge_records_no_judge_model(monkeypatch):
     settings = AnalyzeSettings(_env_file=None, langsmith_api_key="ls")
     await analyze_run.run_eval(settings, models, judge=False, log=lambda m: None)
     assert roles == [Role.ANALYST] and "judge_model" not in captured["metadata"]
+
+
+def test_grounded_accepts_arithmetic_the_answer_shows():
+    field = FeedbackJudgement.model_fields["grounded"].description or ""
+    assert "derived from them by a unit conversion or arithmetic the answer shows" in field
+    assert "800 m in 200 s gives 4:10/km" in field
+    from tri_analyze.evals.evaluators import JUDGE_SYSTEM
+
+    assert "list each in problems" in JUDGE_SYSTEM and "arithmetic" in JUDGE_SYSTEM
