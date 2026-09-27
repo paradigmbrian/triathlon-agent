@@ -54,6 +54,18 @@ def turn_config(
     return cfg
 
 
+def paused_review(snap: Any) -> dict[str, Any] | None:
+    """The interrupt payload of a review that is still waiting, from a state snapshot: the
+    thread's next node is `review` and its first task holds an interrupt. The one definition
+    every host uses to decide that a new turn must wait."""
+    if snap is None or getattr(snap, "next", ()) != ("review",):
+        return None
+    tasks = getattr(snap, "tasks", ()) or ()
+    if tasks and tasks[0].interrupts:
+        return dict(tasks[0].interrupts[0].value)
+    return None
+
+
 async def stream_turn(
     runnable: Any,
     payload: Any,

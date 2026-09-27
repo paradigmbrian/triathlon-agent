@@ -12,7 +12,7 @@ import yaml
 from langgraph.types import Command
 
 from tri_core.harness.turns import Out as Out
-from tri_core.harness.turns import run_agent_turn, stream_turn, turn_config
+from tri_core.harness.turns import paused_review, run_agent_turn, stream_turn, turn_config
 from tri_wellness.labs.models import (
     BLOCKING_REASONS,
     Bound,
@@ -372,13 +372,6 @@ async def run_turn(
     return result
 
 
-def _pending_payload(snapshot: Any) -> dict[str, Any] | None:
-    for task in getattr(snapshot, "tasks", ()) or ():
-        for stop in getattr(task, "interrupts", ()) or ():
-            return dict(stop.value)
-    return None
-
-
 async def run_ingest(
     graph: Any,
     *,
@@ -395,7 +388,7 @@ async def run_ingest(
     snap = await graph.aget_state(cfg)
     values: dict[str, Any] = snap.values or {}
     pending: dict[str, Any] | None = None
-    if snap.next == ("review",) and (pending := _pending_payload(snap)) is not None:
+    if (pending := paused_review(snap)) is not None:
         out("resuming the review for this file\n")
     elif values.get("panel_id") is not None:
         out(f"already stored as panel {values['panel_id']}; nothing to do\n")

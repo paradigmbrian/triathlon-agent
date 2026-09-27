@@ -93,7 +93,8 @@ regenerates targets; approve persists them, reject discards them.
 ## Commands
 
 - `tri-nutrition chat [--no-live]`: the REPL. `/status`, `/profile`, `/pending`, `/sync`, `/quit`.
-  At review: `approve`, `reject <note>`, or `edit` (YAML in `$EDITOR`).
+  At review: `approve`, `reject <note>`, or `edit` (YAML in `$EDITOR`). A review left waiting
+  from an earlier session opens first.
 - At review the table is followed by the session fueling lines and the race timeline.
   `set_session_note` writes the workout's private note; `set_race_note` creates or updates the
   calendar note titled `Race fuel: <event> <date>`. A note is only overwritten when the agent
@@ -108,7 +109,8 @@ regenerates targets; approve persists them, reject discards them.
   note whose plan still has violations is skipped and printed, and the exit code is 1. A plan
   refused for violations (stored, not proposed) is printed and exits 1 too, even when nothing
   else is up for review. A review
-  left by an earlier run is shown but never approved here (exit 3): answer it in `chat`.
+  left by an earlier run, a partial apply's remainder, or a run stopped mid-graph is shown and
+  never approved here (exit 3): answer it in `chat`.
 - `tri-nutrition eval [--judge/--no-judge] [--prefix NAME] [--recreate-dataset]`: creates the
   LangSmith dataset `tri_nutrition_fueling` from `evals/cases.py` when missing, runs the fueling
   prompts over it as experiment `fuel-v<PROMPT_VERSION>`, and prints the pass rate per

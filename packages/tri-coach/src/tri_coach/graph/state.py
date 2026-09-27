@@ -25,6 +25,7 @@ class CoachState(TypedDict, total=False):
     brief: Brief | None  # set by a handoff tool, consumed by planning/nutrition
     proposals: list[Proposal]  # accumulated this turn; apply empties it
     next_proposal_id: int  # the number the next proposal takes; ids keep counting past an apply
+    consults: dict[str, int]  # consultations made this turn, by domain; start clears it
     proposal_request: ProposalRequest | None  # set by propose_changes, consumed by review
     pending: ChangeSet | None  # what review shows; remainder after a partial apply
     carried: list[Proposal]  # held proposals the change set did not name; review -> apply

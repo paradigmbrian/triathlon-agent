@@ -87,6 +87,7 @@ class CoachContext:
     labs_enabled: bool = False  # TRI_ATHLETE_SEX set: the wellness consult is bound
     labs: LabSummary | None = None
     labs_missing: bool = False  # labs_enabled but lab_panels is not there: migrations not applied
+    consults_left: dict[str, int] | None = None  # set by the coach node on every entry
 
 
 async def load_context(
@@ -222,6 +223,15 @@ def _days_lines(days: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
+def _consults_line(left: dict[str, int] | None) -> str | None:
+    if left is None:
+        return None
+    return (
+        f"Consults left this turn: planning {left.get('planning', 0)}, "
+        f"nutrition {left.get('nutrition', 0)}."
+    )
+
+
 def _pending_line(pending: ChangeSet | None) -> str | None:
     if pending is None:
         return None
@@ -251,6 +261,9 @@ def render_context(ctx: CoachContext) -> str:
     lines.append(_nutrition_line(ctx))
     lines.append(_labs_line(ctx))
     lines += _days_lines(ctx.recent_days)
+    consults = _consults_line(ctx.consults_left)
+    if consults:
+        lines.append(consults)
     pending = _pending_line(ctx.pending)
     if pending:
         lines.append(pending)

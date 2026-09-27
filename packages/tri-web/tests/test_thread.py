@@ -139,3 +139,20 @@ async def test_snapshot_of_an_empty_thread():
     snap = SimpleNamespace(next=(), values={}, tasks=())
     view = await thread_snapshot(Graph(snap), "coach", running=None)
     assert view.messages == [] and view.stuck is False
+
+
+def test_a_spent_consult_budget_reloads_as_activity_not_a_consult_card():
+    budget = (
+        "consult budget for planning is spent this turn (2 of 2); explain what you have and "
+        "stop, or ask the athlete"
+    )
+    ui = ui_messages(
+        [
+            ToolMessage(budget, tool_call_id="c1", name="consult_planning", id="t1"),
+            ToolMessage("planning says hold", tool_call_id="c2", name="consult_planning", id="t2"),
+        ]
+    )
+    assert [(u.role, u.name) for u in ui] == [
+        ("activity", "consult_planning"),
+        ("consult", "consult_planning"),
+    ]

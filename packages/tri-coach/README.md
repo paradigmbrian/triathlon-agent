@@ -30,7 +30,7 @@ flowchart TD
     START([START]) --> start["start\nclears last turn's brief, proposals, decision"]
     start --> coach["coach\ncreate_agent sub-agent\nask_analyst, ask_wellness, consult_planning, consult_nutrition,\npropose_changes, remember, forget"]
     coach -->|turn ended in conversation| END1([END])
-    coach ==>|Command: consult_planning| planning["planning\ntri-planning graph, embedded,\nfresh InMemorySaver per run"]
+    coach ==>|Command: consult_planning| planning["planning\ntri-planning graph, embedded,\nno checkpointer"]
     coach ==>|Command: consult_nutrition| nutrition["nutrition\ntri-nutrition graph, embedded"]
     planning --> coach
     nutrition --> coach
@@ -53,17 +53,24 @@ beside a handoff in the same step could never be answered, so the sub-agent's mo
 
 | Node | Model call | Reads | Writes | Returns |
 |---|---|---|---|---|
-| `start` | none | nothing | nothing | clears `brief`, `proposals`, `proposal_request`, `review_decision`, `reports`; keeps `pending` |
+| `start` | none | nothing | nothing | clears `brief`, `proposals`, `proposal_request`, `review_decision`, `reports`, `consults`; keeps `pending` |
 | `coach` | sub-agent loop | tables, both Store namespaces and the lab tables (context), coach memory | coach memory (via `remember`/`forget`) | new messages, or a `Command` from a tool |
-| `planning` | the embedded planning graph | `brief` | planning's working tables (as a standalone run would before review) | `proposals` + one, the handoff result message |
-| `nutrition` | the embedded nutrition graph | `brief` | nutrition's working tables, the profile on intake | same; on the regenerate brief, the targets entry and a "[follow-on]" message |
+| `planning` | the embedded planning graph | `brief` | planning's working tables (as a standalone run would before review) | `proposals` + one, the handoff result message, `consults` + 1 for the domain |
+| `nutrition` | the embedded nutrition graph | `brief` | nutrition's working tables, the profile on intake | same; on the regenerate brief, the targets entry and a "[follow-on]" message, `consults` + 1 for the domain on a consultation; the regenerate brief does not count |
 | `review` | none | `proposal_request`, `proposals`, the held `pending` | nothing before the interrupt | `pending`, `review_decision`; a reject note as a `HumanMessage` |
 | `apply` | none | `pending` | TrainingPeaks and Garmin through the packages' `apply_changes`, their audit rows with `thread_id = "coach"` | `reports`, the remainder in `pending` under `held-planning` / `held-nutrition`, one report message; regenerate_after_apply and a regenerate brief when planning moved sessions and targets exist in the horizon |
 
 Invariants by construction: no write tool is ever bound to a model; the only path into either
 package's `apply_changes` is `apply`, reached only from `review`; the embedded graphs contain
-no `review` or `apply` node; consultations run in a fresh checkpoint namespace with a private
-in-memory saver carrying that package's serde, so a consultation never sees an earlier one.
+no `review` or `apply` node; consultations run with no checkpointer (compiled with
+`checkpointer=False`), so nothing a sub-graph does is saved and a consultation never sees an
+earlier one.
+
+The coach may consult each sub-agent `TRI_COACH_MAX_CONSULTS_PER_DOMAIN` times per turn
+(default 2). `start` clears the counts; the context block shows `Consults left this turn`, and a
+consult past the budget returns a budget message instead of handing off, so the coach answers
+with what it has. The follow-on regeneration after an apply is not a consultation. A rejected
+review resets the counts, so the coach can revise.
 
 A partial apply keeps what it could not write in `pending` under the stable ids
 `held-planning` and `held-nutrition`. The context block names those ids, and `review` resolves

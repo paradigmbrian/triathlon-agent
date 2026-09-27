@@ -631,3 +631,32 @@ def test_regeneration_is_due_when_planning_moved_sessions_and_targets_exist(ndb,
         domain="planning", applied=1, skipped=[], remaining=0, error=None, sessions_changed=True
     )
     assert _regeneration_due(deps, [clean_apply]) is True
+
+
+async def test_a_nutrition_consultation_checkpoints_nothing_on_the_coach_thread(
+    ndb, make_deps, mem_store
+):
+    await S.put_profile(mem_store, NutritionProfile(**PROFILE_ARGS))
+    saver = InMemorySaver(serde=make_serde(STATE_TYPES))
+    scripts = {
+        "coach": [
+            consult("nutrition", "Race block starts Monday; raise activity_factor to 1.45."),
+            AIMessage(content="Nutrition proposes a higher activity factor."),
+        ],
+        "planning": [],
+        "nutrition": [
+            tool_call(
+                "propose_target_changes",
+                {"overrides": {"activity_factor": 1.45}, "reason": "race block"},
+            ),
+            AIMessage(content="Proposed."),
+        ],
+        "analyst": [],
+    }
+    models = {k: ScriptedChatModel(script=v) for k, v in scripts.items()}
+    deps = make_deps(garmin=FakeGarmin(), tp=NutritionFakeTp(), **models)
+    graph = build_graph(deps, saver, mem_store)
+    out = await graph.ainvoke({"messages": [HumanMessage("race block starts")]}, CFG)
+    assert out["proposals"][0].domain == "nutrition"
+    saved = {c.config["configurable"].get("checkpoint_ns", "") for c in saver.list(None)}
+    assert saved == {""}

@@ -7,7 +7,7 @@ off and this tool's own ToolMessage. The sub-graph node later replaces that Tool
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Annotated
 from uuid import uuid4
 
@@ -19,10 +19,29 @@ from langgraph.types import Command
 from tri_coach.models import Brief, Domain, ProposalRequest
 from tri_core.harness.handoff import handoff
 
+CONSULT_BUDGET_PREFIX = "consult budget for "  # tri_web.thread tells the budget message apart
+CONSULT_BUDGET_SPENT = (
+    CONSULT_BUDGET_PREFIX + "{domain} is spent this turn ({n} of {n}); explain what you have and "
+    "stop, or ask the athlete"
+)
+
 
 def _consult(
-    domain: Domain, instruction: str, tool_call_id: str, messages: Sequence[AnyMessage]
-) -> Command[str]:
+    domain: Domain,
+    instruction: str,
+    tool_call_id: str,
+    messages: Sequence[AnyMessage],
+    spent: int,
+    max_consults: int | None,
+) -> Command[str] | ToolMessage:
+    if max_consults is not None and spent >= max_consults:
+        # a plain tool result: the coach stays in its loop and answers with what it has
+        return ToolMessage(
+            content=CONSULT_BUDGET_SPENT.format(domain=domain, n=max_consults),
+            tool_call_id=tool_call_id,
+            name=f"consult_{domain}",
+            status="error",
+        )
     message_id = str(uuid4())
     ack = ToolMessage(
         content=f"{domain} consulted; its answer replaces this message.",
@@ -38,28 +57,44 @@ def _consult(
     )
 
 
-def make_handoff_tools() -> list[BaseTool]:
+def make_handoff_tools(
+    max_consults: int | None = None, spent: Mapping[str, int] | None = None
+) -> list[BaseTool]:
+    """The coach's handoff tools. `spent` is this turn's consultations by domain (the coach node
+    reads it from state on every entry); past `max_consults` a consult returns the budget message
+    instead of handing off. With no arguments the tools are unlimited (evals, tests)."""
+    used = dict(spent or {})
+
     @tool
     def consult_planning(
         instruction: str,
         tool_call_id: Annotated[str, InjectedToolCallId],
         messages: Annotated[list[AnyMessage], InjectedState("messages")],
-    ) -> Command[str]:
+    ) -> Command[str] | ToolMessage:
         """Brief the planning agent to change the calendar, the goal or the horizon. The
         instruction must name the signal, the lever and the constraint. The result (a proposal
         id with its summary, or the agent's question) comes back as this call's result."""
-        return _consult("planning", instruction, tool_call_id, messages)
+        return _consult(
+            "planning", instruction, tool_call_id, messages, used.get("planning", 0), max_consults
+        )
 
     @tool
     def consult_nutrition(
         instruction: str,
         tool_call_id: Annotated[str, InjectedToolCallId],
         messages: Annotated[list[AnyMessage], InjectedState("messages")],
-    ) -> Command[str]:
+    ) -> Command[str] | ToolMessage:
         """Brief the nutrition agent to change daily targets, fueling notes, the profile or the
         race plan. The instruction must name the signal, the lever and the constraint. The
         result comes back as this call's result."""
-        return _consult("nutrition", instruction, tool_call_id, messages)
+        return _consult(
+            "nutrition",
+            instruction,
+            tool_call_id,
+            messages,
+            used.get("nutrition", 0),
+            max_consults,
+        )
 
     @tool
     def propose_changes(

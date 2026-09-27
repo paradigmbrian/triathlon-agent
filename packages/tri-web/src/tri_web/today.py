@@ -10,8 +10,8 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from tri_coach.context import LabSummary, load_context
-from tri_coach.repl import paused_review
 from tri_core.db import repo as crepo
+from tri_core.harness.turns import paused_review
 from tri_nutrition import repo as nrepo
 from tri_planning import repo as prepo
 from tri_planning.planning.targets import week_monday

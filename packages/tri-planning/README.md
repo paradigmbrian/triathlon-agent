@@ -78,7 +78,8 @@ uv run tri-planning eval [--prefix NAME] [--recreate-dataset]    # LangSmith pas
 
 In chat: `/status` (goal, phase, this week's target vs actual, weeks on the calendar), `/pending`
 (re-show a paused change set), `/sync`, `/quit`. At review: `approve`, `reject <note>`, or
-`edit` (opens the change set as YAML in `$EDITOR`).
+`edit` (opens the change set as YAML in `$EDITOR`). A review left waiting from an earlier
+session opens first, before chat reads a message.
 
 One-time setup: `uv run tri migrate && uv run tri migrate --test` (also creates LangGraph's
 checkpoint tables).

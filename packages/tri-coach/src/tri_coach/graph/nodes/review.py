@@ -69,6 +69,10 @@ def review_node(state: CoachState) -> dict[str, Any]:
         )
         update["carried"] = []
         update["messages"] = [HumanMessage(f"Review rejected: {note}")]
+        # The athlete's reject starts the coach's revision fresh: last turn's consults must not
+        # block the very brief that answers "no, try again". The "unknown proposal ids" refusal
+        # above does not reset the budget; that is the coach's own error within the same turn.
+        update["consults"] = {}
     elif decision.action == "edit" and decision.proposals is not None:
         update["pending"] = ChangeSet(narration=pending.narration, proposals=decision.proposals)
         # A carried id the athlete pulled into the edit is applied now; holding it too would

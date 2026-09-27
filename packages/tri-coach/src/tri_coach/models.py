@@ -44,6 +44,10 @@ class Proposal(BaseModel):
     def render(self) -> str:
         if self.question is not None:
             return f"{self.id} ({self.domain}) asked instead of proposing: {self.question}"
+        if not self.changes and self.pending_violations:
+            return f"{self.id} ({self.domain}) proposed no changes\n" + (
+                "violations: " + "; ".join(self.violations)
+            )
         n = len(self.changes)
         lines = [
             f"{self.id} ({self.domain}): {self.summary}".rstrip(": "),

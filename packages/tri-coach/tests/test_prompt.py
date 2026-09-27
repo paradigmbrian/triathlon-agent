@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import date
 
 from tri_coach import memory as M
@@ -33,9 +34,9 @@ def test_prompt_order_is_rules_context_memory_and_names_the_limit():
     text = render_system_prompt(ctx(), entries, max_consults=2)
     assert text.startswith(COACH_RULES.split("\n")[0])
     assert text.index("Today is") < text.index("Athlete memory")
-    assert "at most 2 consultations per domain per turn" in text
+    assert "2 consultations per domain per turn" in text
     assert "ab12cd injury" in text
-    assert PROMPT_VERSION == "3"
+    assert PROMPT_VERSION == "4"
 
 
 def test_rules_cover_policy_routing_and_memory():
@@ -65,6 +66,8 @@ def test_rules_cover_policy_routing_and_memory():
         "fewer than 7 days of targets left",
         "call remember with kind checkin",
         "Write it before propose_changes",
+        "returns a budget message",
+        "not proposed",
     ):
         assert phrase in COACH_RULES, phrase
 
@@ -73,3 +76,12 @@ def test_the_checklist_names_the_exact_check_in_request():
     assert CHECKIN_REQUEST == "Run the coach check-in."
     assert f'When the message is exactly "{CHECKIN_REQUEST}"' in COACH_RULES
     COACH_RULES.format(max_consults=2)  # still only the one placeholder
+
+
+def test_the_context_names_the_consults_left_this_turn():
+    entries = [M.MemoryEntry(id="ab12cd", kind="injury", text="Knee.", created=date(2026, 9, 10))]
+    assert "Consults left" not in render_system_prompt(ctx(), entries, max_consults=2)
+    left = replace(ctx(), consults_left={"planning": 0, "nutrition": 2})
+    text = render_system_prompt(left, entries, max_consults=2)
+    assert "Consults left this turn: planning 0, nutrition 2." in text
+    assert text.index("Today is") < text.index("Consults left") < text.index("Athlete memory")

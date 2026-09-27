@@ -207,7 +207,7 @@ def test_dataset_examples_are_created_once_and_recreated_on_request():
 
 def test_render_pass_rates_names_the_prompt_version():
     text = render_pass_rates({"routing_accuracy": 0.75, "brief_quality": 1.0}, 13)
-    assert text.startswith("pass rate over 13 examples (prompt version 3):")
+    assert text.startswith("pass rate over 13 examples (prompt version 4):")
     assert "routing_accuracy" in text and "75%" in text and "100%" in text
 
 

@@ -6,6 +6,7 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
+from pydantic import Field
 
 from tri_coach import memory as M
 from tri_coach.checkin import run_checkin
@@ -396,3 +397,117 @@ async def test_checkin_yes_leaves_out_a_designed_week_with_violations(
     written = sorted(args["date"][:10] for tool, args in tp.calls if tool == "tp_create_workout")
     assert written == sorted(s["date"] for s in week2["sessions"] + week3["sessions"])
     assert [w.written_to_tp for w in repo.list_weeks(nocommit, pid)] == [False, True, True]
+
+
+async def test_a_consultation_streams_its_sub_graph_and_checkpoints_nothing(
+    nocommit, make_deps, mem_store
+):
+    seed_active_plan(nocommit)
+    saver = InMemorySaver(serde=make_serde(STATE_TYPES))
+    models = scripted(
+        coach=[
+            consult("planning", "Knee pain. Move w1 off Wednesday; hold weekly TSS."),
+            AIMessage(content="Planning suggests moving Wednesday's tempo to Friday."),
+        ],
+        planning=[move_call(), AIMessage(content="Proposed a move.")],
+        nutrition=[],
+        analyst=[],
+    )
+    graph = build_graph(make_deps(tp=FakeTp(), **models), saver, mem_store)
+    seen = set()
+    async for ns, _mode, _data in graph.astream(
+        {"messages": [HumanMessage("my knee hurts")]}, CFG, stream_mode=["updates"], subgraphs=True
+    ):
+        seen.add(ns[0].split(":")[0] if ns else "")
+    assert "planning" in seen  # the REPL and tri-web still see the sub-agent's steps
+    saved = {c.config["configurable"].get("checkpoint_ns", "") for c in saver.list(None)}
+    assert saved == {""}  # nothing under planning:<task id>; the parent owns the messages
+
+
+class Spy(ScriptedChatModel):
+    """Records the system prompt of every call."""
+
+    prompts: list[str] = Field(default_factory=list)
+
+    def _generate(self, messages, *a, **k):
+        self.prompts.append(messages[0].content)
+        return super()._generate(messages, *a, **k)
+
+
+async def test_the_consult_budget_holds_for_the_turn_and_resets_on_the_next(
+    nocommit, make_deps, mem_store
+):
+    seed_active_plan(nocommit)
+    coach = Spy(
+        script=[
+            consult("planning", "Lighten the week.", "c1"),
+            consult("planning", "Lighten it more.", "c2"),
+            AIMessage(content="Planning asked which session hurt; which was it?"),
+            consult("planning", "The run hurt; drop Thursday's run.", "c3"),
+            AIMessage(content="Planning asked again."),
+        ]
+    )
+    ask = AIMessage(content="Which session hurt: the run or the ride?")
+    planning = ScriptedChatModel(script=[ask, ask])
+    deps = make_deps(
+        tp=FakeTp(),
+        coach=coach,
+        planning=planning,
+        nutrition=ScriptedChatModel(script=[]),
+        analyst=ScriptedChatModel(script=[]),
+        max_consults=1,
+    )
+    graph = build_graph(deps, InMemorySaver(serde=make_serde(STATE_TYPES)), mem_store)
+    out = await graph.ainvoke({"messages": [HumanMessage("tired")]}, CFG)
+    spent = [m for m in out["messages"] if isinstance(m, ToolMessage) and m.tool_call_id == "c2"]
+    assert spent[0].content.startswith("consult budget for planning is spent this turn (1 of 1)")
+    assert planning.calls == 1 and out["consults"] == {"planning": 1}
+    assert "Consults left this turn: planning 1, nutrition 1." in coach.prompts[0]
+    assert "Consults left this turn: planning 0, nutrition 1." in coach.prompts[1]
+
+    out = await graph.ainvoke({"messages": [HumanMessage("the run")]}, CFG)
+    assert planning.calls == 2 and out["consults"] == {"planning": 1}
+
+
+async def test_a_thread_without_consults_runs_with_a_full_budget(nocommit, make_deps, mem_store):
+    """A thread saved before the budget existed, resumed into `coach` without passing `start`."""
+    graph, models = graph_for(make_deps, mem_store, coach=[AIMessage(content="Hello again.")])
+    await graph.aupdate_state(CFG, {"messages": [HumanMessage("hi")]}, as_node="start")
+    assert "consults" not in (await graph.aget_state(CFG)).values
+    out = await graph.ainvoke(None, CFG)
+    assert out["messages"][-1].content == "Hello again." and models["coach"].calls == 1
+
+
+async def test_a_rejected_review_resets_the_consult_budget(nocommit, make_deps, mem_store):
+    """The coach spends its whole planning budget, the athlete rejects, and the coach can
+    consult planning again in the same turn instead of hitting the budget message."""
+    seed_active_plan(nocommit)
+    coach = Spy(
+        script=[
+            consult("planning", "Lighten the week.", "c1"),
+            propose("Move it.", ["p1"], "c2"),
+            consult("planning", "Make it lighter.", "c3"),
+            AIMessage(content="Proposed a lighter week."),
+        ]
+    )
+    planning = ScriptedChatModel(
+        script=[move_call("m1"), AIMessage(content="ok"), move_call("m2"), AIMessage(content="ok")]
+    )
+    deps = make_deps(
+        tp=FakeTp(),
+        coach=coach,
+        planning=planning,
+        nutrition=ScriptedChatModel(script=[]),
+        analyst=ScriptedChatModel(script=[]),
+        max_consults=1,
+    )
+    graph = build_graph(deps, InMemorySaver(serde=make_serde(STATE_TYPES)), mem_store)
+    out = await graph.ainvoke({"messages": [HumanMessage("do it")]}, CFG)
+    assert "__interrupt__" in out and out["consults"] == {"planning": 1}
+
+    out = await graph.ainvoke(Command(resume={"action": "reject", "note": "make it lighter"}), CFG)
+    # the reset shows up in the very next coach entry, before the second consult spends it again
+    assert "Consults left this turn: planning 1, nutrition 1." in coach.prompts[2]
+    # each planning consult makes 2 model calls (the move, then "ok"); a second consult reaching
+    # the model (rather than the budget message) doubles the count
+    assert planning.calls == 4 and out["consults"] == {"planning": 1}

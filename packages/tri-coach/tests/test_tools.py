@@ -385,3 +385,34 @@ def test_ask_tool_names_descriptions_and_schemas_are_unchanged(registry):
         schema = t.tool_call_schema.model_json_schema()
         assert schema["title"] == t.name and schema["required"] == ["question"]
         assert schema["properties"] == {"question": {"title": "Question", "type": "string"}}
+
+
+BUDGET = (
+    "consult budget for planning is spent this turn (2 of 2); explain what you have and stop, "
+    "or ask the athlete"
+)
+
+
+async def test_a_consult_past_the_budget_returns_the_budget_message_and_no_handoff():
+    model = ScriptedChatModel(
+        script=[
+            tool_call("consult_planning", {"instruction": "Drop w1; hold TSS."}),
+            AIMessage(content="I have what I need."),
+        ]
+    )
+    graph = outer_graph(model, make_handoff_tools(2, {"planning": 2}))
+    out = await graph.ainvoke({"messages": [HumanMessage("again")]})
+    assert "reached" not in out
+    tm = [m for m in out["messages"] if isinstance(m, ToolMessage)][0]
+    assert tm.content == BUDGET and tm.name == "consult_planning"
+    assert tm.status == "error"
+    assert out["messages"][-1].content == "I have what I need."
+
+
+async def test_the_budget_is_per_domain():
+    model = ScriptedChatModel(
+        script=[tool_call("consult_nutrition", {"instruction": "Fuel Saturday's ride."})]
+    )
+    graph = outer_graph(model, make_handoff_tools(2, {"planning": 2}))
+    out = await graph.ainvoke({"messages": [HumanMessage("fuel")]})
+    assert out["reached"] == "nutrition"

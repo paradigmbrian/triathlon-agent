@@ -12,7 +12,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.runnables.config import merge_configs
 
 from tri_coach.graph.state import CoachState
-from tri_coach.models import Brief, Proposal
+from tri_coach.models import Brief, Domain, Proposal
 from tri_core.harness.messages import last_ai_text
 from tri_planning.prompts.adjust import BRIEF_PREFIX
 
@@ -21,18 +21,27 @@ def keyed_violations(
     out: dict[str, Any], where: Callable[[str], str]
 ) -> tuple[list[str], dict[str, list[str]]]:
     """A sub-graph run's violations: `last_error`, then one line per `pending_violations` entry
-    (`where` names its key), for the coach and the review; and the entries themselves, which
-    check-in --yes uses to leave the flagged changes out."""
+    (a week or note the sub-agent refused and did not propose), for the coach and the review;
+    and the entries themselves, which check-in --yes uses to leave the flagged changes out."""
     raw: dict[str, list[str]] = out.get("pending_violations") or {}
     keyed = {k: list(v) for k, v in raw.items() if v}
     lines = [out["last_error"]] if out.get("last_error") else []
-    lines += [f"{where(k)}: " + "; ".join(keyed[k]) for k in sorted(keyed)]
+    lines += [f"{where(k)} not proposed: " + "; ".join(keyed[k]) for k in sorted(keyed)]
     return lines, keyed
 
 
 def proposal_from_planning(out: dict[str, Any], pid: str) -> Proposal:
     changes = list(out.get("pending_changes") or [])
     violations, keyed = keyed_violations(out, lambda week: f"week of {week}")
+    if not changes and keyed:
+        # every week was refused: not a question, the violations say why
+        return Proposal(
+            id=pid,
+            domain="planning",
+            summary=out.get("pending_summary") or "",
+            violations=violations,
+            pending_violations=keyed,
+        )
     if not changes:
         return Proposal(
             id=pid,
@@ -50,6 +59,14 @@ def proposal_from_planning(out: dict[str, Any], pid: str) -> Proposal:
         violations=violations,
         pending_violations=keyed,
     )
+
+
+def counted(state: CoachState, domain: Domain) -> dict[str, int]:
+    """This turn's consult counts with one more for `domain`. A thread saved before the budget
+    existed has no counts yet."""
+    spent = dict(state.get("consults") or {})
+    spent[domain] = spent.get(domain, 0) + 1
+    return spent
 
 
 def result_message(brief: Brief, proposal: Proposal) -> ToolMessage:
@@ -81,6 +98,7 @@ def make_planning_node(graph: Any) -> Any:
             "brief": None,
             "proposals": [*proposals, proposal],
             "next_proposal_id": n + 1,
+            "consults": counted(state, "planning"),
             "messages": [result_message(brief, proposal)],
         }
 

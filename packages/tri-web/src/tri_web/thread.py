@@ -10,8 +10,9 @@ from typing import Any, Literal
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 from pydantic import BaseModel
 
-from tri_coach.repl import paused_review
+from tri_coach.tools.handoff import CONSULT_BUDGET_PREFIX
 from tri_core.harness.messages import text_of
+from tri_core.harness.turns import paused_review
 
 CONSULTS = {"consult_planning": "planning", "consult_nutrition": "nutrition"}
 REPORT_PREFIXES = ("[review]", "[follow-on]", "Review rejected:")
@@ -69,7 +70,9 @@ def ui_messages(messages: Sequence[BaseMessage]) -> list[UiMessage]:
                 out.append(UiMessage(id=mid, role="assistant", text=text, where="coach"))
         elif isinstance(m, ToolMessage):
             domain = CONSULTS.get(m.name or "")
-            if domain is not None:
+            # a spent budget is the coach's own tool result, not the domain's answer; live it
+            # shows only as tool activity
+            if domain is not None and not text.startswith(CONSULT_BUDGET_PREFIX):
                 out.append(UiMessage(id=mid, role="consult", text=text, where=domain, name=m.name))
             else:
                 out.append(

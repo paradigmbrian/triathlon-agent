@@ -4,6 +4,7 @@ conversation returns the new messages."""
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 from langchain_core.runnables import RunnableConfig
@@ -37,17 +38,27 @@ def make_coach_node(deps: CoachDeps) -> Any:
         if deps.wellness_registry is not None
         else []
     )
-    tools = [analyst, *wellness, *make_handoff_tools(), *make_memory_tools(deps.today)]
+    memory_tools = make_memory_tools(deps.today)
 
     async def coach(
         state: CoachState, config: RunnableConfig, *, store: BaseStore
     ) -> dict[str, Any]:
+        spent = state.get("consults") or {}
         with deps.connect() as conn:
             ctx = await load_context(
                 conn, store, deps.today(), state.get("pending"), labs_enabled=labs_enabled
             )
+        left = {d: max(0, deps.max_consults - spent.get(d, 0)) for d in ("planning", "nutrition")}
+        ctx = replace(ctx, consults_left=left)
         entries = await M.get_entries(store)
         prompt = render_system_prompt(ctx, entries, max_consults=deps.max_consults)
+        # rebuilt on every entry: the counts change after each consultation
+        tools = [
+            analyst,
+            *wellness,
+            *make_handoff_tools(deps.max_consults, spent),
+            *memory_tools,
+        ]
         agent = make_subagent(deps.model, tools, prompt, middleware=[one_tool_call_at_a_time])
         before = state.get("messages", [])
         result = await agent.ainvoke({"messages": before}, config)
