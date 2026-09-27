@@ -14,7 +14,7 @@ from tri_coach.evals.evaluators import (
     no_unrequested_adjustment,
     routing_accuracy,
 )
-from tri_coach.evals.run import DATASET_NAME, case_examples, ensure_dataset, render_pass_rates
+from tri_coach.evals.run import DATASET_NAME, case_examples, ensure_dataset
 from tri_coach.evals.target import classify, make_target, stub_tools
 from tri_coach.prompts.coach import CHECKIN_REQUEST, PROMPT_VERSION
 from tri_coach.tools.analyst import make_analyst_tool
@@ -205,12 +205,6 @@ def test_dataset_examples_are_created_once_and_recreated_on_request():
     assert client.deleted == 1 and client.created == [DATASET_NAME, DATASET_NAME]
 
 
-def test_render_pass_rates_names_the_prompt_version():
-    text = render_pass_rates({"routing_accuracy": 0.75, "brief_quality": 1.0}, 13)
-    assert text.startswith("pass rate over 13 examples (prompt version 4):")
-    assert "routing_accuracy" in text and "75%" in text and "100%" in text
-
-
 class _FakeClient:
     def __init__(self, **kw):
         pass
@@ -257,7 +251,8 @@ async def test_run_eval_uses_the_coach_and_judge_roles(monkeypatch):
     captured = _stub_langsmith(monkeypatch, coach_run)
     models, roles = _recording_models()
     settings = CoachSettings(_env_file=None, langsmith_api_key="ls")
-    assert await coach_run.run_eval(settings, models, log=lambda m: None) == {}
+    logged: list[str] = []
+    assert await coach_run.run_eval(settings, models, log=logged.append) == {}
     assert sorted(roles) == sorted([Role.COACH, Role.JUDGE])
     assert captured["metadata"] == {
         "prompt_version": PROMPT_VERSION,
@@ -265,3 +260,4 @@ async def test_run_eval_uses_the_coach_and_judge_roles(monkeypatch):
         "effort": None,
         "judge_model": "claude-opus-5",
     }
+    assert f"(prompt version {PROMPT_VERSION}):" in "\n".join(logged)

@@ -1,7 +1,5 @@
 from datetime import date
 
-from langsmith.evaluation import EvaluationResult
-
 import tri_nutrition.evals.run as nutrition_run
 from tri_core.llm import Role
 from tri_core.testing import ScriptedChatModel, tool_call
@@ -12,7 +10,7 @@ from tri_nutrition.evals.evaluators import (
     make_fuel_judge,
     targets_within_bounds,
 )
-from tri_nutrition.evals.run import DATASET_NAME, case_examples, pass_rates, render_pass_rates
+from tri_nutrition.evals.run import DATASET_NAME, case_examples
 from tri_nutrition.evals.target import make_target, parse_inputs
 from tri_nutrition.graph.nodes.fuel import qualifies, race_due
 from tri_nutrition.prompts.fuel import PROMPT_VERSION
@@ -93,29 +91,6 @@ async def test_judge_uses_the_model_only_when_there_are_notes():
     assert res["score"] == 1
 
 
-def test_pass_rates_and_rendering():
-    rows = [
-        {
-            "evaluation_results": {
-                "results": [EvaluationResult(key="a", score=1), EvaluationResult(key="b", score=0)]
-            }
-        },
-        {
-            "evaluation_results": {
-                "results": [
-                    EvaluationResult(key="a", score=1),
-                    EvaluationResult(key="b", score=1),
-                    EvaluationResult(key="c", score=None),
-                ]
-            }
-        },
-    ]
-    rates = pass_rates(rows)
-    assert rates == {"a": 1.0, "b": 0.5}
-    text = render_pass_rates(rates, 2)
-    assert "a" in text and "100%" in text and "50%" in text and "2 examples" in text
-
-
 class _FakeClient:
     def __init__(self, **kw):
         pass
@@ -162,7 +137,8 @@ async def test_run_eval_uses_the_fuel_and_judge_roles(monkeypatch):
     captured = _stub_langsmith(monkeypatch, nutrition_run)
     models, roles = _recording_models()
     settings = NutritionSettings(_env_file=None, langsmith_api_key="ls")
-    assert await nutrition_run.run_eval(settings, models, log=lambda m: None) == {}
+    logged: list[str] = []
+    assert await nutrition_run.run_eval(settings, models, log=logged.append) == {}
     assert sorted(roles) == sorted([Role.NUTRITION_FUEL, Role.JUDGE])
     assert captured["metadata"] == {
         "prompt_version": PROMPT_VERSION,
@@ -170,3 +146,4 @@ async def test_run_eval_uses_the_fuel_and_judge_roles(monkeypatch):
         "effort": None,
         "judge_model": "claude-opus-5",
     }
+    assert f"(prompt version {PROMPT_VERSION}):" in "\n".join(logged)

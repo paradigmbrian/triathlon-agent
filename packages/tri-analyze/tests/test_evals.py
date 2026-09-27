@@ -2,7 +2,6 @@
 
 import json
 from datetime import date
-from types import SimpleNamespace
 
 import pytest
 from langchain_core.messages import AIMessage
@@ -27,14 +26,7 @@ from tri_analyze.evals.evaluators import (
     states_window,
     uses_sql,
 )
-from tri_analyze.evals.run import (
-    DATASET_NAME,
-    case_examples,
-    ensure_dataset,
-    errored,
-    pass_rates,
-    render_pass_rates,
-)
+from tri_analyze.evals.run import DATASET_NAME, case_examples, ensure_dataset
 from tri_analyze.evals.target import Canned, athlete_from_inputs, make_target, stub_tools
 from tri_analyze.prompts.analyst import FEEDBACK_RULES, PROMPT_VERSION
 from tri_analyze.repo import AthleteContext
@@ -398,38 +390,6 @@ def test_dataset_examples_are_created_once_and_recreated_on_request():
     assert client.deleted == 1 and client.created == [DATASET_NAME, DATASET_NAME]
 
 
-def test_pass_rates_skip_none_and_rendering_names_the_prompt_version():
-    def R(key, score):
-        return SimpleNamespace(key=key, score=score)
-
-    rows = [
-        {
-            "evaluation_results": {
-                "results": [R("uses_sql", 1), R("pulls_splits", None), R("grounded", 0)]
-            }
-        },
-        {
-            "evaluation_results": {
-                "results": [R("uses_sql", 0), R("pulls_splits", 1), R("grounded", 1)]
-            }
-        },
-    ]
-    rates = pass_rates(rows)
-    assert rates == {"uses_sql": 0.5, "pulls_splits": 1.0, "grounded": 0.5}
-    text = render_pass_rates(rates, 2)
-    assert text.startswith("pass rate over 2 examples (prompt version 1):")
-    assert "uses_sql" in text and "50%" in text and "100%" in text
-
-
-def test_errored_counts_rows_whose_run_carries_an_error():
-    rows = [
-        {"run": SimpleNamespace(error=None)},
-        {"run": SimpleNamespace(error="IndexError: list index out of range")},
-        {"run": SimpleNamespace(error="")},
-    ]
-    assert errored(rows) == 1 and errored([]) == 0
-
-
 class _FakeClient:
     def __init__(self, **kw):
         pass
@@ -476,7 +436,8 @@ async def test_run_eval_uses_the_analyst_and_judge_roles(monkeypatch):
     captured = _stub_langsmith(monkeypatch, analyze_run)
     models, roles = _recording_models()
     settings = AnalyzeSettings(_env_file=None, langsmith_api_key="ls")
-    assert await analyze_run.run_eval(settings, models, log=lambda m: None) == ({}, 0)
+    logged: list[str] = []
+    assert await analyze_run.run_eval(settings, models, log=logged.append) == ({}, 0)
     assert sorted(roles) == sorted([Role.ANALYST, Role.JUDGE])
     assert captured["metadata"] == {
         "prompt_version": PROMPT_VERSION,
@@ -484,6 +445,7 @@ async def test_run_eval_uses_the_analyst_and_judge_roles(monkeypatch):
         "effort": "medium",
         "judge_model": "claude-opus-5",
     }
+    assert f"(prompt version {PROMPT_VERSION}):" in "\n".join(logged)
 
 
 async def test_run_eval_without_the_judge_records_no_judge_model(monkeypatch):

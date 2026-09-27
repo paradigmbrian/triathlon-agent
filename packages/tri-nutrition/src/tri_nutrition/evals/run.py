@@ -4,13 +4,13 @@ is named by PROMPT_VERSION and the pass rate per evaluator is what changes betwe
 
 from __future__ import annotations
 
-from collections import defaultdict
 from collections.abc import Callable
 from typing import Any
 
 from langsmith import Client, aevaluate
 
 from tri_core.config import Settings
+from tri_core.evals import errored, pass_rates, render_pass_rates, scored_counts
 from tri_core.llm import ModelProvider, Role, eval_metadata
 from tri_nutrition.evals.cases import CASES
 from tri_nutrition.evals.evaluators import (
@@ -41,21 +41,6 @@ def ensure_dataset(client: Client, *, recreate: bool = False) -> None:
     client.create_examples(dataset_name=DATASET_NAME, examples=case_examples())
 
 
-def pass_rates(rows: list[dict[str, Any]]) -> dict[str, float]:
-    scores: dict[str, list[float]] = defaultdict(list)
-    for row in rows:
-        for r in row["evaluation_results"]["results"]:
-            if r.score is not None:
-                scores[r.key].append(float(r.score))
-    return {key: sum(v) / len(v) for key, v in scores.items()}
-
-
-def render_pass_rates(rates: dict[str, float], n: int) -> str:
-    lines = [f"pass rate over {n} examples (prompt version {PROMPT_VERSION}):"]
-    lines += [f"  {key:24} {rate:.0%}" for key, rate in sorted(rates.items())]
-    return "\n".join(lines)
-
-
 async def run_eval(
     settings: Settings,
     models: ModelProvider,
@@ -83,7 +68,11 @@ async def run_eval(
         max_concurrency=2,
     )
     rows: list[Any] = [row async for row in results]
-    rates = pass_rates([dict(r) for r in rows])
+    dict_rows = [dict(r) for r in rows]
+    rates = pass_rates(dict_rows)
+    errors = errored(dict_rows)
     log(f"experiment: {results.experiment_name}")
-    log(render_pass_rates(rates, len(rows)))
+    log(render_pass_rates(rates, scored_counts(dict_rows), len(rows), version=PROMPT_VERSION))
+    if errors:
+        log(f"{errors} errored")
     return rates

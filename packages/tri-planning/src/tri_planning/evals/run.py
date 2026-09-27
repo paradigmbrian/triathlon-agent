@@ -6,7 +6,6 @@ versions."""
 
 from __future__ import annotations
 
-from collections import defaultdict
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from datetime import date
@@ -16,6 +15,7 @@ from langsmith import Client, aevaluate
 
 from tri_core.config import readonly_url
 from tri_core.db.repo import Conn
+from tri_core.evals import errored, pass_rates, render_pass_rates, scored_counts
 from tri_core.llm import ModelProvider, Role, eval_metadata
 from tri_planning.config import PlanningSettings
 from tri_planning.evals.design_eval import build_examples, design_target, validator_pass
@@ -37,21 +37,6 @@ def ensure_dataset(client: Client, *, recreate: bool = False) -> None:
         return
     client.create_dataset(DATASET_NAME, description=DATASET_DESCRIPTION)
     client.create_examples(dataset_name=DATASET_NAME, examples=case_examples(date.today()))
-
-
-def pass_rates(rows: list[dict[str, Any]]) -> dict[str, float]:
-    scores: dict[str, list[float]] = defaultdict(list)
-    for row in rows:
-        for r in row["evaluation_results"]["results"]:
-            if r.score is not None:
-                scores[r.key].append(float(r.score))
-    return {key: sum(v) / len(v) for key, v in scores.items()}
-
-
-def render_pass_rates(rates: dict[str, float], n: int) -> str:
-    lines = [f"pass rate over {n} examples (prompt version {PROMPT_VERSION}):"]
-    lines += [f"  {key:26} {rate:.0%}" for key, rate in sorted(rates.items())]
-    return "\n".join(lines)
 
 
 def _no_database() -> AbstractContextManager[Conn]:
@@ -90,7 +75,11 @@ async def run_eval(
         max_concurrency=2,
     )
     rows: list[Any] = [row async for row in results]
-    rates = pass_rates([dict(r) for r in rows])
+    dict_rows = [dict(r) for r in rows]
+    rates = pass_rates(dict_rows)
+    errors = errored(dict_rows)
     log(f"experiment: {results.experiment_name}")
-    log(render_pass_rates(rates, len(rows)))
+    log(render_pass_rates(rates, scored_counts(dict_rows), len(rows), version=PROMPT_VERSION))
+    if errors:
+        log(f"{errors} errored")
     return rates
