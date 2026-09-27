@@ -18,7 +18,8 @@ from langgraph.types import Command
 
 from tri_coach.models import Proposal
 from tri_coach.prompts.coach import CHECKIN_REQUEST
-from tri_coach.repl import Out, paused_review, render_review, run_turn
+from tri_coach.repl import Out, render_review, run_turn
+from tri_core.harness.turns import paused_review
 from tri_nutrition.nutrition.models import NutritionChange
 from tri_nutrition.repl import not_proposed, split_violating
 from tri_planning.checkin import changes_without_violations

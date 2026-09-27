@@ -25,7 +25,7 @@ from langgraph.types import Command
 from tri_coach.models import Proposal, ReviewDecision
 from tri_core.harness.messages import text_of
 from tri_core.harness.turns import Out as Out  # re-exported: tri_coach.checkin imports it
-from tri_core.harness.turns import format_failure, stream_turn, turn_config
+from tri_core.harness.turns import format_failure, paused_review, stream_turn, turn_config
 from tri_nutrition.nutrition.models import NutritionChange
 from tri_nutrition.repl import render_review as render_nutrition
 from tri_planning.repl import render_changes as render_planning
@@ -319,16 +319,6 @@ async def _review_dialogue(
                 continue
             decision = ReviewDecision(action="edit", proposals=edited)
         return decision
-
-
-def paused_review(snap: Any) -> dict[str, Any] | None:
-    """The interrupt payload of a review that is still waiting, from a state snapshot."""
-    if snap is None or getattr(snap, "next", ()) != ("review",):
-        return None
-    tasks = getattr(snap, "tasks", ()) or ()
-    if tasks and tasks[0].interrupts:
-        return dict(tasks[0].interrupts[0].value)
-    return None
 
 
 async def chat_loop(

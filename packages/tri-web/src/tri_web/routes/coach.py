@@ -10,7 +10,7 @@ from langgraph.types import Command
 from starlette.responses import StreamingResponse
 
 from tri_coach.models import Proposal, ReviewDecision
-from tri_coach.repl import paused_review
+from tri_core.harness.turns import paused_review
 from tri_web import review as R
 from tri_web.events import Busy, sse_response, start_turn
 from tri_web.runtime import Runtime, cfg

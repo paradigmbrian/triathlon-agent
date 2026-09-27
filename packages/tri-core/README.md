@@ -16,6 +16,6 @@ inside `src/tri_core/{mcp,db,sync}/`.
 | `harness.agent_tool` | `agent_tool` and `Invocation`: an agent run on a throwaway thread, exposed as a one-question tool |
 | `harness.handoff` | `handoff`, `turn_messages`, `undelivered`: leaving a sub-agent through `Command.PARENT` with a valid history |
 | `harness.persistence` | `open_checkpointer(url, state_types)`, `open_store`, `checkpointer_ready`, `store_ready`, `make_serde`, `SETUP_HINT`, `STORE_SETUP_HINT` |
-| `harness.turns` | `stream_turn`, `AgentTurnPrinter`, `GraphTurnPrinter`, `run_agent_turn`, `run_graph_turn`, `api_error_message`, `turn_config` |
+| `harness.turns` | `stream_turn`, `AgentTurnPrinter`, `GraphTurnPrinter`, `run_agent_turn`, `run_graph_turn`, `api_error_message`, `turn_config`, `paused_review` (the one test for "a review is waiting") |
 
 Spec: `docs/superpowers/specs/2026-09-15-tri-harness-design.md`.

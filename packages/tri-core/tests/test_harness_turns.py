@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import anthropic
 import httpx
 import pytest
@@ -12,6 +14,7 @@ from tri_core.harness.turns import (
     TurnFailure,
     api_error_message,
     format_failure,
+    paused_review,
     run_agent_turn,
     run_graph_turn,
     stream_turn,
@@ -328,3 +331,16 @@ async def test_run_graph_turn_propagates_non_anthropic_errors():
 
     with pytest.raises(RuntimeError, match="kaboom"):
         await run_graph_turn(RaisingGraph(), {"messages": []}, "planning", lambda s: None)
+
+
+def test_paused_review_reads_only_a_review_that_is_waiting():
+    payload = {"narration": "n", "proposals": []}
+    waiting = SimpleNamespace(interrupts=(Interrupt(value=payload),))
+    assert paused_review(SimpleNamespace(next=("review",), tasks=(waiting,))) == payload
+    # stopped at review before its interrupt ran: nothing to answer
+    stopped = SimpleNamespace(interrupts=())
+    assert paused_review(SimpleNamespace(next=("review",), tasks=(stopped,))) is None
+    assert paused_review(SimpleNamespace(next=("apply",), tasks=(waiting,))) is None
+    assert paused_review(SimpleNamespace(next=(), tasks=())) is None
+    assert paused_review(SimpleNamespace(next=("review",))) is None  # a stub without tasks
+    assert paused_review(None) is None
