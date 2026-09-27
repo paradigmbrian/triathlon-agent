@@ -161,3 +161,4 @@ class PlanWeekRow(BaseModel):
     target_hours: float | None
     designed: PlannedWeek | None
     written_to_tp: bool
+    violations: list[str] = Field(default_factory=list)  # why the last design was refused

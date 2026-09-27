@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import date, timedelta
 from typing import Any
 
@@ -184,15 +185,30 @@ def list_weeks(conn: Conn, plan_id: int) -> list[PlanWeekRow]:
             target_hours=float(r["target_hours"]) if r["target_hours"] is not None else None,
             designed=PlannedWeek.model_validate(r["designed"]) if r["designed"] else None,
             written_to_tp=r["written_to_tp"],
+            violations=list(r["violations"] or []),
         )
         for r in rows
     ]
 
 
-def set_week_designed(conn: Conn, plan_id: int, week_start: date, week: PlannedWeek) -> None:
+def set_week_designed(
+    conn: Conn,
+    plan_id: int,
+    week_start: date,
+    week: PlannedWeek | None,
+    violations: Sequence[str] = (),
+) -> None:
+    """Store a week's design, or for a design refused by the validator, null and its
+    violations. A clean design clears the violations an earlier refusal left."""
     conn.execute(
-        "update plan_weeks set designed = %s where plan_id = %s and week_start = %s",
-        (Jsonb(week.model_dump(mode="json")), plan_id, week_start),
+        "update plan_weeks set designed = %s, violations = %s "
+        "where plan_id = %s and week_start = %s",
+        (
+            Jsonb(week.model_dump(mode="json")) if week is not None else None,
+            Jsonb(list(violations)) if violations else None,
+            plan_id,
+            week_start,
+        ),
     )
 
 
