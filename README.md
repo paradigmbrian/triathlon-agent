@@ -161,32 +161,3 @@ docs/superpowers/       specs and implementation plans
 Module-level READMEs: `packages/tri-core/src/tri_core/{mcp,db,sync}/README.md`; each agent
 package documents itself in its own `README.md`.
 
-## Status
-
-- Milestones 1–2 (2026-09-06): scaffold, schema, MCP client, sync with watermarks.
-- Milestones 3–4 (2026-09-06): LangChain agent with the SQL tool, athlete-context prompt,
-  streaming REPL, and live MCP tools.
-- Workspace (2026-09-07): monorepo with tri-core extracted; tri-planning milestones tracked in
-  `docs/superpowers/plans/2026-09-07-tri-planning-0*.md`.
-- tri-planning milestones 2-4 (2026-09): targets, graph with review interrupt, adjust and
-  check-in; design-prompt validator pass rate: not yet measured (run
-  `uv run tri-planning eval` and record the `validator_pass` mean here).
-- tri-wellness milestone 1 (2026-09-11): ranges table, registry, normalize, evaluate, training context, lab tables; tracked in docs/superpowers/plans/2026-09-11-tri-wellness-0*.md.
-- tri-wellness milestone 2 (2026-09): PDF and export ingest with a checkpointed review; first real panel pending.
-- tri-wellness milestone 3 (2026-09): report, chat and panels commands; LangSmith report evaluators (pass rates in the package README).
-- tri-coach milestone 1 (2026-09-12): planning route node, embedded mode and `apply_changes` in
-  planning and nutrition, nutrition regenerate entry, directed prompt sections, tri-core
-  `open_live_servers` and `ToolsCaller`; tracked in
-  `docs/superpowers/plans/2026-09-12-tri-coach-01-sub-package-preparation.md`. Coach v1 pending.
-- tri-coach milestone 2 (2026-09): coach v1 (chat, memory, reset; handoffs, review, apply);
-  tracked in `docs/superpowers/plans/2026-09-12-tri-coach-02-coach-v1.md`. Check-in and eval pending.
-- tri-coach milestone 3 (2026-09): wellness consult (`ask_wellness`, lab line in the context, prompt v2);
-  tracked in `docs/superpowers/plans/2026-09-13-tri-coach-03-wellness-consult.md`. Merged 2026-09-13.
-- tri-coach milestone 4 (2026-09): check-in, the follow-on nutrition gate, prompt v3 and the routing eval;
-  tracked in `docs/superpowers/plans/2026-09-13-tri-coach-04-checkin-and-follow-on.md`.
-- tri-analyze alignment (2026-09): flat layout, settings and LangSmith project, prompt rendered per call
-  from runtime context with a tool guide, chat hardening, coach passes the context; tracked in
-  `docs/superpowers/plans/2026-09-13-tri-analyze-01-alignment.md`. Eval (2026-09): `tri-analyze eval`,
-  twelve cases, three code checks and a judge; tracked in
-  `docs/superpowers/plans/2026-09-13-tri-analyze-02-eval.md`.
-- tri-web sub-project 1 (2026-09): server (`tri-web serve`), React shell, Today strip, coach chat with the review gate (schema form and YAML), sync and check-in jobs, memory and reset; tracked in `docs/superpowers/plans/2026-09-14-tri-web-0*.md`. Sub-projects 2 to 4 (progress, nutrition, labs) unspecced.
