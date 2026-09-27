@@ -43,7 +43,7 @@ def test_serde_round_trips_state_models_without_unregistered_warning(caplog):
 async def test_second_process_resumes_from_postgres(nocommit, make_deps):
     url = Settings().test_database_url
     if not checkpointer_ready(url):
-        pytest.skip("run scripts/setup_checkpointer.py against the test database")
+        pytest.skip("run `uv run tri migrate --test`")
     thread = {"configurable": {"thread_id": f"test-{uuid.uuid4()}"}}
     script = [
         tool_call("set_training_goal", GOAL_ARGS),

@@ -116,9 +116,5 @@ regenerates targets; approve persists them, reject discards them.
 - `tri-nutrition reset [--yes] [--forget-profile]`: clears the thread and unwritten rows; only
   `--forget-profile` deletes the Store keys.
 
-Setup once per database (creates the checkpoint and store tables):
-
-```bash
-uv run python scripts/setup_checkpointer.py $DATABASE_URL
-uv run python scripts/setup_checkpointer.py $TEST_DATABASE_URL
-```
+Setup once per database: `uv run tri migrate && uv run tri migrate --test` (also creates the
+checkpoint and store tables).

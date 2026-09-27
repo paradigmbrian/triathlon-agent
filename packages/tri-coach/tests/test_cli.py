@@ -17,7 +17,7 @@ def test_ready_names_the_missing_piece(monkeypatch):
     )
     monkeypatch.setattr("tri_core.harness.persistence.checkpointer_ready", lambda url: False)
     s = CoachSettings(_env_file=None, anthropic_api_key="k", database_url="postgresql://x/y")
-    assert ready(s) is not None and "setup_checkpointer" in ready(s)
+    assert ready(s) is not None and "uv run tri migrate" in ready(s)
     monkeypatch.setattr("tri_core.harness.persistence.checkpointer_ready", lambda url: True)
     monkeypatch.setattr("tri_core.harness.persistence.store_ready", lambda url: False)
     assert ready(s) is not None and "LangGraph store tables are missing" in ready(s)

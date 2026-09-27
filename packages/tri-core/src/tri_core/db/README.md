@@ -17,10 +17,13 @@ db/
   writes.py       recorded_write, mark_failed, note_pending_error, pending_rows:
                   pending -> applied | failed
   sql_tool.py     the agents' read-only SQL tool and SCHEMA_DOC
+  migrate.py      discover, plan, apply_migrations, ensure_langgraph_tables: tri migrate
 ```
 
-Schema lives in `migrations/*.sql` at the repo root. **Migrations are applied by hand with
-psql** (see the top-level README); the assistant writes them, Brian runs them.
+Schema lives in `migrations/*.sql` at the repo root, applied by `uv run tri migrate` (`--test`
+for the test database) and recorded in `schema_migrations` with each file's sha256. An applied
+file is never edited: a change is a new file. The assistant writes migrations; Brian runs
+`tri migrate`.
 
 ## Tables
 
@@ -87,8 +90,8 @@ payload, so a field that was not modeled can still be queried with `->>` without
 
 ## Test database
 
-`tri_analyze_test` on the same container, created once by hand and migrated with the same
-files. The `db` fixture in `tri_core.testing.fixtures` (registered by the root `conftest.py`) opens a connection, yields it, and rolls back
+`tri_analyze_test` on the same container, created once by hand (`create database
+tri_analyze_test`) and migrated with `uv run tri migrate --test`. The `db` fixture in `tri_core.testing.fixtures` (registered by the root `conftest.py`) opens a connection, yields it, and rolls back
 after every test, so tests never leave rows behind. When Postgres is down the fixture skips
 with a clear message instead of failing.
 

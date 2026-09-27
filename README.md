@@ -43,21 +43,21 @@ Deeper context lives next to the code:
 
 ## Setup
 
-`./setup.sh` does steps 1, 2 and 6 and creates `.env` from the example (step 3): it needs uv
-and a running Docker, and is safe to re-run (each migration is skipped when already applied).
+`./setup.sh` does steps 1 and 2 and creates `.env` from the example (step 3): it needs uv
+and a running Docker, and is safe to re-run (`tri migrate` skips what it already applied).
 Steps 3 (the API key), 4 and 5 stay manual. The steps it automates:
 
 1. Python 3.12 via uv, from the repository root: `uv sync` (installs every package editable
    and their console scripts into one `.venv`).
-2. Postgres (Docker, host port 5435): `docker compose up -d`, then apply the migrations to
-   both databases:
+2. Postgres (Docker, host port 5435): `docker compose up -d`, create the test database once, then
+   migrate both:
    ```bash
    docker compose exec db psql -U tri_analyze -c "create database tri_analyze_test;"
-   for f in migrations/*.sql; do
-     docker compose exec -T db psql -U tri_analyze -d tri_analyze < "$f"
-     docker compose exec -T db psql -U tri_analyze -d tri_analyze_test < "$f"
-   done
+   uv run tri migrate && uv run tri migrate --test
    ```
+   `tri migrate` applies `migrations/*.sql` in order, records each in `schema_migrations`,
+   refuses a file edited after it was applied, and creates LangGraph's checkpoint and store
+   tables. `--dry-run` prints what would run.
 3. `cp .env.example .env`, then fill in `ANTHROPIC_API_KEY` (from console.anthropic.com).
    Optional but recommended while learning: `LANGSMITH_TRACING=true` and
    `LANGSMITH_API_KEY` (free at smith.langchain.com) to see every prompt and tool call.
@@ -69,13 +69,12 @@ Steps 3 (the API key), 4 and 5 stay manual. The steps it automates:
    uvx --from git+https://github.com/JamsusMaximus/trainingpeaks-mcp@<ref> tp-mcp auth-status
    ```
 5. First sync: `uv run tri sync --full` (a year of TrainingPeaks, 60 days of Garmin).
-6. Checkpoint and LangGraph store tables (once per database): `uv run python scripts/setup_checkpointer.py <url>`
-   for both `tri_analyze` and `tri_analyze_test`.
 
 ## Run
 
 ```bash
 uv run tri sync [--since YYYY-MM-DD] [--source trainingpeaks|garmin|all] [--full]
+uv run tri migrate [--test] [--dry-run]
 uv run tri-analyze chat [--no-live]     # --no-live binds only the database tool
 uv run tri-analyze eval [--recreate-dataset]   # LangSmith feedback eval
 uv run tri-planning chat [--no-live]    # plan; every TrainingPeaks write is approved first
@@ -148,7 +147,7 @@ uv run python scripts/spike_mcp.py   # re-record packages/tri-core/tests/fixture
 ```
 pyproject.toml          workspace root: members, shared ruff/mypy/pytest config
 conftest.py             pytest options and the shared `db` fixture plugin
-migrations/             001_initial.sql (sync tables), 002_planning.sql and 003_rename_skeleton_to_targets.sql (planning tables), 004_nutrition.sql (nutrition tables), 005_wellness.sql (lab tables), 006_fixes.sql (2026-09-24 correctness fixes), 007_data_layer.sql (tombstones, garmin_activities, change status)
+migrations/             001_initial.sql (sync tables), 002_planning.sql and 003_rename_skeleton_to_targets.sql (planning tables), 004_nutrition.sql (nutrition tables), 005_wellness.sql (lab tables), 006_fixes.sql (2026-09-24 correctness fixes), 007_data_layer.sql (tombstones, garmin_activities, change status), 009_schema_migrations.sql (the tri migrate record), 010_reader_role.sql (the SQL tool's tri_reader role)
 packages/tri-core/      src/tri_core/{config,cli,mcp,db,sync,testing}
 packages/tri-analyze/   src/tri_analyze/{config,cli,llm,agent,repo,repl,testing,allowlist,prompts,tools,evals}
 packages/tri-planning/  src/tri_planning/{config,cli,repo,repl,testing,planning,graph,tools,prompts}

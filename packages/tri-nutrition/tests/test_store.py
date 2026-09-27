@@ -48,7 +48,7 @@ async def test_fuel_log_empty_and_forget_all():
 async def test_postgres_store_round_trip():
     url = Settings().test_database_url
     if not store_ready(url):
-        pytest.skip("run scripts/setup_checkpointer.py against the test database")
+        pytest.skip("run `uv run tri migrate --test`")
     ns = ("test", f"nutrition-{uuid.uuid4()}")
     async with open_store(url) as pg:
         try:

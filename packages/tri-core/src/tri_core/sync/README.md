@@ -88,7 +88,7 @@ TrainingPeaks provides the year of training load, which is what long trends need
 
 ## Adding a field
 
-1. Add the column in a new `migrations/00N_*.sql` (Brian applies it).
+1. Add the column in a new `migrations/00N_*.sql` (Brian applies it with `uv run tri migrate`).
 2. Add it to the row dataclass in `db/models.py` and the column list in `db/repo.py`.
 3. Read it in the relevant `parse_*` and add an assertion to the parser test.
 4. If the agent should know about it, add a line to `SCHEMA_DOC` in `tri_core/db/sql_tool.py`.
