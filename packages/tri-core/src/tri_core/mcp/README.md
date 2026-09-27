@@ -84,7 +84,8 @@ when to use it.
 - Garmin: the server prints "Garmin authentication expired. Re-run 'garmin-mcp-auth'". Run
   the auth command from the top-level README.
 - TrainingPeaks: tools return `AUTH_INVALID`. Log into app.trainingpeaks.com in Chrome and
-  rerun `tp-mcp auth --from-browser chrome`.
+  rerun `tp-mcp auth --from-browser chrome` (the `browser` extra is required: the README Setup
+  step 4 command).
 
 ## Bumping a server version
 
