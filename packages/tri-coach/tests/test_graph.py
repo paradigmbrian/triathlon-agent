@@ -476,3 +476,38 @@ async def test_a_thread_without_consults_runs_with_a_full_budget(nocommit, make_
     assert "consults" not in (await graph.aget_state(CFG)).values
     out = await graph.ainvoke(None, CFG)
     assert out["messages"][-1].content == "Hello again." and models["coach"].calls == 1
+
+
+async def test_a_rejected_review_resets_the_consult_budget(nocommit, make_deps, mem_store):
+    """The coach spends its whole planning budget, the athlete rejects, and the coach can
+    consult planning again in the same turn instead of hitting the budget message."""
+    seed_active_plan(nocommit)
+    coach = Spy(
+        script=[
+            consult("planning", "Lighten the week.", "c1"),
+            propose("Move it.", ["p1"], "c2"),
+            consult("planning", "Make it lighter.", "c3"),
+            AIMessage(content="Proposed a lighter week."),
+        ]
+    )
+    planning = ScriptedChatModel(
+        script=[move_call("m1"), AIMessage(content="ok"), move_call("m2"), AIMessage(content="ok")]
+    )
+    deps = make_deps(
+        tp=FakeTp(),
+        coach=coach,
+        planning=planning,
+        nutrition=ScriptedChatModel(script=[]),
+        analyst=ScriptedChatModel(script=[]),
+        max_consults=1,
+    )
+    graph = build_graph(deps, InMemorySaver(serde=make_serde(STATE_TYPES)), mem_store)
+    out = await graph.ainvoke({"messages": [HumanMessage("do it")]}, CFG)
+    assert "__interrupt__" in out and out["consults"] == {"planning": 1}
+
+    out = await graph.ainvoke(Command(resume={"action": "reject", "note": "make it lighter"}), CFG)
+    # the reset shows up in the very next coach entry, before the second consult spends it again
+    assert "Consults left this turn: planning 1, nutrition 1." in coach.prompts[2]
+    # each planning consult makes 2 model calls (the move, then "ok"); a second consult reaching
+    # the model (rather than the budget message) doubles the count
+    assert planning.calls == 4 and out["consults"] == {"planning": 1}
