@@ -243,3 +243,29 @@ async def test_nutrition_proposals_carry_fuel_violations_by_session_and_race():
     p = (await node({"brief": consult, "proposals": []}, CONFIG))["proposals"][0]
     assert p.pending_violations == follow_on.pending_violations
     assert p.violations == follow_on.violations
+
+
+def test_a_no_change_planning_proposal_keeps_its_refused_weeks():
+    from tri_coach.graph.nodes.planning import proposal_from_planning
+
+    out = {
+        "pending_changes": [],
+        "pending_violations": {"2026-09-21": ["hard sessions on consecutive days"]},
+        "messages": [AIMessage(content="Nothing can be written.")],
+    }
+    p = proposal_from_planning(out, "p1")
+    assert not p.changes and p.question == "Nothing can be written."
+    assert p.pending_violations == {"2026-09-21": ["hard sessions on consecutive days"]}
+
+
+def test_a_no_change_nutrition_proposal_keeps_its_refused_notes():
+    from tri_coach.graph.nodes.nutrition import proposal_from_nutrition
+
+    out = {
+        "pending_changes": [],
+        "pending_violations": {"w2": ["product Mystery is not in the library"], "race": []},
+        "messages": [AIMessage(content="Nothing can be written.")],
+    }
+    p = proposal_from_nutrition(out, "p1")
+    assert not p.changes and p.question == "Nothing can be written."
+    assert p.pending_violations == {"w2": ["product Mystery is not in the library"]}

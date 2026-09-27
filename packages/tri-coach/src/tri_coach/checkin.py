@@ -1,8 +1,9 @@
 """tri-coach check-in: one unattended coach turn with the fixed check-in request on thread coach.
 
 Exit codes, as `tri-planning check-in`: 0 a clean week, or every gate approved and applied;
-1 a model or API error, an apply that did not complete, or a change skipped under --yes for
-validator violations; 2 neither an active plan nor a nutrition profile; 3 paused at review, or
+1 a model or API error, an apply that did not complete, a change skipped under --yes for
+validator violations, or a designed week or fuel plan refused (stored, not proposed), even with
+nothing to review; 2 neither an active plan nor a nutrition profile; 3 paused at review, or
 refused because a review or a held change set is already pending (its owner decides it in chat,
 and --yes must not approve it) or the thread stopped mid-run. --yes approves the change set and
 a second gate only when it is the nutrition follow-on, and never a change a validator flagged:
@@ -34,10 +35,10 @@ def _is_nutrition_follow_on(payload: dict[str, Any]) -> bool:
 
 
 def _refused(proposals: list[Proposal]) -> list[str]:
-    """Fuel plans or designed weeks a sub-agent stored but never proposed, read from the turn's
-    final state: with no changes to review, `without_violations` never runs over them. Nutrition
-    may cover some of its own pending_violations keys with other changes; a no-change planning
-    proposal covers none of them, so every key is refused."""
+    """Fuel plans or designed weeks a sub-agent stored but never proposed, from proposals that
+    never reached a gate (a gate's own go through `without_violations`). Nutrition may cover
+    some of its own pending_violations keys with other changes; a violating week never produces
+    changes, so every planning key is refused."""
     lines: list[str] = []
     for p in proposals:
         if p.domain == "nutrition":
@@ -47,7 +48,7 @@ def _refused(proposals: list[Proposal]) -> list[str]:
                     cast(list[NutritionChange], p.changes), p.pending_violations
                 )
             ]
-        elif p.domain == "planning" and not p.changes:
+        elif p.domain == "planning":
             lines += [
                 f"{p.id} week of {week}: not proposed: " + "; ".join(v)
                 for week, v in sorted(p.pending_violations.items())
@@ -119,6 +120,7 @@ async def run_checkin(
     request = {"messages": [HumanMessage(CHECKIN_REQUEST)]}
     printer = await run_turn(graph, request, thread_id, out, tags=CHECKIN_TAGS)
     gates = skipped = 0
+    refused: list[str] = []
     while True:
         if printer.error is not None:
             return EXIT_ERROR
@@ -134,6 +136,10 @@ async def run_checkin(
             out(PAUSED_HINT + "\n")
             return EXIT_PAUSED
         gates += 1
+        # apply clears `proposals`: read the ones this gate does not carry before resuming
+        at_gate = (await graph.aget_state(cfg)).values or {}
+        gated = {raw.get("id") for raw in printer.interrupt.get("proposals") or []}
+        refused += _refused([p for p in at_gate.get("proposals") or [] if p.id not in gated])
         kept, flagged = without_violations(printer.interrupt)
         resume: dict[str, Any] = {"action": "approve"}
         if flagged:
@@ -149,14 +155,13 @@ async def run_checkin(
         command: Command[Any] = Command(resume=resume)
         printer = await run_turn(graph, command, thread_id, out, tags=CHECKIN_TAGS)
     after = (await graph.aget_state(cfg)).values or {}
+    # proposals still in state never reached a gate; one seen at a gate too is printed once
+    refused = list(dict.fromkeys(refused + _refused(after.get("proposals") or [])))
+    for line in refused:
+        out(f"check-in: {line}\n")
     # apply reports a failed or partial write through state, not an interrupt
     if gates and (after.get("last_error") or after.get("pending") is not None):
         reason = after.get("last_error") or "changes still pending"
         out(f"check-in: apply did not complete: {reason}\n")
         return EXIT_ERROR
-    # nothing reached review (or apply cleared it): a fuel plan or a designed week may still
-    # sit refused
-    refused = _refused(after.get("proposals") or [])
-    for line in refused:
-        out(f"check-in: {line}\n")
     return EXIT_ERROR if skipped or refused else EXIT_OK

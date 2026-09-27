@@ -313,3 +313,45 @@ def test_without_violations_names_a_fuel_plan_that_was_not_proposed():
     kept, skipped = without_violations(payload)
     assert [c.target_key for c in kept[0].changes] == ["w1"]
     assert skipped == ["p1 w2: not proposed: product Mystery is not in the library"]
+
+
+REFUSED_WEEK = Proposal(
+    id="p1",
+    domain="planning",
+    summary="s",
+    violations=["week of 2026-09-21: hard sessions on consecutive days"],
+    pending_violations={"2026-09-21": ["hard sessions on consecutive days"]},
+    question="Nothing can be written: state the violations and stop.",
+)
+REFUSED_WEEK_LINE = "p1 week of 2026-09-21: not proposed: hard sessions on consecutive days"
+
+
+class ByTurn(Graph):
+    """aget_state returns the snapshot for the number of turns run so far, as a checkpointer
+    would: before the first turn, at the first gate, after the resumed turn."""
+
+    async def aget_state(self, config: Any) -> Any:
+        return self.states[len(self.inputs)]
+
+
+async def test_yes_exits_1_on_a_refused_week_beside_an_approved_nutrition_change():
+    """Apply clears `proposals`, so the refused week has to be read at the gate."""
+    targets = nutrition_proposal().model_copy(update={"id": "p2"})
+    value = {"narration": "Targets.", "proposals": [targets.model_dump(mode="json")]}
+    gate = ((), "updates", {"__interrupt__": (Interrupt(value=value),)})
+    at_gate = SimpleNamespace(
+        next=("review",), values={"proposals": [REFUSED_WEEK, targets]}, tasks=()
+    )
+    applied = SimpleNamespace(next=(), values={"proposals": []}, tasks=())
+    graph = ByTurn([[gate], [DONE]], [IDLE, at_gate, applied])
+    code, text = await run(graph, yes=True)
+    assert code == EXIT_ERROR and graph.inputs[1].resume == {"action": "approve"}
+    assert text.count(REFUSED_WEEK_LINE) == 1
+
+
+async def test_checkin_exits_1_on_a_refused_week_beside_planning_changes_never_reviewed():
+    partial = REFUSED_WEEK.model_copy(update={"changes": proposal().changes, "question": None})
+    after = SimpleNamespace(next=(), values={"proposals": [partial]}, tasks=())
+    graph = Graph([[DONE]], [IDLE, after])
+    code, text = await run(graph)
+    assert code == EXIT_ERROR and REFUSED_WEEK_LINE in text
