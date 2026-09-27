@@ -10,6 +10,7 @@ from tri_core.testing import ScriptedChatModel, tool_call
 from tri_nutrition import plan_loader, repo
 from tri_nutrition import store as S
 from tri_nutrition.graph.graph import after_checkin, after_review, build_graph, route_start
+from tri_nutrition.graph.nodes.route import route_node
 from tri_nutrition.nutrition.models import NutritionProfile, ReviewDecision
 from tri_nutrition.nutrition.targets import build
 from tri_nutrition.repl import checkin_run
@@ -380,7 +381,7 @@ async def test_checkin_run_yes_skips_violating_changes_and_exits_1(ndb, make_dep
     printed: list[str] = []
     assert await checkin_run(graph, thread_id="nutrition", out=printed.append, approve=True) == 1
     text = "".join(printed)
-    assert "skipped set_session_note w2" in text and "Mystery" in text
+    assert "not proposed w2: " in text and "Mystery" in text
     assert [c[0] for c in g.calls] == ["set_nutrition_daily_settings"]
     assert [(c[0], c[1]["workout_id"]) for c in tp.calls] == [
         ("tp_get_workout_note", "w1"),
@@ -411,3 +412,11 @@ async def test_override_only_checkin_persists_the_override_and_leaves_state_clea
     assert out["review_decision"] is None
     assert "profile updated" in out["messages"][-1].content
     assert (await graph.aget_state(CFG)).next == ()
+
+
+async def test_route_starts_a_turn_without_last_turns_refusals(mem_store):
+    out = await route_node({"pending_violations": {"w9": ["old"]}}, store=mem_store)
+    assert out["pending_violations"] == {}
+    # a change set waiting at review keeps the violations its payload shows
+    held = {"pending_changes": [object()], "pending_violations": {"w9": ["old"]}}
+    assert "pending_violations" not in await route_node(held, store=mem_store)

@@ -12,6 +12,7 @@ from tri_coach.checkin import (
     EXIT_OK,
     EXIT_PAUSED,
     run_checkin,
+    without_violations,
 )
 from tri_coach.models import ChangeSet, Proposal
 from tri_coach.prompts.coach import CHECKIN_REQUEST
@@ -255,3 +256,28 @@ async def test_yes_skips_flagged_changes_at_both_gates_and_exits_1():
     assert [c["op"] for p in fuel["proposals"] for c in p["changes"]] == ["set_day_targets"]
     assert "skipping p1 week of 2026-09-21: hard sessions on consecutive days" in text
     assert "skipping p2 set_session_note w2: carbs 95 g/h above the 90 g/h ceiling" in text
+
+
+def test_without_violations_names_a_fuel_plan_that_was_not_proposed():
+    payload = {
+        "proposals": [
+            {
+                "id": "p1",
+                "domain": "nutrition",
+                "summary": "s",
+                "changes": [
+                    {
+                        "op": "set_session_note",
+                        "target_key": "w1",
+                        "day": "2026-09-14",
+                        "payload": {},
+                        "reason": "r",
+                    }
+                ],
+                "pending_violations": {"w2": ["product Mystery is not in the library"]},
+            }
+        ]
+    }
+    kept, skipped = without_violations(payload)
+    assert [c.target_key for c in kept[0].changes] == ["w1"]
+    assert skipped == ["p1 w2: not proposed: product Mystery is not in the library"]

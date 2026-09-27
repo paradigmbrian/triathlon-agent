@@ -19,7 +19,7 @@ from tri_coach.models import Proposal
 from tri_coach.prompts.coach import CHECKIN_REQUEST
 from tri_coach.repl import Out, paused_review, render_review, run_turn
 from tri_nutrition.nutrition.models import NutritionChange
-from tri_nutrition.repl import split_violating
+from tri_nutrition.repl import not_proposed, split_violating
 from tri_planning.checkin import changes_without_violations
 
 EXIT_OK, EXIT_ERROR, EXIT_NO_PLAN, EXIT_PAUSED = 0, 1, 2, 3
@@ -53,6 +53,10 @@ def without_violations(payload: dict[str, Any]) -> tuple[list[Proposal], list[st
             clean, flagged = split_violating(cast(list[NutritionChange], p.changes), keyed)
             skipped += [
                 f"{p.id} {c.op} {c.target_key or c.day}: " + "; ".join(v) for c, v in flagged
+            ]
+            skipped += [
+                f"{p.id} {key}: not proposed: " + "; ".join(v)
+                for key, v in not_proposed(cast(list[NutritionChange], p.changes), keyed)
             ]
             kept.append(p.model_copy(update={"changes": clean}))
     return kept, skipped

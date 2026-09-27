@@ -1,4 +1,5 @@
 from datetime import date
+from types import SimpleNamespace
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from langgraph.types import Command, Interrupt
@@ -10,6 +11,7 @@ from tri_nutrition.repl import (
     changes_from_yaml,
     changes_to_yaml,
     chat_loop,
+    checkin_run,
     parse_decision,
     render_review,
     render_targets,
@@ -182,3 +184,25 @@ def test_split_violating_keeps_order_and_matches_notes_by_key():
     assert clean == [change()]
     assert skipped == [(note, ["too much"]), (race, ["no pre-race step"])]
     assert split_violating([note], {}) == ([note], [])
+
+
+class _RefusedTurn:
+    """A graph whose turn ends without an interrupt, leaving a refused note in state."""
+
+    def __init__(self) -> None:
+        self.turned = False
+
+    async def astream(self, payload, config=None, **kwargs):
+        self.turned = True
+        return
+        yield
+
+    async def aget_state(self, config):
+        values = {"pending_violations": {"w2": ["product Mystery"]}} if self.turned else {}
+        return SimpleNamespace(values=values, next=())
+
+
+async def test_checkin_run_exits_1_on_a_refusal_with_nothing_to_review():
+    printed: list[str] = []
+    code = await checkin_run(_RefusedTurn(), thread_id="n", out=printed.append, approve=True)
+    assert code == 1 and "not proposed w2: product Mystery" in "".join(printed)

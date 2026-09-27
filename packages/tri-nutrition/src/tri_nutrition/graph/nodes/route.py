@@ -11,4 +11,8 @@ from tri_nutrition.graph.state import NutritionState
 
 
 async def route_node(state: NutritionState, *, store: BaseStore) -> dict[str, Any]:
-    return {"has_profile": await S.get_profile(store) is not None}
+    update: dict[str, Any] = {"has_profile": await S.get_profile(store) is not None}
+    if not state.get("pending_changes"):
+        # this turn's refusals only: check-in reads pending_violations after the turn
+        update["pending_violations"] = {}
+    return update

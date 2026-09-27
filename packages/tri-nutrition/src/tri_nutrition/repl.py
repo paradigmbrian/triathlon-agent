@@ -247,11 +247,20 @@ def split_violating(
     return clean, skipped
 
 
+def not_proposed(
+    changes: list[NutritionChange], violations: dict[str, list[str]]
+) -> list[tuple[str, list[str]]]:
+    """The violation keys no change covers: plans the fuel node stored but did not propose,
+    as (key, violations) in key order."""
+    covered = {RACE_VIOLATIONS_KEY if c.op == "set_race_note" else c.target_key for c in changes}
+    return [(k, list(v)) for k, v in sorted(violations.items()) if v and k not in covered]
+
+
 async def checkin_run(graph: Any, *, thread_id: str, out: Out, approve: bool) -> int:
-    """One unattended check-in. 0: nothing pending, or approved in full; 1: approved with the
-    violating changes skipped (each is printed with its violations); 3: a change set waits at
-    review, either this run's without `approve`, or one an earlier run left, which is never
-    approved here."""
+    """One unattended check-in. 0: nothing pending, or approved in full; 1: a plan was not
+    proposed for violations, or approved with the violating changes skipped (each printed with
+    its violations); 3: a change set waits at review, either this run's without `approve`, or
+    one an earlier run left, which is never approved here."""
     cfg = {"configurable": {"thread_id": thread_id}}
     snap = await graph.aget_state(cfg)
     if snap.next == ("review",):
@@ -267,19 +276,28 @@ async def checkin_run(graph: Any, *, thread_id: str, out: Out, approve: bool) ->
     request = {"messages": [HumanMessage(CHECKIN_REQUEST)]}
     printer = await run_turn(graph, request, thread_id, out)
     if printer.interrupt is None:
-        return 0
+        refused = not_proposed(
+            [], (await graph.aget_state(cfg)).values.get("pending_violations") or {}
+        )
+        for key, reasons in refused:
+            out(f"not proposed {key}: {'; '.join(reasons)}\n")
+        return 1 if refused else 0
     out("\n" + render_review(printer.interrupt) + "\n")
     if not approve:
         out(PAUSED_HINT + "\n")
         return 3
     changes = [NutritionChange.model_validate(c) for c in printer.interrupt.get("changes", [])]
-    clean, skipped = split_violating(changes, printer.interrupt.get("violations") or {})
+    violations = printer.interrupt.get("violations") or {}
+    clean, skipped = split_violating(changes, violations)
+    refused = not_proposed(changes, violations)
     for change, reasons in skipped:
         out(f"skipped {change.op} {change.target_key or change.day}: {'; '.join(reasons)}\n")
+    for key, reasons in refused:
+        out(f"not proposed {key}: {'; '.join(reasons)}\n")
     resume: dict[str, Any] = {"action": "approve"}
     if skipped:
         resume = {"action": "edit", "changes": [c.model_dump(mode="json") for c in clean]}
     printer = await run_turn(graph, Command(resume=resume), thread_id, out)
     if printer.interrupt is not None:
         return 3
-    return 1 if skipped else 0
+    return 1 if skipped or refused else 0
