@@ -175,6 +175,27 @@ async def test_a_race_plan_that_still_fails_is_stored_but_not_proposed(ndb, mem_
     assert any("pre-race" in v for v in race.violations)
 
 
+async def test_an_all_refused_turn_shows_only_the_refusals(ndb, mem_store, make_deps):
+    no_pre = race_plan_json(RACE, timeline=[race_plan_json(RACE)["timeline"][1]])
+    model = ScriptedChatModel(
+        script=[
+            fuel_call("w1", MONDAY, products=["Mystery"]),
+            fuel_call("w1", MONDAY, products=["Mystery"]),
+            fuel_call("w2", TUE, products=["Mystery"]),
+            fuel_call("w2", TUE, products=["Mystery"]),
+            tool_call("RaceFuelPlan", no_pre),
+            tool_call("RaceFuelPlan", no_pre),
+        ]
+    )
+    deps, graph, h = await seeded(ndb, mem_store, make_deps, model)
+    out = await graph.ainvoke({"pending_changes": []}, CFG)
+    assert out["pending_changes"] == []
+    assert sorted(out["pending_violations"]) == ["race", "w1", "w2"]
+    lines = out["pending_summary"].splitlines()
+    assert len(lines) == 3 and all(": not proposed: " in x for x in lines)
+    assert "Race fuel" not in out["pending_summary"] and "products" not in lines[0]
+
+
 async def test_unchanged_written_notes_are_not_reproposed(ndb, mem_store, make_deps):
     model = ScriptedChatModel(
         script=[
