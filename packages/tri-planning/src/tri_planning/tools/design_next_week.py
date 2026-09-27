@@ -61,7 +61,7 @@ def make_design_next_week_tool(
         with deps.connect() as conn:
             repo.set_week_designed(conn, plan_id, row.week_start, week)
             conn.commit()
-        changes = session_changes(week, target.phase)
+        changes = session_changes(week, target)
         return json.dumps(
             {
                 "week_start": row.week_start.isoformat(),

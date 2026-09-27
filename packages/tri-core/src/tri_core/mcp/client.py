@@ -64,7 +64,7 @@ class McpToolClient:
         try:
             await asyncio.wait_for(self._open(params), timeout=SESSION_TIMEOUT_S)
         except BaseException:
-            # a failed, hung, or cancelled handshake must not leave the server subprocess running
+            # a failed, hung or cancelled handshake must not leave the server subprocess running
             await self.__aexit__(None, None, None)
             raise
         return self

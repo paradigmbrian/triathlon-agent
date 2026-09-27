@@ -7,12 +7,9 @@ from langchain_core.tools import tool
 
 from tri_core.testing import ScriptedChatModel, tool_call
 from tri_planning import repo
+from tri_planning.checkin import changes_without_violations
 from tri_planning.graph.nodes import adjust as adjust_node
-from tri_planning.graph.nodes.adjust import (
-    changes_from_messages,
-    make_adjust_node,
-    violating_changes_from_messages,
-)
+from tri_planning.graph.nodes.adjust import changes_from_messages, make_adjust_node
 from tri_planning.planning.models import (
     CalendarChange,
     FitnessSnapshot,
@@ -251,58 +248,6 @@ async def test_adjust_binds_only_read_and_propose_tools(nocommit, make_deps, mon
     )
 
 
-def test_changes_from_messages_keys_violations_by_week_and_drops_them_on_redesign():
-    msgs = [
-        design_message(violations=["hard sessions on consecutive days"], call_id="1"),
-        design_message(week_start="2026-09-28", title="clean", call_id="2"),
-        AIMessage(content="done"),
-    ]
-    _, _, violations = changes_from_messages(msgs)
-    assert violations == {"2026-09-21": ["hard sessions on consecutive days"]}
-    redesigned = [*msgs[:1], design_message(title="second try", call_id="3")]
-    assert changes_from_messages(redesigned)[2] == {}
-
-
-def test_violating_changes_are_keyed_by_the_designed_week_whatever_their_dates():
-    # The model dated the violating week's session outside its target week.
-    stray = design_result(violations=["hard sessions on consecutive days"])
-    stray["changes"][0]["workout_date"] = stray["changes"][0]["workout"]["date"] = "2026-09-28"
-    msgs = [
-        ToolMessage(content=json.dumps(stray), name="design_next_week", tool_call_id="1"),
-        design_message(week_start="2026-10-05", title="clean", call_id="2"),
-    ]
-    changes, _, _ = changes_from_messages(msgs)
-    assert violating_changes_from_messages(msgs) == {"2026-09-21": changes[:1]}
-    redesigned = [*msgs, design_message(title="second try", call_id="3")]
-    assert violating_changes_from_messages(redesigned) == {}
-
-
-async def test_design_violations_become_pending_violations(nocommit, make_deps):
-    gid, pid, targets = seed(nocommit)
-    bad = week_json(
-        MONDAY + timedelta(weeks=1), targets[1].target_tss, hard_on_consecutive_days=True
-    )
-    model = ScriptedChatModel(
-        script=[
-            tool_call("design_next_week", {}),
-            tool_call("PlannedWeek", bad),
-            tool_call("PlannedWeek", bad),  # the retry is as bad
-            AIMessage(content="Next week designed."),
-        ]
-    )
-    node = make_adjust_node(
-        make_deps(model, tp=FakeTp(), today=MONDAY + timedelta(days=3), horizon=3)
-    )
-    out = await node(
-        {"goal_id": gid, "plan_id": pid, "phase": "active", "messages": [HumanMessage("check in")]},
-        CFG,
-    )
-    assert list(out["pending_violations"]) == ["2026-09-21"]
-    assert any("consecutive" in v for v in out["pending_violations"]["2026-09-21"])
-    assert len(out["pending_changes"]) == 3
-    assert out["pending_violating_changes"] == {"2026-09-21": out["pending_changes"]}
-
-
 async def test_directed_brief_ends_on_the_proposal_and_merges_the_designed_week(
     nocommit, make_deps
 ):
@@ -338,3 +283,56 @@ async def test_directed_brief_ends_on_the_proposal_and_merges_the_designed_week(
     assert out["changes_from"] == "adjust" and out["pending_summary"] == "drop tempo"
     assert [c.op for c in out["pending_changes"]] == ["create", "create", "create", "delete"]
     assert repo.list_weeks(nocommit, pid)[1].designed is not None
+
+
+def test_changes_from_messages_keys_violations_by_week_and_drops_them_on_redesign():
+    msgs = [
+        design_message(violations=["hard sessions on consecutive days"], call_id="1"),
+        design_message(week_start="2026-09-28", title="clean", call_id="2"),
+        AIMessage(content="done"),
+    ]
+    _, _, violations = changes_from_messages(msgs)
+    assert violations == {"2026-09-21": ["hard sessions on consecutive days"]}
+    redesigned = [*msgs[:1], design_message(title="second try", call_id="3")]
+    assert changes_from_messages(redesigned)[2] == {}
+
+
+async def test_design_violations_become_pending_violations(nocommit, make_deps):
+    gid, pid, targets = seed(nocommit)
+    bad = week_json(
+        MONDAY + timedelta(weeks=1), targets[1].target_tss, hard_on_consecutive_days=True
+    )
+    model = ScriptedChatModel(
+        script=[
+            tool_call("design_next_week", {}),
+            tool_call("PlannedWeek", bad),
+            tool_call("PlannedWeek", bad),  # the retry is as bad
+            AIMessage(content="Next week designed."),
+        ]
+    )
+    node = make_adjust_node(
+        make_deps(model, tp=FakeTp(), today=MONDAY + timedelta(days=3), horizon=3)
+    )
+    out = await node(
+        {"goal_id": gid, "plan_id": pid, "phase": "active", "messages": [HumanMessage("check in")]},
+        CFG,
+    )
+    assert list(out["pending_violations"]) == ["2026-09-21"]
+    assert any("consecutive" in v for v in out["pending_violations"]["2026-09-21"])
+    assert len(out["pending_changes"]) == 3
+
+
+def test_a_designed_week_keeps_its_origin_so_a_stray_session_is_filtered_with_it():
+    stray = design_result(violations=["2026-09-29 swim: outside the week starting 2026-09-21"])
+    moved = {**stray["changes"][0], "workout_date": "2026-09-29"}
+    stray["changes"].append(moved)
+    msgs = [
+        ToolMessage(content=json.dumps(stray), name="design_next_week", tool_call_id="1"),
+        design_message(week_start="2026-09-28", title="clean", call_id="2"),
+    ]
+    changes, _, violations = changes_from_messages(msgs)
+    assert [str(c.design_week) for c in changes] == ["2026-09-21", "2026-09-21", "2026-09-28"]
+    kept, skipped = changes_without_violations(
+        {"changes": [c.model_dump(mode="json") for c in changes], "violations": violations}
+    )
+    assert [c.workout.title for c in kept] == ["clean"] and skipped == ["2026-09-21"]

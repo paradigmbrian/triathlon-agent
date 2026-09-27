@@ -74,6 +74,25 @@ async def test_applies_all_records_rows_marks_designed_weeks_and_activates(nocom
     assert "applied 2" in out["messages"][0].content
 
 
+async def test_a_stray_session_does_not_mark_another_designed_week_written(nocommit, make_deps):
+    # Week 1's design put a session in week 2. Approving it writes week 1's design only; week 2's
+    # own design is still unwritten, so the design node must still pick it up.
+    gid, pid = seed(nocommit)
+    for i in range(2):
+        week = MONDAY + timedelta(weeks=i)
+        repo.set_week_designed(
+            nocommit, pid, week, PlannedWeek(week_start=week, sessions=[], coach_note="n")
+        )
+    changes = [
+        create(0).model_copy(update={"design_week": MONDAY}),
+        create(8, "Stray").model_copy(update={"design_week": MONDAY}),
+    ]
+    node = make_apply_node(make_deps(ScriptedChatModel(script=[]), tp=FakeTp()))
+    out = await node(state(gid, pid, changes), CFG)
+    assert out["pending_changes"] == [] and out["last_error"] is None
+    assert [w.written_to_tp for w in repo.list_weeks(nocommit, pid)] == [True, False]
+
+
 async def test_mid_batch_failure_keeps_remainder_pending(nocommit, make_deps):
     gid, pid = seed(nocommit)
     tp = FakeTp(fail_on_call=2)
@@ -415,6 +434,26 @@ async def test_a_create_reconciled_this_pass_is_not_sent_again(nocommit, make_de
         "select status from plan_changes where plan_id = %s order by id", (pid,)
     ).fetchall()
     assert [row["status"] for row in rows] == ["applied", "applied"]
+
+
+async def test_a_reconciled_stray_session_marks_its_design_week_written(nocommit, make_deps):
+    # Week 1's design dated a session in week 2; reconciling it writes week 1, not week 2.
+    gid, pid = seed(nocommit)
+    for i in range(2):
+        week = MONDAY + timedelta(weeks=i)
+        repo.set_week_designed(
+            nocommit, pid, week, PlannedWeek(week_start=week, sessions=[], coach_note="n")
+        )
+    stray = create(8, "Stray").model_copy(update={"design_week": MONDAY})
+    rid = repo.insert_pending_change(nocommit, pid, "t", stray)
+    _backdate(nocommit, rid)
+    day = MONDAY + timedelta(days=8)
+    tp = FakeTp(listings=[[_listed("1001", title="Stray", day=day)]])
+    r = await apply_changes(
+        make_deps(ScriptedChatModel(script=[]), tp=tp), [], "t", plan_id=pid, goal_id=gid
+    )
+    assert _status(nocommit, rid)["status"] == "applied" and r.error is None
+    assert [w.written_to_tp for w in repo.list_weeks(nocommit, pid)] == [True, False]
 
 
 async def test_a_reconciled_create_cancels_one_identical_create_only(nocommit, make_deps):

@@ -63,7 +63,8 @@ Stop and report to Brian without working around it if:
 18. A2 `states_window` matches "decoupling 5%"
 19. B1 a turn during a paused review drops the review
 20. B2 500 bodies carry the exception text
-21. Final checks
+21. K5 tri-coach `check-in --yes` skips violating changes (depends on Task 1; follows Task 11 logically)
+22. Final checks
 
 ---
 
@@ -4047,7 +4048,529 @@ git commit -m "fix(web): 500 bodies say internal error; the exception text goes 
 
 ---
 
-### Task 21: Final checks
+### Task 21: K5 tri-coach `check-in --yes` skips violating changes
+
+**Depends on Task 1.** This task logically follows Task 11 (it is the coach half of N3 and P3) and is numbered 21 so the tasks after 11 keep their numbers. It imports `tri_planning.checkin.changes_without_violations` and reads `pending_violations` from the embedded planning graph, both of which Task 1 adds. Run it only after Task 1 is committed. Tasks 8-11 edit other lines of `planning.py`, `nutrition.py` and `models.py`. The blocks below match the current files, and none of the lines they replace is touched by an earlier task.
+
+**Files:**
+- Modify: `packages/tri-coach/src/tri_coach/models.py:28`
+- Modify: `packages/tri-coach/src/tri_coach/graph/nodes/planning.py:7, 19-36`
+- Modify: `packages/tri-coach/src/tri_coach/graph/nodes/nutrition.py:17, 21, 26-57`
+- Modify: `packages/tri-coach/src/tri_coach/checkin.py:3-8, 12-18, 26-28, 64-65, 79-82, 90`
+- Test: `packages/tri-coach/tests/test_nodes.py` (append)
+- Test: `packages/tri-coach/tests/test_checkin.py` (append)
+
+**Interfaces:**
+- Consumes (Task 1): `PlanningState.pending_violations: dict[str, list[str]]` (week_start ISO -> violations), returned by the embedded planning graph's `ainvoke`; `tri_planning.checkin.changes_without_violations(payload) -> tuple[list[CalendarChange], list[str]]`, which reads `payload["changes"]` and `payload["violations"]`. Consumes (plan 01, on `main`): the nutrition fuel node's `pending_violations` (keyed by `tp_workout_id`, `"race"` for the race plan); `tri_nutrition.repl.split_violating(changes, violations)` and `RACE_VIOLATIONS_KEY`.
+- Produces:
+  - `Proposal.pending_violations: dict[str, list[str]] = Field(default_factory=dict)`: the sub-graph's `pending_violations`, unchanged.
+  - `Proposal.violations` is `last_error` (as before) followed by one line per keyed entry: `week of <date>: <v1>; <v2>` for planning, `session <tp_workout_id>: ...` or `race note: ...` for nutrition. `Proposal.render()` (the coach's tool result), `render_review` (terminal) and the web `ProposalCard` already print `violations`, so the interactive review shows them without a renderer change.
+  - `tri_coach.graph.nodes.planning.keyed_violations(out, where) -> tuple[list[str], dict[str, list[str]]]`, `tri_coach.graph.nodes.nutrition.fuel_where(key) -> str`.
+  - `tri_coach.checkin.without_violations(payload) -> tuple[list[Proposal], list[str]]`: the review payload's proposals with the flagged changes removed (planning via `changes_without_violations`, nutrition via `split_violating`), and one line per skip.
+  - `run_checkin` with `yes=True`, at either gate: when anything is flagged it prints `check-in: skipping <line>` per skip and resumes the coach's review with `{"action": "edit", "proposals": [...]}` holding every proposal with only its clean changes. It returns `EXIT_ERROR` (1) when anything was skipped and the apply completed. A gate with nothing flagged still resumes `{"action": "approve"}`.
+
+**Why the coach's review and not the sub-graphs':** the embedded planning and nutrition graphs are compiled with `embedded=True` and have no review node. The coach's own `review_node` is the gate `--yes` answers, and its edit branch (`review.py:71-76`) replaces `pending` with `decision.proposals` before `apply`. A proposal left with no changes stays in the edit. `apply_changes` in both packages takes an empty list and reports `applied 0`, so the apply message is never empty. The nutrition overrides on that proposal are still persisted, as they would have been under `approve`.
+
+**Why import rather than copy:** `tri_nutrition.repl` and `tri_planning.checkin` import nothing from `tri_coach` (`grep -rn tri_coach packages/tri-planning/src packages/tri-nutrition/src` prints nothing), and `tri_coach.repl` already imports `tri_nutrition.repl` and `tri_planning.repl`. That means no import cycle, and each domain keeps one definition of which change a violation covers.
+
+- [ ] **Step 1: Write the failing tests**
+
+Append to `packages/tri-coach/tests/test_nodes.py`, adding the import `from tri_coach.repl import render_review`:
+
+```python
+async def test_a_consultation_carries_the_planning_violations_by_week():
+    create = {"op": "create", "workout_date": "2026-09-22", "reason": "next week"}
+    graph = Recorder(
+        {
+            "pending_changes": [create],
+            "pending_summary": "Designed week(s) 2026-09-21 added to the calendar proposal.",
+            "pending_violations": {"2026-09-21": ["hard sessions on consecutive days"]},
+            "last_error": None,
+        }
+    )
+    brief = Brief(domain="planning", instruction="x", tool_call_id="c1", message_id="m1")
+    out = await make_planning_node(graph)({"brief": brief, "proposals": []}, CONFIG)
+    p = out["proposals"][0]
+    assert p.pending_violations == {"2026-09-21": ["hard sessions on consecutive days"]}
+    assert p.violations == ["week of 2026-09-21: hard sessions on consecutive days"]
+    # the coach reads them in the tool result; the athlete reads them at review
+    line = "violations: week of 2026-09-21: hard sessions on consecutive days"
+    assert line in out["messages"][0].content
+    assert line in render_review({"narration": "n", "proposals": [p.model_dump(mode="json")]})
+
+
+async def test_nutrition_proposals_carry_fuel_violations_by_session_and_race():
+    note = {
+        "op": "set_session_note",
+        "target_key": "w2",
+        "day": "2026-09-15",
+        "payload": {},
+        "reason": "long ride",
+    }
+    graph = Recorder(
+        {
+            "pending_changes": [note],
+            "pending_summary": "Fuel",
+            "pending_violations": {
+                "w2": ["carbs 95 g/h above the 90 g/h ceiling"],
+                "race": ["no sodium"],
+            },
+            "last_error": None,
+        }
+    )
+    node = make_nutrition_node(graph)
+    regenerate = Brief(domain="nutrition", instruction="regenerate", regenerate=True)
+    follow_on = (await node({"brief": regenerate, "proposals": []}, CONFIG))["proposals"][0]
+    assert follow_on.pending_violations["w2"] == ["carbs 95 g/h above the 90 g/h ceiling"]
+    assert follow_on.violations == [
+        "race note: no sodium",
+        "session w2: carbs 95 g/h above the 90 g/h ceiling",
+    ]
+    consult = Brief(domain="nutrition", instruction="x", tool_call_id="c1", message_id="m1")
+    p = (await node({"brief": consult, "proposals": []}, CONFIG))["proposals"][0]
+    assert p.pending_violations == follow_on.pending_violations
+    assert p.violations == follow_on.violations
+```
+
+Append to `packages/tri-coach/tests/test_checkin.py`:
+
+```python
+def flagged(pid: str, domain: str, changes: list[dict[str, Any]], violations: dict) -> tuple:
+    p = Proposal.model_validate(
+        {
+            "id": pid,
+            "domain": domain,
+            "summary": "s",
+            "changes": changes,
+            "pending_violations": violations,
+        }
+    )
+    value = {"narration": f"{domain} gate", "proposals": [p.model_dump(mode="json")]}
+    return ((), "updates", {"__interrupt__": (Interrupt(value=value),)})
+
+
+FLAGGED_WEEK = flagged(
+    "p1",
+    "planning",
+    [
+        {"op": "create", "workout_date": "2026-09-22", "reason": "next week"},
+        {"op": "move", "tp_workout_id": "w1", "new_date": "2026-09-18", "reason": "knee"},
+    ],
+    {"2026-09-21": ["hard sessions on consecutive days"]},
+)
+FLAGGED_NOTE = flagged(
+    "p2",
+    "nutrition",
+    [
+        {
+            "op": "set_day_targets",
+            "target_key": "2026-09-14",
+            "day": "2026-09-14",
+            "payload": {"calorie_goal": 2800},
+            "reason": "easy day",
+        },
+        {
+            "op": "set_session_note",
+            "target_key": "w2",
+            "day": "2026-09-15",
+            "payload": {},
+            "reason": "long ride",
+        },
+    ],
+    {"w2": ["carbs 95 g/h above the 90 g/h ceiling"]},
+)
+
+
+async def test_yes_skips_flagged_changes_at_both_gates_and_exits_1():
+    graph = Graph([[FLAGGED_WEEK], [FLAGGED_NOTE], [DONE]], [IDLE])
+    code, text = await run(graph, yes=True)
+    assert code == EXIT_ERROR
+    plan, fuel = graph.inputs[1].resume, graph.inputs[2].resume
+    assert plan["action"] == "edit" and fuel["action"] == "edit"
+    assert [c["op"] for p in plan["proposals"] for c in p["changes"]] == ["move"]
+    assert [c["op"] for p in fuel["proposals"] for c in p["changes"]] == ["set_day_targets"]
+    assert "skipping p1 week of 2026-09-21: hard sessions on consecutive days" in text
+    assert "skipping p2 set_session_note w2: carbs 95 g/h above the 90 g/h ceiling" in text
+```
+
+`test_yes_approves_the_change_set_and_its_follow_on` already pins the clean case: no `pending_violations`, resume `{"action": "approve"}`, exit 0.
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `uv run pytest packages/tri-coach/tests/test_nodes.py packages/tri-coach/tests/test_checkin.py -v`
+Expected: the two node tests fail with `AttributeError: 'Proposal' object has no attribute 'pending_violations'`. `test_yes_skips_flagged_changes_...` fails with `assert 0 == 1`: `Proposal` ignores the unknown `pending_violations` key and the check-in approves both gates. The other tests pass.
+
+- [ ] **Step 3: Write the implementation**
+
+In `packages/tri-coach/src/tri_coach/models.py`, replace:
+
+```python
+    violations: list[str] = Field(default_factory=list)  # last_error, fuel violations
+```
+
+with:
+
+```python
+    violations: list[str] = Field(default_factory=list)  # last_error, then one line per key below
+    # the sub-graph's pending_violations: planning by week_start ISO, nutrition by tp_workout_id
+    # or "race"; check-in --yes leaves out the changes they cover
+    pending_violations: dict[str, list[str]] = Field(default_factory=dict)
+```
+
+`Proposal` is in `STATE_TYPES` and the new field has a default, so checkpoints written before this change still load.
+
+In `packages/tri-coach/src/tri_coach/graph/nodes/planning.py`, replace:
+
+```python
+from typing import Any
+
+from langchain_core.messages import HumanMessage, ToolMessage
+```
+
+with:
+
+```python
+from collections.abc import Callable
+from typing import Any
+
+from langchain_core.messages import HumanMessage, ToolMessage
+```
+
+and replace:
+
+```python
+def proposal_from_planning(out: dict[str, Any], pid: str) -> Proposal:
+    changes = list(out.get("pending_changes") or [])
+    violations = [out["last_error"]] if out.get("last_error") else []
+    if not changes:
+        return Proposal(
+            id=pid,
+            domain="planning",
+            summary=out.get("pending_summary") or "",
+            violations=violations,
+            question=last_ai_text(out.get("messages", [])) or "no answer",
+        )
+    return Proposal(
+        id=pid,
+        domain="planning",
+        summary=out.get("pending_summary") or "",
+        changes=changes,
+        violations=violations,
+    )
+```
+
+with:
+
+```python
+def keyed_violations(
+    out: dict[str, Any], where: Callable[[str], str]
+) -> tuple[list[str], dict[str, list[str]]]:
+    """A sub-graph run's violations: `last_error`, then one line per `pending_violations` entry
+    (`where` names its key), for the coach and the review; and the entries themselves, which
+    check-in --yes uses to leave the flagged changes out."""
+    raw: dict[str, list[str]] = out.get("pending_violations") or {}
+    keyed = {k: list(v) for k, v in raw.items() if v}
+    lines = [out["last_error"]] if out.get("last_error") else []
+    lines += [f"{where(k)}: " + "; ".join(keyed[k]) for k in sorted(keyed)]
+    return lines, keyed
+
+
+def proposal_from_planning(out: dict[str, Any], pid: str) -> Proposal:
+    changes = list(out.get("pending_changes") or [])
+    violations, keyed = keyed_violations(out, lambda week: f"week of {week}")
+    if not changes:
+        return Proposal(
+            id=pid,
+            domain="planning",
+            summary=out.get("pending_summary") or "",
+            violations=violations,
+            question=last_ai_text(out.get("messages", [])) or "no answer",
+        )
+    return Proposal(
+        id=pid,
+        domain="planning",
+        summary=out.get("pending_summary") or "",
+        changes=changes,
+        violations=violations,
+        pending_violations=keyed,
+    )
+```
+
+In `packages/tri-coach/src/tri_coach/graph/nodes/nutrition.py`, replace:
+
+```python
+from tri_coach.graph.nodes.planning import result_message
+```
+
+with:
+
+```python
+from tri_coach.graph.nodes.planning import keyed_violations, result_message
+```
+
+replace:
+
+```python
+from tri_nutrition.prompts.checkin import BRIEF_PREFIX
+```
+
+with:
+
+```python
+from tri_nutrition.prompts.checkin import BRIEF_PREFIX
+from tri_nutrition.repl import RACE_VIOLATIONS_KEY
+```
+
+and replace:
+
+```python
+def proposal_from_nutrition(out: dict[str, Any], pid: str) -> Proposal:
+    changes = list(out.get("pending_changes") or [])
+    violations = [out["last_error"]] if out.get("last_error") else []
+    overrides = out.get("profile_overrides") or None
+    if not changes:
+        return Proposal(
+            id=pid,
+            domain="nutrition",
+            summary=out.get("pending_summary") or "",
+            violations=violations,
+            question=last_ai_text(out.get("messages", [])) or "no answer",
+        )
+    return Proposal(
+        id=pid,
+        domain="nutrition",
+        summary=out.get("pending_summary") or "",
+        changes=changes,
+        violations=violations,
+        overrides=overrides,
+    )
+
+
+def proposal_from_regenerate(out: dict[str, Any], pid: str) -> Proposal:
+    """No sub-agent ran, so there is never a question: changes, or nothing, or violations."""
+    error = out.get("last_error")
+    return Proposal(
+        id=pid,
+        domain="nutrition",
+        summary=out.get("pending_summary") or error or "",
+        changes=list(out.get("pending_changes") or []),
+        violations=[error] if error else [],
+    )
+```
+
+with:
+
+```python
+def fuel_where(key: str) -> str:
+    """The note a fuel violation belongs to: the race plan's, or a session's by tp_workout_id."""
+    return "race note" if key == RACE_VIOLATIONS_KEY else f"session {key}"
+
+
+def proposal_from_nutrition(out: dict[str, Any], pid: str) -> Proposal:
+    changes = list(out.get("pending_changes") or [])
+    violations, keyed = keyed_violations(out, fuel_where)
+    overrides = out.get("profile_overrides") or None
+    if not changes:
+        return Proposal(
+            id=pid,
+            domain="nutrition",
+            summary=out.get("pending_summary") or "",
+            violations=violations,
+            question=last_ai_text(out.get("messages", [])) or "no answer",
+        )
+    return Proposal(
+        id=pid,
+        domain="nutrition",
+        summary=out.get("pending_summary") or "",
+        changes=changes,
+        violations=violations,
+        pending_violations=keyed,
+        overrides=overrides,
+    )
+
+
+def proposal_from_regenerate(out: dict[str, Any], pid: str) -> Proposal:
+    """No sub-agent ran, so there is never a question: changes, or nothing, or violations."""
+    error = out.get("last_error")
+    violations, keyed = keyed_violations(out, fuel_where)
+    return Proposal(
+        id=pid,
+        domain="nutrition",
+        summary=out.get("pending_summary") or error or "",
+        changes=list(out.get("pending_changes") or []),
+        violations=violations,
+        pending_violations=keyed,
+    )
+```
+
+`follow_on_message` asks the coach to narrate and propose when the proposal has changes, and the coach prompt (`prompts/coach.py:33, 41`) already says to state a proposal's violations. The prompt text stays the same.
+
+In `packages/tri-coach/src/tri_coach/checkin.py`, replace:
+
+```python
+Exit codes, as `tri-planning check-in`: 0 a clean week, or every gate approved and applied;
+1 a model or API error, or an apply that did not complete; 2 neither an active plan nor a
+nutrition profile; 3 paused at review, or refused because a review or a held change set is
+already pending (its owner decides it in chat, and --yes must not approve it) or the thread
+stopped mid-run. --yes approves the change set and a second gate only when it is the nutrition
+follow-on."""
+```
+
+with:
+
+```python
+Exit codes, as `tri-planning check-in`: 0 a clean week, or every gate approved and applied;
+1 a model or API error, an apply that did not complete, or a change skipped under --yes for
+validator violations; 2 neither an active plan nor a nutrition profile; 3 paused at review, or
+refused because a review or a held change set is already pending (its owner decides it in chat,
+and --yes must not approve it) or the thread stopped mid-run. --yes approves the change set and
+a second gate only when it is the nutrition follow-on, and never a change a validator flagged:
+a designed week with violations, or a fuel note with violations."""
+```
+
+replace:
+
+```python
+from typing import Any
+
+from langchain_core.messages import HumanMessage
+from langgraph.types import Command
+
+from tri_coach.prompts.coach import CHECKIN_REQUEST
+from tri_coach.repl import Out, paused_review, render_review, run_turn
+```
+
+with:
+
+```python
+from typing import Any, cast
+
+from langchain_core.messages import HumanMessage
+from langgraph.types import Command
+
+from tri_coach.models import Proposal
+from tri_coach.prompts.coach import CHECKIN_REQUEST
+from tri_coach.repl import Out, paused_review, render_review, run_turn
+from tri_nutrition.nutrition.models import NutritionChange
+from tri_nutrition.repl import split_violating
+from tri_planning.checkin import changes_without_violations
+```
+
+replace:
+
+```python
+def _is_nutrition_follow_on(payload: dict[str, Any]) -> bool:
+    proposals = payload.get("proposals") or []
+    return bool(proposals) and all(p.get("domain") == "nutrition" for p in proposals)
+```
+
+with:
+
+```python
+def _is_nutrition_follow_on(payload: dict[str, Any]) -> bool:
+    proposals = payload.get("proposals") or []
+    return bool(proposals) and all(p.get("domain") == "nutrition" for p in proposals)
+
+
+def without_violations(payload: dict[str, Any]) -> tuple[list[Proposal], list[str]]:
+    """The review payload's proposals with every change a validator flagged left out, and one
+    line per skip. Each domain decides what a violation covers, as its own check-in does: a
+    designed week (tri-planning), a session or race note (tri-nutrition)."""
+    kept: list[Proposal] = []
+    skipped: list[str] = []
+    for raw in payload.get("proposals") or []:
+        p = Proposal.model_validate(raw)
+        keyed = p.pending_violations
+        if p.domain == "planning":
+            dumped = [c.model_dump(mode="json") for c in p.changes]
+            weeks_clean, weeks = changes_without_violations(
+                {"changes": dumped, "violations": keyed}
+            )
+            skipped += [f"{p.id} week of {w}: " + "; ".join(keyed[w]) for w in weeks]
+            kept.append(p.model_copy(update={"changes": weeks_clean}))
+        else:
+            clean, flagged = split_violating(cast(list[NutritionChange], p.changes), keyed)
+            skipped += [
+                f"{p.id} {c.op} {c.target_key or c.day}: " + "; ".join(v) for c, v in flagged
+            ]
+            kept.append(p.model_copy(update={"changes": clean}))
+    return kept, skipped
+```
+
+replace:
+
+```python
+    gates = 0
+    while True:
+```
+
+with:
+
+```python
+    gates = skipped = 0
+    while True:
+```
+
+replace:
+
+```python
+        gates += 1
+        out("check-in: --yes given, approving\n")
+        approve: Command[Any] = Command(resume={"action": "approve"})
+        printer = await run_turn(graph, approve, thread_id, out, tags=CHECKIN_TAGS)
+```
+
+with:
+
+```python
+        gates += 1
+        kept, flagged = without_violations(printer.interrupt)
+        resume: dict[str, Any] = {"action": "approve"}
+        if flagged:
+            # An unattended run never writes a change a validator flagged: the rest go through
+            # as an edit, and the run exits 1 so the cron run is noticed.
+            for line in flagged:
+                out(f"check-in: skipping {line}\n")
+            skipped += len(flagged)
+            out("check-in: --yes given, approving the changes without violations\n")
+            resume = {"action": "edit", "proposals": [p.model_dump(mode="json") for p in kept]}
+        else:
+            out("check-in: --yes given, approving\n")
+        command: Command[Any] = Command(resume=resume)
+        printer = await run_turn(graph, command, thread_id, out, tags=CHECKIN_TAGS)
+```
+
+and replace:
+
+```python
+            out(f"check-in: apply did not complete: {reason}\n")
+            return EXIT_ERROR
+    return EXIT_OK
+```
+
+with:
+
+```python
+            out(f"check-in: apply did not complete: {reason}\n")
+            return EXIT_ERROR
+    return EXIT_ERROR if skipped else EXIT_OK
+```
+
+- [ ] **Step 4: Run the tests to verify they pass**
+
+Run: `uv run pytest packages/tri-coach/tests packages/tri-web/tests packages/tri-planning/tests/test_checkin.py -q`
+Expected: all pass. tri-web renders `Proposal.violations` and forwards the payload's proposals as dicts, so the new key is passed through unchanged.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add packages/tri-coach/src/tri_coach/models.py packages/tri-coach/src/tri_coach/graph/nodes/planning.py packages/tri-coach/src/tri_coach/graph/nodes/nutrition.py packages/tri-coach/src/tri_coach/checkin.py packages/tri-coach/tests/test_nodes.py packages/tri-coach/tests/test_checkin.py
+git commit -m "fix(coach): check-in --yes skips changes with validator violations and exits 1"
+```
+
+---
+
+### Task 22: Final checks
 
 **Files:**
 - Modify: nothing new; this task verifies the branch.
@@ -4062,7 +4585,7 @@ If Brian has applied 006 to the test database, run `uv run pytest -q -rs` and co
 
 - [ ] **Step 2: Nothing this plan touched still reads the old shapes**
 
-Run: `rg -n "line\[1:\]\.split\(\)\[0\]|weekly = float\(tss_row\[\"total\"\]\) / 4|first = week_monday\(today\)$" packages`
+Run: `rg -n "line\[1:\]\.split\(\)\[0\]|weekly = float\(tss_row\[\"total\"\]\) / 4|first = week_monday\(today\)$|approve: Command\[Any\] = Command" packages`
 Expected: no output.
 
 - [ ] **Step 3: Vault copies**
@@ -4076,4 +4599,4 @@ Expected: all pass; `git status` clean.
 
 - [ ] **Step 5: Report**
 
-List for Brian: the final test count against B, the tests that skip until 006 is applied, and the evals to rerun after merge (`tri-analyze eval` (A2 changes an evaluator), `tri-coach eval` (K3 changes the apply report)).
+List for Brian: the final test count against B, the tests that skip until 006 is applied, and the evals to rerun after merge (`tri-analyze eval` (A2 changes an evaluator), `tri-coach eval` (K3 changes the apply report; K5 adds validator violations to the consultation result the coach reads)).

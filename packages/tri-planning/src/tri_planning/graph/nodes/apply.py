@@ -113,7 +113,8 @@ async def _verify(
 def _mark_week_written(conn: Conn, plan_id: int | None, change: CalendarChange) -> None:
     if plan_id is None or change.op != "create" or change.workout_date is None:
         return
-    week = week_monday(change.workout_date)
+    # a designed session writes the week it was designed for, not the one it is dated in
+    week = change.design_week or week_monday(change.workout_date)
     if any(w.week_start == week and w.designed for w in repo.list_weeks(conn, plan_id)):
         repo.mark_weeks_written(conn, plan_id, [week])
 
@@ -303,7 +304,8 @@ async def apply_changes(
         applied.append(change)
         remaining.remove(change)
         if change.op == "create" and change.workout_date is not None:
-            written.add(week_monday(change.workout_date))
+            # a designed session writes the week it was designed for, not the one it is dated in
+            written.add(change.design_week or week_monday(change.workout_date))
         if change.op == "apply_plan":
             tp_plan_applied = True
 

@@ -135,8 +135,9 @@ async def test_a_failing_initialize_closes_the_stack_and_reraises(monkeypatch):
     assert client._stack is None and client._session is None
 
 
-async def test_a_cancelled_initialize_also_closes_the_stack(monkeypatch):
+async def test_a_cancelled_handshake_closes_the_stack_and_stays_cancelled(monkeypatch):
     closed: list[str] = []
+    started = asyncio.Event()
 
     @asynccontextmanager
     async def fake_stdio_client(params):
@@ -145,7 +146,7 @@ async def test_a_cancelled_initialize_also_closes_the_stack(monkeypatch):
         finally:
             closed.append("transport")
 
-    class FakeSession:
+    class HangingSession:
         def __init__(self, read, write) -> None:
             pass
 
@@ -156,18 +157,18 @@ async def test_a_cancelled_initialize_also_closes_the_stack(monkeypatch):
             closed.append("session")
 
         async def initialize(self):
-            await asyncio.Event().wait()  # never set: blocks until cancelled
+            started.set()
+            await asyncio.Event().wait()  # a server that never answers
 
-    monkeypatch.setattr("tri_core.mcp.client.stdio_client", fake_stdio_client)
-    monkeypatch.setattr("tri_core.mcp.client.ClientSession", FakeSession)
-    client = McpToolClient(ServerSpec(name="fake", command="x", args=[]))
-
-    async def enter():
+    async def open_client(client):
         async with client:
             pass
 
-    task = asyncio.create_task(enter())
-    await asyncio.sleep(0.01)  # let it reach the blocked initialize()
+    monkeypatch.setattr("tri_core.mcp.client.stdio_client", fake_stdio_client)
+    monkeypatch.setattr("tri_core.mcp.client.ClientSession", HangingSession)
+    client = McpToolClient(ServerSpec(name="fake", command="x", args=[]))
+    task = asyncio.create_task(open_client(client))
+    await started.wait()
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task

@@ -167,7 +167,8 @@ async def test_bought_plan_is_adopted_after_apply(nocommit, make_deps, mem_store
     workouts = [
         {"id": "w1", "date": MONDAY.isoformat(), "tss_planned": 60, "duration_planned": 1.0}
     ]
-    tp = FakeTp(responses={"tp_get_workouts": {"workouts": workouts, "count": 1}})
+    # empty before the plan is applied, so the adoption owns only what the plan added
+    tp = FakeTp(listings=[[], workouts])
     graph, models = graph_for(
         make_deps,
         mem_store,
@@ -186,7 +187,9 @@ async def test_bought_plan_is_adopted_after_apply(nocommit, make_deps, mem_store
         "tp_apply_training_plan",
         "tp_get_workouts",
     ]
-    assert repo.derive_phase(nocommit)[0] == "active" and out["pending"] is None
+    phase, _, pid = repo.derive_phase(nocommit)
+    assert phase == "active" and out["pending"] is None
+    assert repo.owned_workout_ids(nocommit, pid) == {"w1"}
 
 
 async def test_a_failing_adopt_is_reported_not_raised(nocommit, make_deps, mem_store):

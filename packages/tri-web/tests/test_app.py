@@ -22,6 +22,6 @@ async def test_an_unexpected_error_logs_the_text_and_returns_a_fixed_body(runtim
     async with httpx.AsyncClient(transport=transport, base_url="http://127.0.0.1") as c:
         r = await c.get("/api/coach/thread")
     assert r.status_code == 500 and r.json() == {"detail": "internal error"}
-    # create_app also logs whether web/dist is built; only the error line is under test
-    errors = [line for line in lines if line.startswith("internal error")]
-    assert errors == ["internal error on GET /api/coach/thread: RuntimeError: psycopg went away"]
+    # `web/dist` may or may not exist locally, which adds a "frontend not built" line at
+    # create_app time; only the line the failing request itself logs matters here.
+    assert lines[-1] == "internal error on GET /api/coach/thread: RuntimeError: psycopg went away"

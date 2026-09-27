@@ -20,16 +20,11 @@ def review_node(state: PlanningState) -> dict[str, Any]:
     changes = state.get("pending_changes") or []
     if not changes:
         return {"review_decision": None, "messages": [AIMessage("No calendar changes to review.")]}
-    violating = state.get("pending_violating_changes")
     raw = interrupt(
         {
             "summary": state.get("pending_summary") or "",
             "changes": [c.model_dump(mode="json") for c in changes],
             "violations": state.get("pending_violations") or {},
-            # None when the checkpoint predates this key: check-in --yes then skips by date.
-            "violating_changes": None
-            if violating is None
-            else {w: [c.model_dump(mode="json") for c in cs] for w, cs in violating.items()},
             "last_error": state.get("last_error"),
         }
     )

@@ -158,6 +158,7 @@ def make_targets_node(deps: GraphDeps) -> Any:
                 "pending_changes": changes,
                 "changes_from": "targets",
                 "pending_summary": f"Apply bought plan {goal.tp_plan_id} starting {start}.",
+                "pending_violations": {},
             }
 
         if state.get("plan_id") is not None:
