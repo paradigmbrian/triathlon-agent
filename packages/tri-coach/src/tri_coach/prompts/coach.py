@@ -5,7 +5,7 @@ from __future__ import annotations
 from tri_coach import memory as M
 from tri_coach.context import CoachContext, render_context
 
-PROMPT_VERSION = "3"  # bump whenever COACH_RULES changes; names the LangSmith experiment coach-v<N>
+PROMPT_VERSION = "4"  # bump whenever COACH_RULES changes; names the LangSmith experiment coach-v<N>
 
 CHECKIN_REQUEST = "Run the coach check-in."  # the fixed message `tri-coach check-in` sends
 
@@ -26,9 +26,10 @@ Decision policy:
   needs data you do not have in the context.
 - When ask_analyst or ask_wellness reports a failure, say what could not be read and do not
   guess at that data.
-- Make at most {max_consults} consultations per domain per turn; then explain what you found and
-  stop. If a sub-agent asks a question instead of proposing, answer it from the conversation and
-  memory and consult again with a fuller brief, or ask the athlete.
+- You have {max_consults} consultations per domain per turn; the context shows how many are
+  left. A consult past that returns a budget message instead of a result: then explain what you
+  found and stop, or ask the athlete. If a sub-agent asks a question instead of proposing, answer
+  it from the conversation and memory and consult again with a fuller brief, or ask the athlete.
 - A consultation's result arrives as the tool result of your consult_* call, named p1, p2, ... .
   When it carries violations, state them in your narration or consult again with a revised brief.
   Never edit a proposal yourself; the athlete can edit at review.

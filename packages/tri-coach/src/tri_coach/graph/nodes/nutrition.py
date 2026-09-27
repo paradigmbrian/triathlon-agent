@@ -14,7 +14,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.runnables.config import merge_configs
 from langgraph.errors import GraphBubbleUp
 
-from tri_coach.graph.nodes.planning import keyed_violations, result_message
+from tri_coach.graph.nodes.planning import counted, keyed_violations, result_message
 from tri_coach.graph.state import CoachState
 from tri_coach.models import Proposal
 from tri_core.harness.messages import last_ai_text
@@ -125,6 +125,7 @@ def make_nutrition_node(graph: Any) -> Any:
             "brief": None,
             "proposals": [*proposals, proposal],
             "next_proposal_id": n + 1,
+            "consults": counted(state, "nutrition"),
             "messages": [result_message(brief, proposal)],
         }
 

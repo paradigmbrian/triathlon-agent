@@ -34,14 +34,15 @@ from tri_planning.graph.graph import build_graph as build_planning_graph
 
 
 def start_node(state: CoachState) -> dict[str, Any]:
-    """A new athlete turn: forget last turn's brief, proposals and decision. `pending` survives
-    (a partial apply's remainder) and is shown in the context block; it is re-emitted unchanged so
-    the channel exists in the snapshot from the first turn on."""
+    """A new athlete turn: forget last turn's brief, proposals, decision and consult counts.
+    `pending` survives (a partial apply's remainder) and is shown in the context block; it is
+    re-emitted unchanged so the channel exists in the snapshot from the first turn on."""
     return {
         "pending": state.get("pending"),
         "brief": None,
         "proposals": [],
         "next_proposal_id": 1,
+        "consults": {},
         "proposal_request": None,
         "carried": [],
         "regenerate_after_apply": False,
