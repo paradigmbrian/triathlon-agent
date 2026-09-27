@@ -10,6 +10,7 @@ from datetime import date
 from langchain_core.language_models import BaseChatModel
 from langchain_core.tools import BaseTool
 
+from tri_core.config import readonly_url
 from tri_core.db.connection import connect as core_connect
 from tri_core.db.repo import Conn
 from tri_core.sync import ToolCaller
@@ -22,7 +23,7 @@ ConnectFactory = Callable[[], AbstractContextManager[Conn]]
 class GraphDeps:
     model: BaseChatModel  # the intake and adjust sub-agents
     connect: ConnectFactory
-    db_url: str  # for the read-only SQL tool, which opens its own connections
+    readonly_db_url: str  # the SQL tool's tri_reader URL; it opens its own connections
     tp: ToolCaller | None = None  # live TrainingPeaks session; None when the server is down
     garmin_tools: list[BaseTool] = field(default_factory=list)  # Plan 4
     horizon_weeks: int = 3
@@ -41,7 +42,7 @@ def make_deps(
     return GraphDeps(
         model=model,
         connect=lambda: core_connect(url),
-        db_url=url,
+        readonly_db_url=readonly_url(settings),
         tp=tp,
         horizon_weeks=settings.tri_planning_horizon_weeks,
         design_model=design_model,

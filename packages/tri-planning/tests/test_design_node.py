@@ -185,7 +185,9 @@ async def test_design_week_uses_the_design_model_when_one_is_set(monkeypatch):
 
     monkeypatch.setattr(design_node, "structured", spy)
     agent, designer = ScriptedChatModel(script=[]), ScriptedChatModel(script=[])
-    deps = GraphDeps(model=agent, connect=lambda: contextlib.nullcontext(None), db_url="unused")
+    deps = GraphDeps(
+        model=agent, connect=lambda: contextlib.nullcontext(None), readonly_db_url="unused"
+    )
     with pytest.raises(_Stop):
         await design_week(deps, None, None, None, None, None, {})
     deps.design_model = designer

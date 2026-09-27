@@ -26,7 +26,7 @@ def make_deps(nocommit):
         return GraphDeps(
             model=model,
             connect=lambda: contextlib.nullcontext(nocommit),
-            db_url=Settings().test_database_url,
+            readonly_db_url=Settings().test_database_url,
             tp=tp,
             garmin_tools=list(garmin_tools or []),
             horizon_weeks=horizon,

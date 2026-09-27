@@ -43,11 +43,11 @@ def make_test_deps(
         model=coach,
         analyst_model=analyst,
         connect=connect,
-        db_url=url,
+        readonly_db_url=url,
         planning_deps=PlanningDeps(
             model=planning,
             connect=connect,
-            db_url=url,
+            readonly_db_url=url,
             tp=tp,
             horizon_weeks=3,
             today=lambda: today,
@@ -55,7 +55,7 @@ def make_test_deps(
         nutrition_deps=NutritionDeps(
             model=nutrition,
             connect=connect,
-            db_url=url,
+            readonly_db_url=url,
             garmin=garmin,
             tp=tp,
             horizon_days=3,

@@ -36,21 +36,24 @@ ASK_WELLNESS_DESCRIPTION = inspect.cleandoc(
 
 
 def wellness_tools(
-    connect: ConnectFactory, db_url: str, registry: MarkerRegistry
+    connect: ConnectFactory, readonly_db_url: str, registry: MarkerRegistry
 ) -> list[BaseTool]:
     """What tri-wellness chat binds: the SQL read tool with the lab schema doc and the three
     findings tools. None of them writes."""
-    return [make_query_tool(db_url, WELLNESS_SCHEMA_DOC), *make_findings_tools(connect, registry)]
+    return [
+        make_query_tool(readonly_db_url, WELLNESS_SCHEMA_DOC),
+        *make_findings_tools(connect, registry),
+    ]
 
 
 def make_wellness_tool(
     model: BaseChatModel,
     connect: ConnectFactory,
-    db_url: str,
+    readonly_db_url: str,
     registry: MarkerRegistry,
     today: Callable[[], date],
 ) -> BaseTool:
-    tools = wellness_tools(connect, db_url, registry)
+    tools = wellness_tools(connect, readonly_db_url, registry)
     names = [t.name for t in tools]
 
     def prepare() -> Invocation:

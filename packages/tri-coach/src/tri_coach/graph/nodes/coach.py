@@ -27,7 +27,11 @@ def make_coach_node(deps: CoachDeps) -> Any:
     wellness = (
         [
             make_wellness_tool(
-                deps.wellness_model, deps.connect, deps.db_url, deps.wellness_registry, deps.today
+                deps.wellness_model,
+                deps.connect,
+                deps.readonly_db_url,
+                deps.wellness_registry,
+                deps.today,
             )
         ]
         if deps.wellness_registry is not None

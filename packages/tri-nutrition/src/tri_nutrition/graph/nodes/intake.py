@@ -33,7 +33,7 @@ def profile_saved_from_messages(messages: Sequence[AnyMessage]) -> bool:
 
 def make_intake_node(deps: GraphDeps) -> Any:
     tools = [
-        make_query_tool(deps.db_url),
+        make_query_tool(deps.readonly_db_url),
         make_plan_tool(deps.connect, deps.today, deps.horizon_days),
         *make_garmin_read_tools(deps.garmin, deps.today, only=INTAKE_READ_TOOLS),
         *make_profile_tools(deps.today),
