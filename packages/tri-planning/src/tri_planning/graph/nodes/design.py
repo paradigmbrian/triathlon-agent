@@ -1,11 +1,12 @@
-"""Design node: one structured-output call per window week, validated, retried once."""
+"""Design node: one structured-output call per window week, scaled to its target, validated,
+retried once; a week that still fails is stored with its violations and not proposed."""
 
 from __future__ import annotations
 
 from datetime import date, timedelta
 from typing import Any
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.runnables.config import merge_configs
 
@@ -28,6 +29,10 @@ from tri_planning.planning.tss import scale_to_target
 from tri_planning.prompts.design import DESIGN_SYSTEM, render_design_prompt
 
 NO_WEEK = "the designer returned no week in two attempts"
+
+
+def not_designed_line(week_start: date, violations: list[str]) -> str:
+    return f"week {week_start}: not designed: " + "; ".join(violations)
 
 
 def window_weeks(weeks: list[PlanWeekRow], today: date, horizon: int) -> list[PlanWeekRow]:
@@ -137,28 +142,35 @@ def make_design_node(deps: GraphDeps) -> Any:
                 deps, goal, target, thresholds, previous, note, config
             )
             with deps.connect() as conn:
-                repo.set_week_designed(conn, plan_id, row.week_start, week)
+                if violations:
+                    repo.set_week_designed(conn, plan_id, row.week_start, None, violations)
+                else:
+                    repo.set_week_designed(conn, plan_id, row.week_start, week)
                 conn.commit()
+            if violations:
+                # still failing after the retry: stored with its reasons, never proposed
+                flagged[row.week_start.isoformat()] = violations
+                notes.append(not_designed_line(row.week_start, violations))
+                continue
             changes.extend(session_changes(week, target))
-            line = (
+            notes.append(
                 f"{row.week_start} ({target.phase}, target {target.target_tss:.0f} TSS): "
                 f"{len(week.sessions)} sessions, {week.total_tss:.0f} TSS, {week.total_hours:.1f} h"
             )
-            if violations:
-                line += "\n  VIOLATIONS: " + "; ".join(violations)
-                flagged[row.week_start.isoformat()] = violations
-            notes.append(line)
             previous = week
 
         if goal.create_tp_event and stored.tp_event_id is None and goal.event_date is not None:
             changes.insert(0, event_change(goal))
         summary = "\n".join(notes) if notes else "No weeks to design inside the horizon."
-        return {
+        update: dict[str, Any] = {
             "pending_changes": changes,
             "pending_summary": summary,
             "pending_violations": flagged,
             "changes_from": "design",
             "review_decision": None,
         }
+        if not changes:
+            update["messages"] = [AIMessage(summary)]  # nothing to review: the turn ends here
+        return update
 
     return design
