@@ -65,7 +65,8 @@ Steps 3 (the API key), 4 and 5 stay manual. The steps it automates:
    ```bash
    uvx --python 3.12 --from git+https://github.com/Taxuspt/garmin_mcp@<ref> garmin-mcp-auth
    # log into app.trainingpeaks.com in Chrome first, then:
-   uvx --from git+https://github.com/JamsusMaximus/trainingpeaks-mcp@<ref> tp-mcp auth --from-browser chrome
+   uvx --from 'tp-mcp[browser] @ git+https://github.com/JamsusMaximus/trainingpeaks-mcp@<ref>' tp-mcp auth --from-browser chrome
+   uvx --from git+https://github.com/JamsusMaximus/trainingpeaks-mcp@<ref> tp-mcp auth-status
    ```
 5. First sync: `uv run tri sync --full` (a year of TrainingPeaks, 60 days of Garmin).
 6. Checkpoint and LangGraph store tables (once per database): `uv run python scripts/setup_checkpointer.py <url>`
