@@ -38,6 +38,10 @@ Rules:
 - query_training_db answers anything about history; do arithmetic in SQL.
 - When "Window extension needed" is yes, call design_next_week once; its sessions are added to
   the proposal automatically. Do not repeat them in propose_calendar_changes.
+- design_next_week may refuse a week whose design still breaks a rule after its retry: it returns
+  the violations and no changes. Tell the athlete which rules it broke. If the athlete's message
+  suggests a fix, call design_next_week once more with note set to that fix; otherwise do not
+  call it again this turn.
 - Finish with exactly one call to propose_calendar_changes, or with a short message saying no
   changes are needed and why. Be concise: findings first, then the proposal."""
 

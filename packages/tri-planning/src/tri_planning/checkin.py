@@ -1,7 +1,7 @@
 """Non-interactive review: one graph turn with the fixed check-in prompt.
 
-Exit codes: 0 applied or nothing to do, 1 model/API error, apply failure, or a week skipped
-for validator violations under --yes, 2 no active plan, 3 paused at review.
+Exit codes: 0 applied or nothing to do, 1 model/API error, apply failure, a week not designed
+for validator violations, or one skipped under --yes, 2 no active plan, 3 paused at review.
 """
 
 from __future__ import annotations
@@ -74,7 +74,11 @@ async def run_checkin(
     if printer.error is not None:
         return EXIT_ERROR
     if printer.interrupt is None:
-        return EXIT_OK
+        # nothing to review, but a week the design refused must not pass silently
+        refused = (await graph.aget_state(cfg)).values.get("pending_violations") or {}
+        for week in sorted(refused):
+            out(f"check-in: week of {week} not designed: {'; '.join(refused[week])}\n")
+        return EXIT_ERROR if refused else EXIT_OK
     out(render_changes(printer.interrupt) + "\n")
     if not yes:
         out("check-in: paused at review; run `tri-planning chat` and type /pending to decide\n")

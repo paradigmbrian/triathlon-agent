@@ -139,15 +139,15 @@ async def test_embedded_adjust_ends_with_pending_changes_and_no_interrupt(nocomm
     assert tp.calls == []
 
 
-async def test_review_payload_carries_the_designed_weeks_violations(nocommit, make_deps):
-    seed_active(nocommit)
+async def test_a_refused_week_ends_the_adjust_turn_without_a_review(nocommit, make_deps):
+    _, pid = seed_active(nocommit)
     bad = week_json(MONDAY + timedelta(weeks=1), 300, hard_on_consecutive_days=True)
     model = ScriptedChatModel(
         script=[
             tool_call("design_next_week", {}),
             tool_call("DesignedWeek", bad),
             tool_call("DesignedWeek", bad),
-            AIMessage(content="Next week designed."),
+            AIMessage(content="Next week's design broke a rule; tell me what to change."),
         ]
     )
     graph = build_graph(
@@ -155,6 +155,7 @@ async def test_review_payload_carries_the_designed_weeks_violations(nocommit, ma
         InMemorySaver(),
     )
     out = await graph.ainvoke({"messages": [HumanMessage("check in")]}, CFG)
-    payload = out["__interrupt__"][0].value
-    assert list(payload["violations"]) == ["2026-09-21"]
-    assert "consecutive" in payload["violations"]["2026-09-21"][0]
+    assert "__interrupt__" not in out
+    assert list(out["pending_violations"]) == ["2026-09-21"]
+    assert "consecutive" in out["pending_violations"]["2026-09-21"][0]
+    assert repo.list_weeks(nocommit, pid)[1].designed is None

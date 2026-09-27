@@ -195,3 +195,9 @@ def test_directed_section_is_stable_and_names_the_prefix():
     assert "smallest change set" in text and "ask one question" in text
     assert "athlete_requested" in text.split("Directed briefs")[1]
     assert text.index("Review checklist") < text.index("Directed briefs") < text.index("Today is")
+
+
+def test_rules_say_how_to_handle_a_refused_week():
+    from tri_planning.prompts.adjust import ADJUST_RULES
+
+    assert "refuse" in ADJUST_RULES and "note" in ADJUST_RULES

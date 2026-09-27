@@ -19,10 +19,14 @@ from tri_planning.planning.targets import week_monday
 def make_design_next_week_tool(
     deps: GraphDeps, plan_id_getter: Callable[[], int | None]
 ) -> BaseTool:
-    async def design_next_week(config: Annotated[RunnableConfig, InjectedToolArg]) -> str:
-        """Design the next plan week that is not yet on the calendar (sessions, TSS, structure)
-        so at least two weeks ahead stay covered. Its sessions join the proposal automatically.
-        Re-designs a week that was designed but never approved."""
+    async def design_next_week(
+        config: Annotated[RunnableConfig, InjectedToolArg], note: str | None = None
+    ) -> str:
+        """Design the next plan week that is not yet on the calendar (sessions, durations,
+        structure) so at least two weeks ahead stay covered. Its sessions join the proposal
+        automatically. Re-designs a week that was designed but never approved. A week whose
+        design still breaks a rule after one retry is refused: you get its violations and no
+        changes. `note`: what the athlete wants changed, when calling again after a refusal."""
         plan_id = plan_id_getter()
         if plan_id is None:
             return json.dumps({"error": "no active plan"})
@@ -56,17 +60,24 @@ def make_design_next_week_tool(
             None,
         )
         week, violations = await design_week(
-            deps, stored.goal, target, thresholds, previous, None, config
+            deps, stored.goal, target, thresholds, previous, note, config
         )
         with deps.connect() as conn:
-            repo.set_week_designed(conn, plan_id, row.week_start, week)
+            if violations:
+                repo.set_week_designed(conn, plan_id, row.week_start, None, violations)
+            else:
+                repo.set_week_designed(conn, plan_id, row.week_start, week)
             conn.commit()
+        if violations:
+            return json.dumps(
+                {"week_start": row.week_start.isoformat(), "violations": violations, "changes": []}
+            )
         changes = session_changes(week, target)
         return json.dumps(
             {
                 "week_start": row.week_start.isoformat(),
                 "coach_note": week.coach_note,
-                "violations": violations,
+                "violations": [],
                 "changes": [c.model_dump(mode="json") for c in changes],
             }
         )

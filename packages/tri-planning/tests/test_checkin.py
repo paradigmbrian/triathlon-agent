@@ -202,3 +202,25 @@ def test_the_filter_still_drops_an_undesigned_change_dated_in_a_flagged_week():
     }
     kept, _ = changes_without_violations(payload)
     assert [c.workout_date for c in kept] == [date(2026, 10, 6)]
+
+
+class RefusedGraph(StubGraph):
+    """After its turn, the state holds a week the design refused."""
+
+    async def aget_state(self, config):
+        snap = await super().aget_state(config)
+        if self.inputs:
+            snap.values["pending_violations"] = {
+                "2026-09-21": ["hard sessions on consecutive days"]
+            }
+        return snap
+
+
+async def test_a_week_refused_with_nothing_to_review_exits_1():
+    printed: list[str] = []
+    code = await run_checkin(RefusedGraph([[]]), phase="active", yes=True, out=printed.append)
+    assert code == 1
+    assert (
+        "check-in: week of 2026-09-21 not designed: hard sessions on consecutive days"
+        in "".join(printed)
+    )

@@ -110,4 +110,36 @@ async def test_config_not_exposed_in_model_facing_schema(make_deps):
     tool = make_design_next_week_tool(deps, lambda: None)
 
     assert tool.args_schema is not None
-    assert tool.args_schema.model_json_schema()["properties"] == {}
+    assert set(tool.args_schema.model_json_schema()["properties"]) == {"note"}
+
+
+async def test_a_refused_week_returns_its_violations_and_no_changes(nocommit, make_deps):
+    gid, pid, targets = seed(nocommit)
+    repo.mark_weeks_written(nocommit, pid, [MONDAY])
+    week1 = MONDAY + timedelta(weeks=1)
+    bad = week_json(week1, targets[1].target_tss, hard_on_consecutive_days=True)
+    model = ScriptedChatModel(script=[structured(bad), structured(bad)])
+    tool = make_design_next_week_tool(make_deps(model, horizon=3), lambda: pid)
+    out = json.loads(await tool.ainvoke({}))
+    assert set(out) == {"week_start", "violations", "changes"}
+    assert out["week_start"] == week1.isoformat() and out["changes"] == []
+    assert any("consecutive" in v for v in out["violations"])
+    stored = repo.list_weeks(nocommit, pid)[1]
+    assert stored.designed is None and stored.violations == out["violations"]
+
+
+async def test_a_note_reaches_the_design_prompt(nocommit, make_deps):
+    gid, pid, targets = seed(nocommit)
+    repo.mark_weeks_written(nocommit, pid, [MONDAY])
+    captured = []
+
+    class Spy(ScriptedChatModel):
+        def _generate(self, messages, *a, **k):
+            captured.append(messages[-1].content)
+            return super()._generate(messages, *a, **k)
+
+    week1 = MONDAY + timedelta(weeks=1)
+    model = Spy(script=[structured(week_json(week1, targets[1].target_tss))])
+    tool = make_design_next_week_tool(make_deps(model, horizon=3), lambda: pid)
+    await tool.ainvoke({"note": "swap the Thursday run for a swim"})
+    assert "swap the Thursday run for a swim" in captured[0]

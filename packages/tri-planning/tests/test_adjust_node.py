@@ -322,8 +322,8 @@ async def test_design_violations_become_pending_violations(nocommit, make_deps):
         CFG,
     )
     assert list(out["pending_violations"]) == ["2026-09-21"]
-    assert any("consecutive" in v for v in out["pending_violations"]["2026-09-21"])
-    assert len(out["pending_changes"]) == 3
+    assert out["pending_changes"] == [] and out["changes_from"] is None
+    assert out["pending_summary"].startswith("week 2026-09-21: not designed: ")
 
 
 def test_a_designed_week_keeps_its_origin_so_a_stray_session_is_filtered_with_it():
@@ -340,3 +340,22 @@ def test_a_designed_week_keeps_its_origin_so_a_stray_session_is_filtered_with_it
         {"changes": [c.model_dump(mode="json") for c in changes], "violations": violations}
     )
     assert [c.workout.title for c in kept] == ["clean"] and skipped == ["2026-09-21"]
+
+
+def test_changes_from_messages_names_a_refused_week_in_the_summary():
+    refused = ToolMessage(
+        content=json.dumps(
+            {"week_start": "2026-09-21", "violations": ["hard days"], "changes": []}
+        ),
+        name="design_next_week",
+        tool_call_id="1",
+    )
+    changes, summary, violations = changes_from_messages(
+        [refused, design_message(week_start="2026-09-28", title="clean", call_id="2")]
+    )
+    assert [c.workout.title for c in changes] == ["clean"]
+    assert violations == {"2026-09-21": ["hard days"]}
+    assert summary.splitlines() == [
+        "Designed week(s) 2026-09-28 added to the calendar proposal.",
+        "week 2026-09-21: not designed: hard days",
+    ]
