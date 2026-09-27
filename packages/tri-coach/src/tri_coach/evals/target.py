@@ -16,14 +16,14 @@ from langchain_core.messages import AIMessage, convert_to_messages
 from langchain_core.tools import BaseTool, StructuredTool
 
 from tri_coach import memory as M
-from tri_coach.evals.cases import Route
+from tri_coach.evals.cases import EVAL_MAX_CONSULTS, Route
 from tri_coach.prompts.coach import COACH_RULES
 from tri_coach.tools.handoff import make_handoff_tools
 from tri_coach.tools.memory import make_memory_tools
 from tri_core.harness.agents import make_subagent, one_tool_call_at_a_time
 from tri_core.harness.messages import last_ai_text
 
-MAX_CONSULTS = 2
+MAX_CONSULTS = EVAL_MAX_CONSULTS
 TARGET_RECURSION_LIMIT = 30
 HANDOFFS: dict[str, Route] = {"consult_planning": "planning", "consult_nutrition": "nutrition"}
 REAL_DESCRIPTIONS = {
@@ -31,21 +31,30 @@ REAL_DESCRIPTIONS = {
 }
 
 
-def stub_tools(inputs: dict[str, Any]) -> list[BaseTool]:
+def stub_tools(
+    inputs: dict[str, Any], served: list[dict[str, str]] | None = None
+) -> list[BaseTool]:
     n = 0
+    log = served if served is not None else []
+
+    def record(name: str, answer: str) -> str:
+        log.append({"name": name, "answer": answer})
+        return answer
 
     async def ask_analyst(question: str) -> str:
         """Ask the analyst about past sessions, trends, readiness, sleep, HRV, body composition,
         logged intake against nutrition targets, or how training compares to plan. It reads the
         database and the devices; it changes nothing. Ask one specific question at a time."""
-        return str(inputs.get("analyst_answer") or "No data found for that question.")
+        return record(
+            "ask_analyst", str(inputs.get("analyst_answer") or "No data found for that question.")
+        )
 
     async def ask_wellness(question: str) -> str:
         """Ask the lab interpreter about the athlete's lab panels: a marker's value against its
         functional range, what is outside optimal and why, the retest plan, supplements, or
         whether a symptom could be lab-related. It reads stored panels and reports; it changes
         nothing. Ask one specific question at a time."""
-        return str(inputs.get("wellness_answer") or "No panel stored.")
+        return record("ask_wellness", str(inputs.get("wellness_answer") or "No panel stored."))
 
     def proposal(domain: str) -> str:
         nonlocal n
@@ -53,10 +62,10 @@ def stub_tools(inputs: dict[str, Any]) -> list[BaseTool]:
         return f"p{n} ({domain}): a proposal that satisfies the brief\n1 change"
 
     async def consult_planning(instruction: str) -> str:
-        return proposal("planning")
+        return record("consult_planning", proposal("planning"))
 
     async def consult_nutrition(instruction: str) -> str:
-        return proposal("nutrition")
+        return record("consult_nutrition", proposal("nutrition"))
 
     async def propose_changes(narration: str, proposal_ids: list[str]) -> str:
         return f"change set {proposal_ids} sent to the athlete for review"
@@ -109,7 +118,10 @@ async def run_case(model: BaseChatModel, inputs: dict[str, Any]) -> dict[str, An
         [COACH_RULES.format(max_consults=MAX_CONSULTS), inputs["context"], inputs["memory"]]
     )
     history = convert_to_messages(inputs["messages"])
-    agent = make_subagent(model, stub_tools(inputs), prompt, middleware=[one_tool_call_at_a_time])
+    served: list[dict[str, str]] = []
+    agent = make_subagent(
+        model, stub_tools(inputs, served), prompt, middleware=[one_tool_call_at_a_time]
+    )
     out = await agent.ainvoke({"messages": history}, {"recursion_limit": TARGET_RECURSION_LIMIT})
     new = out["messages"][len(history) :]
     calls: list[dict[str, Any]] = [
@@ -123,6 +135,7 @@ async def run_case(model: BaseChatModel, inputs: dict[str, Any]) -> dict[str, An
         "route": classify(calls),
         "briefs": [str(c["args"].get("instruction", "")) for c in calls if c["name"] in HANDOFFS],
         "answer": last_ai_text(new),
+        "served": served,
     }
 
 

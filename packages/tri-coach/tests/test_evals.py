@@ -12,6 +12,7 @@ from tri_coach.evals.cases import CASES, ROUTES
 from tri_coach.evals.evaluators import (
     make_brief_judge,
     no_unrequested_adjustment,
+    render_judge_prompt,
     routing_accuracy,
 )
 from tri_coach.evals.run import DATASET_NAME, case_examples, ensure_dataset
@@ -159,6 +160,7 @@ async def test_brief_judge_scores_every_brief_and_skips_a_turn_without_one():
         "names_signal": True,
         "names_lever": True,
         "names_constraint": False,
+        "grounded": True,
         "problems": ["no constraint named"],
     }
     c = case("knee_pain_planning")
@@ -261,3 +263,60 @@ async def test_run_eval_uses_the_coach_and_judge_roles(monkeypatch):
         "judge_model": "claude-opus-5",
     }
     assert f"(prompt version {PROMPT_VERSION}):" in "\n".join(logged)
+
+
+async def test_the_target_returns_every_answer_it_served():
+    c = case("knee_pain_planning")
+    model = ScriptedChatModel(
+        script=[
+            tool_call("ask_analyst", {"question": "Runs since Sunday?"}, "a1"),
+            tool_call("consult_planning", {"instruction": "Knee. No running 7 days."}, "c1"),
+            AIMessage(content="Planning will move the runs."),
+        ]
+    )
+    out = await make_target(model)(c.inputs())
+    assert [s["name"] for s in out["served"]] == ["ask_analyst", "consult_planning"]
+    assert out["served"][0]["answer"] == c.inputs()["analyst_answer"]
+    assert out["served"][1]["answer"].startswith("p1 (planning)")
+
+
+def test_the_judge_sees_context_memory_conversation_and_served_answers():
+    c = case("knee_pain_planning")
+    served = [{"name": "ask_analyst", "answer": "TSB -18 entering the week."}]
+    text = render_judge_prompt(c.inputs(), {"served": served}, "TSB -18. Drop Thursday's run.")
+    inputs = c.inputs()
+    assert inputs["context"] in text and inputs["memory"] in text
+    assert all(m["content"] in text for m in inputs["messages"])
+    assert "ask_analyst: TSB -18 entering the week." in text
+    assert text.rstrip().endswith("TSB -18. Drop Thursday's run.")
+    bare = render_judge_prompt(c.inputs(), {}, "b")
+    assert "Tool answers this turn:\n(none)" in bare
+
+
+async def test_an_ungrounded_brief_fails_naming_its_index():
+    good = {
+        "bounded": True,
+        "names_signal": True,
+        "names_lever": True,
+        "names_constraint": True,
+        "grounded": True,
+        "problems": [],
+    }
+    bad = {**good, "grounded": False, "problems": ["Ferritin 18 appears nowhere"]}
+    judge = make_brief_judge(
+        ScriptedChatModel(
+            script=[tool_call("BriefJudgement", good), tool_call("BriefJudgement", bad)]
+        )
+    )
+    res = await judge(case("knee_pain_planning").inputs(), {"briefs": ["one", "two"]})
+    assert res["score"] == 0 and res["comment"] == "brief 2: Ferritin 18 appears nowhere"
+
+
+async def test_a_raising_brief_judge_scores_zero_with_the_error():
+    judge = make_brief_judge(ScriptedChatModel(script=[]))  # IndexError on the first call
+    res = await judge(case("knee_pain_planning").inputs(), {"briefs": ["one"]})
+    assert res["score"] == 0 and res["comment"].startswith("judge failed: IndexError")
+
+
+def test_the_eval_context_names_the_consults_left():
+    assert "Consults left this turn: planning 2, nutrition 2." in case("knee_pain_planning").context

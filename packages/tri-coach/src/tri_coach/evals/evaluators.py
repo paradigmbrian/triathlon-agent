@@ -1,6 +1,7 @@
 """Evaluators over one coach turn: two code checks over the tool calls (the route taken, and no
 handoff for a pure question) and an LLM judge over each brief. A check that does not apply to a
-case scores None, which the pass rate leaves out."""
+case scores None, which the pass rate leaves out. The judge sees the context, memory, conversation
+and every tool answer the target served, so an invented number fails."""
 
 from __future__ import annotations
 
@@ -51,7 +52,15 @@ class BriefJudgement(BaseModel):
     names_signal: bool = Field(description="states what was observed or reported that warrants it")
     names_lever: bool = Field(description="states what to change")
     names_constraint: bool = Field(description="states what must hold while changing it")
-    problems: list[str] = Field(description="one line per missing element or overreach")
+    grounded: bool = Field(
+        description=(
+            "every number, date and lab value in the brief appears in the context block, the "
+            "memory, the conversation or a sub-agent answer"
+        )
+    )
+    problems: list[str] = Field(
+        description="one line per missing element, overreach, or number that appears nowhere"
+    )
 
 
 JUDGE_SYSTEM = """\
@@ -59,14 +68,25 @@ You audit one brief a head coach wrote to a planning or nutrition sub-agent. A g
 bounded (one specific change the sub-agent can carry out without deciding anything else) and
 names three things: the signal (what was observed or reported, with numbers or dates when the
 conversation has them), the lever (what to change) and the constraint (what must hold, such as
-a weekly TSS band, a session to keep, or the nutrition goal). You are given the athlete's last
-message and the brief. Judge the brief's text literally; return a BriefJudgement."""
+a weekly TSS band, a session to keep, or the nutrition goal).
+
+You are given what the coach knew: its context block, its memory, the whole conversation and
+the answers its tools returned this turn (the analyst, the lab interpreter, earlier
+consultations). Grounded: every number, date and lab value in the brief appears in one of
+those. A figure that appears nowhere is invented, however plausible: name it in problems.
+Judge the brief's text literally; return a BriefJudgement."""
 
 
-def render_judge_prompt(inputs: dict[str, Any], brief: str) -> str:
-    messages = inputs.get("messages") or []
-    last = str(messages[-1]["content"]) if messages else ""
-    return f"Athlete's last message:\n{last}\n\nBrief:\n{brief}"
+def render_judge_prompt(inputs: dict[str, Any], outputs: dict[str, Any], brief: str) -> str:
+    conversation = "\n".join(f"{m['role']}: {m['content']}" for m in inputs.get("messages") or [])
+    served = "\n".join(f"{s['name']}: {s['answer']}" for s in outputs.get("served") or [])
+    return (
+        f"Context block:\n{inputs.get('context', '')}\n\n"
+        f"Memory:\n{inputs.get('memory', '')}\n\n"
+        f"Conversation:\n{conversation or '(none)'}\n\n"
+        f"Tool answers this turn:\n{served or '(none)'}\n\n"
+        f"Brief:\n{brief}"
+    )
 
 
 def make_brief_judge(model: BaseChatModel) -> AsyncEvaluator:
@@ -76,17 +96,32 @@ def make_brief_judge(model: BaseChatModel) -> AsyncEvaluator:
         briefs = [b for b in outputs.get("briefs") or [] if b]
         if not briefs:
             return {"key": "brief_quality", "score": None, "comment": "no brief"}
-        ok = True
-        problems: list[str] = []
-        for brief in briefs:
-            out = await judge.ainvoke(
-                [SystemMessage(JUDGE_SYSTEM), HumanMessage(render_judge_prompt(inputs, brief))]
-            )
-            assert isinstance(out, BriefJudgement)
+        failed: list[str] = []
+        for i, brief in enumerate(briefs, 1):
+            try:
+                out = await judge.ainvoke(
+                    [
+                        SystemMessage(JUDGE_SYSTEM),
+                        HumanMessage(render_judge_prompt(inputs, outputs, brief)),
+                    ]
+                )
+                assert isinstance(out, BriefJudgement)
+            except Exception as exc:  # noqa: BLE001 - scored, not raised, like the analyst judge
+                comment = f"judge failed: {type(exc).__name__}: {exc}"
+                return {"key": "brief_quality", "score": 0, "comment": comment}
             ok = (
-                ok and out.bounded and out.names_signal and out.names_lever and out.names_constraint
+                out.bounded
+                and out.names_signal
+                and out.names_lever
+                and out.names_constraint
+                and out.grounded
             )
-            problems += out.problems
-        return {"key": "brief_quality", "score": int(ok), "comment": "; ".join(problems) or "ok"}
+            if not ok:
+                failed.append(f"brief {i}: " + ("; ".join(out.problems) or "no problem named"))
+        return {
+            "key": "brief_quality",
+            "score": int(not failed),
+            "comment": " | ".join(failed) or "ok",
+        }
 
     return brief_quality
