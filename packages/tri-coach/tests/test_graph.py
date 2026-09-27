@@ -396,3 +396,28 @@ async def test_checkin_yes_leaves_out_a_designed_week_with_violations(
     written = sorted(args["date"][:10] for tool, args in tp.calls if tool == "tp_create_workout")
     assert written == sorted(s["date"] for s in week2["sessions"] + week3["sessions"])
     assert [w.written_to_tp for w in repo.list_weeks(nocommit, pid)] == [False, True, True]
+
+
+async def test_a_consultation_streams_its_sub_graph_and_checkpoints_nothing(
+    nocommit, make_deps, mem_store
+):
+    seed_active_plan(nocommit)
+    saver = InMemorySaver(serde=make_serde(STATE_TYPES))
+    models = scripted(
+        coach=[
+            consult("planning", "Knee pain. Move w1 off Wednesday; hold weekly TSS."),
+            AIMessage(content="Planning suggests moving Wednesday's tempo to Friday."),
+        ],
+        planning=[move_call(), AIMessage(content="Proposed a move.")],
+        nutrition=[],
+        analyst=[],
+    )
+    graph = build_graph(make_deps(tp=FakeTp(), **models), saver, mem_store)
+    seen = set()
+    async for ns, _mode, _data in graph.astream(
+        {"messages": [HumanMessage("my knee hurts")]}, CFG, stream_mode=["updates"], subgraphs=True
+    ):
+        seen.add(ns[0].split(":")[0] if ns else "")
+    assert "planning" in seen  # the REPL and tri-web still see the sub-agent's steps
+    saved = {c.config["configurable"].get("checkpoint_ns", "") for c in saver.list(None)}
+    assert saved == {""}  # nothing under planning:<task id>; the parent owns the messages

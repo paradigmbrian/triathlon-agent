@@ -19,7 +19,6 @@ from __future__ import annotations
 from typing import Any
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
-from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.store.base import BaseStore
 
@@ -30,11 +29,8 @@ from tri_coach.graph.nodes.nutrition import make_nutrition_node
 from tri_coach.graph.nodes.planning import make_planning_node
 from tri_coach.graph.nodes.review import review_node
 from tri_coach.graph.state import CoachState
-from tri_core.harness.persistence import make_serde
 from tri_nutrition.graph.graph import build_graph as build_nutrition_graph
-from tri_nutrition.graph.state import STATE_TYPES as NUTRITION_STATE_TYPES
 from tri_planning.graph.graph import build_graph as build_planning_graph
-from tri_planning.graph.state import STATE_TYPES as PLANNING_STATE_TYPES
 
 
 def start_node(state: CoachState) -> dict[str, Any]:
@@ -67,18 +63,11 @@ def after_apply(state: CoachState) -> str:
 
 
 def build_graph(deps: CoachDeps, checkpointer: BaseCheckpointSaver[Any], store: BaseStore) -> Any:
-    # Private in-memory savers: every consultation runs in a fresh checkpoint namespace and
-    # nothing a sub-graph did is persisted or seen by the next consultation. Each carries its own
-    # package's serde, so its state models round trip without the default's warning.
-    planning_graph = build_planning_graph(
-        deps.planning_deps, InMemorySaver(serde=make_serde(PLANNING_STATE_TYPES)), embedded=True
-    )
-    nutrition_graph = build_nutrition_graph(
-        deps.nutrition_deps,
-        InMemorySaver(serde=make_serde(NUTRITION_STATE_TYPES)),
-        store,
-        embedded=True,
-    )
+    # No checkpointer: a graph invoked inside a node would otherwise take the parent config's
+    # checkpointer and save every step under thread "coach". The coach's state already carries
+    # what a consultation returns, and each consultation starts fresh.
+    planning_graph = build_planning_graph(deps.planning_deps, False, embedded=True)
+    nutrition_graph = build_nutrition_graph(deps.nutrition_deps, False, store, embedded=True)
 
     g: StateGraph[CoachState] = StateGraph(CoachState)
     g.add_node("start", start_node)

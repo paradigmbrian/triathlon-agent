@@ -30,7 +30,7 @@ flowchart TD
     START([START]) --> start["start\nclears last turn's brief, proposals, decision"]
     start --> coach["coach\ncreate_agent sub-agent\nask_analyst, ask_wellness, consult_planning, consult_nutrition,\npropose_changes, remember, forget"]
     coach -->|turn ended in conversation| END1([END])
-    coach ==>|Command: consult_planning| planning["planning\ntri-planning graph, embedded,\nfresh InMemorySaver per run"]
+    coach ==>|Command: consult_planning| planning["planning\ntri-planning graph, embedded,\nno checkpointer"]
     coach ==>|Command: consult_nutrition| nutrition["nutrition\ntri-nutrition graph, embedded"]
     planning --> coach
     nutrition --> coach
@@ -62,8 +62,9 @@ beside a handoff in the same step could never be answered, so the sub-agent's mo
 
 Invariants by construction: no write tool is ever bound to a model; the only path into either
 package's `apply_changes` is `apply`, reached only from `review`; the embedded graphs contain
-no `review` or `apply` node; consultations run in a fresh checkpoint namespace with a private
-in-memory saver carrying that package's serde, so a consultation never sees an earlier one.
+no `review` or `apply` node; consultations run with no checkpointer (compiled with
+`checkpointer=False`), so nothing a sub-graph does is saved and a consultation never sees an
+earlier one.
 
 A partial apply keeps what it could not write in `pending` under the stable ids
 `held-planning` and `held-nutrition`. The context block names those ids, and `review` resolves

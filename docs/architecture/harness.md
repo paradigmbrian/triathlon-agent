@@ -22,7 +22,7 @@ Read it top to bottom. Teal names are the harness module doing the work at that 
 
 Dashed edges are tools that return `Command(graph=Command.PARENT)`, so a model's tool call becomes a jump to another node. Every one of them goes through `handoff()`, which re-emits the turn's messages and answers any sibling tool call the jump cut off, so the saved history never holds a tool call without a result.
 
-- `consult_planning` and `consult_nutrition` run the embedded planning or nutrition graph on a throwaway `InMemorySaver` (serializer: `make_serde` with that package's `STATE_TYPES`) and swap the result into the original tool message.
+- `consult_planning` and `consult_nutrition` run the embedded planning or nutrition graph with no checkpointer (`checkpointer=False`; the parent graph owns the messages, and each consultation starts fresh) and swap the result into the original tool message.
 - `propose_changes` goes to `review`, which pauses the thread with `interrupt()` until the athlete approves, edits or rejects.
 - `apply` writes the approved changes. If sessions moved and nutrition targets exist in the horizon, nutrition runs once more to regenerate them.
 

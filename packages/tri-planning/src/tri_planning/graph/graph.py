@@ -16,7 +16,7 @@ Embedded mode (build_graph(..., embedded=True)): no review or apply; every "revi
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
@@ -75,11 +75,16 @@ def after_design(state: PlanningState) -> str:
 
 
 def build_graph(
-    deps: GraphDeps, checkpointer: BaseCheckpointSaver[Any], *, embedded: bool = False
+    deps: GraphDeps,
+    checkpointer: BaseCheckpointSaver[Any] | Literal[False],
+    *,
+    embedded: bool = False,
 ) -> Any:
     """Compile the planning graph. With `embedded=True` there is no `review` or `apply`: every
     path that would pause at review ends the run instead, leaving `pending_changes`,
-    `pending_summary` and `changes_from` in the output for the caller (the coach) to review."""
+    `pending_summary` and `changes_from` in the output for the caller (the coach) to review.
+    Embedded, the caller passes checkpointer=False: the parent graph owns the messages and
+    nothing the run does is saved."""
     review = END if embedded else "review"
     g: StateGraph[PlanningState] = StateGraph(PlanningState)
     g.add_node("route", make_route_node(deps))

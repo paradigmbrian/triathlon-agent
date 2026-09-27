@@ -16,7 +16,7 @@ violation end the run.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -75,14 +75,16 @@ def after_review(state: NutritionState) -> str:
 
 def build_graph(
     deps: GraphDeps,
-    checkpointer: BaseCheckpointSaver[Any],
+    checkpointer: BaseCheckpointSaver[Any] | Literal[False],
     store: BaseStore,
     *,
     embedded: bool = False,
 ) -> Any:
     """Compile the nutrition graph. With `embedded=True` there is no `review` or `apply`: `fuel`
     ends the run and a targets violation ends it, leaving `pending_changes`, `pending_summary`,
-    `regenerate_from` and `last_error` in the output for the caller (the coach) to review."""
+    `regenerate_from` and `last_error` in the output for the caller (the coach) to review.
+    Embedded, the caller passes checkpointer=False: the parent graph owns the messages and
+    nothing the run does is saved."""
     review = END if embedded else "review"
     g: StateGraph[NutritionState] = StateGraph(NutritionState)
     g.add_node("route", route_node)
