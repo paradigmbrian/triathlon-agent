@@ -9,8 +9,9 @@ from typing import Any
 from langchain_core.messages import BaseMessage
 from langchain_core.outputs import ChatGenerationChunk, ChatResult
 
+from tri_analyze.evals.seed import workout_row
 from tri_analyze.repo import AthleteContext
-from tri_core.db.models import DailyMetricsRow, WorkoutRow
+from tri_core.db.models import DailyMetricsRow
 from tri_core.db.repo import Conn, upsert_daily_metrics, upsert_workouts
 from tri_core.testing import ScriptedChatModel
 
@@ -83,41 +84,9 @@ class RecordingScriptedModel(ScriptedChatModel):
 
 
 def seed_workouts(conn: Conn, rows: list[dict[str, Any]]) -> None:
-    """rows: dicts with tp_workout_id, workout_date, sport, and optional title, planned_tss,
-    planned_duration_sec, actual_duration_sec, actual_tss, completed (default True)."""
-    out: list[WorkoutRow] = []
-    for r in rows:
-        out.append(
-            WorkoutRow(
-                tp_workout_id=r["tp_workout_id"],
-                workout_date=r["workout_date"],
-                sport=r["sport"],
-                sport_raw=None,
-                title=r.get("title", ""),
-                description=None,
-                completed=bool(r.get("completed", True)),
-                planned_duration_sec=r.get("planned_duration_sec"),
-                planned_distance_m=None,
-                planned_tss=r.get("planned_tss"),
-                planned_if=None,
-                actual_duration_sec=r.get("actual_duration_sec"),
-                actual_distance_m=None,
-                actual_tss=r.get("actual_tss"),
-                actual_if=None,
-                normalized_power=None,
-                avg_power=None,
-                avg_hr=None,
-                avg_cadence=None,
-                elevation_gain_m=None,
-                calories=None,
-                feeling=None,
-                rpe=None,
-                comments=None,
-                structure=None,
-                raw={},
-            )
-        )
-    upsert_workouts(conn, out)
+    """rows: dicts with tp_workout_id, workout_date, sport and any other WorkoutRow field (the
+    rest None; completed True)."""
+    upsert_workouts(conn, [workout_row(r) for r in rows])
 
 
 def seed_daily_metrics(conn: Conn, rows: list[dict[str, Any]]) -> None:
