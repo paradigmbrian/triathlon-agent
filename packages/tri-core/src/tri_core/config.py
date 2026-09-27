@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import urlsplit, urlunsplit
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -14,6 +15,8 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     database_url: str = "postgresql://tri_analyze:tri_analyze@localhost:5435/tri_analyze"
     test_database_url: str = "postgresql://tri_analyze:tri_analyze@localhost:5435/tri_analyze_test"
+    # The agents' SQL tool; unset: DATABASE_URL as tri_reader (readonly_url below).
+    tri_readonly_database_url: str | None = None
 
     garmin_email: str | None = None
     garmin_password: str | None = None
@@ -50,6 +53,22 @@ class Settings(BaseSettings):
     langsmith_tracing: bool = False
     langsmith_api_key: str | None = None
     langsmith_project: str = "tri_analyze"
+
+
+READER_USER = "tri_reader"
+READER_PASSWORD = "tri_reader"  # migrations/010_reader_role.sql; change both together
+
+
+def reader_url(url: str) -> str:
+    """`url` with its user and password replaced by the tri_reader role's."""
+    parts = urlsplit(url)
+    host = parts.netloc.rpartition("@")[2]
+    return urlunsplit(parts._replace(netloc=f"{READER_USER}:{READER_PASSWORD}@{host}"))
+
+
+def readonly_url(settings: Settings) -> str:
+    """The SQL tool's connection: TRI_READONLY_DATABASE_URL, else DATABASE_URL as tri_reader."""
+    return settings.tri_readonly_database_url or reader_url(settings.database_url)
 
 
 @lru_cache(maxsize=1)

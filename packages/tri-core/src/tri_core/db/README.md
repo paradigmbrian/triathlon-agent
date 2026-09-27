@@ -99,4 +99,6 @@ with a clear message instead of failing.
 
 The assistant never runs `INSERT/UPDATE/DELETE` or DDL against the store. Writes happen only
 through `tri sync`, which Brian runs, and through tests inside rolled-back
-transactions. The agent's `query_training_db` tool runs on a `read_only=True` connection.
+transactions. The agents' `query_training_db` tool connects as `tri_reader` (migration 010:
+SELECT only, read-only transactions, no `pg_signal_backend`) through `readonly_url(settings)`,
+on a `read_only=True` connection, after `validate_select`'s lexical check.
