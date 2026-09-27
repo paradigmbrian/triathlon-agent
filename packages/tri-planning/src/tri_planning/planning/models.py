@@ -60,6 +60,25 @@ class WeekTarget(BaseModel):
     sport_hint: str = ""
 
 
+class DesignedSession(BaseModel):
+    """A session as the designer returns it: no load. `tss.scale_to_target` computes the load
+    and makes it a PlannedSession."""
+
+    date: date
+    sport: Sport
+    title: str
+    description: str
+    duration_minutes: int = Field(ge=0)
+    intensity: Intensity
+    structure: dict[str, Any] | None = None
+
+
+class DesignedWeek(BaseModel):
+    week_start: date
+    sessions: list[DesignedSession]
+    coach_note: str
+
+
 class PlannedSession(BaseModel):
     date: date
     sport: Sport
