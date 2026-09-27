@@ -284,8 +284,8 @@ class ApplyResult:
         if self.error:
             lines.append(f"  stopped: {self.error}")
             lines.append(
-                f"  {len(self.remaining)} change(s) still pending; they will be re-proposed next "
-                "turn."
+                f"  {len(self.remaining)} change(s) still pending; they stay pending and are "
+                "reviewed on the next message in `tri-nutrition chat`."
             )
         return "\n".join(lines)
 
