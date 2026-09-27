@@ -33,6 +33,17 @@ def _is_nutrition_follow_on(payload: dict[str, Any]) -> bool:
     return bool(proposals) and all(p.get("domain") == "nutrition" for p in proposals)
 
 
+def _refused_nutrition(proposals: list[Proposal]) -> list[str]:
+    """Fuel plans a nutrition sub-agent stored but never proposed, read from the turn's final
+    state: with no changes to review, `without_violations` never runs over them."""
+    return [
+        f"{p.id} {key}: not proposed: " + "; ".join(v)
+        for p in proposals
+        if p.domain == "nutrition"
+        for key, v in not_proposed(cast(list[NutritionChange], p.changes), p.pending_violations)
+    ]
+
+
 def without_violations(payload: dict[str, Any]) -> tuple[list[Proposal], list[str]]:
     """The review payload's proposals with every change a validator flagged left out, and one
     line per skip. Each domain decides what a violation covers, as its own check-in does: a
@@ -125,11 +136,14 @@ async def run_checkin(
             out("check-in: --yes given, approving\n")
         command: Command[Any] = Command(resume=resume)
         printer = await run_turn(graph, command, thread_id, out, tags=CHECKIN_TAGS)
-    if gates:
-        # apply reports a failed or partial write through state, not an interrupt
-        after = (await graph.aget_state(cfg)).values or {}
-        if after.get("last_error") or after.get("pending") is not None:
-            reason = after.get("last_error") or "changes still pending"
-            out(f"check-in: apply did not complete: {reason}\n")
-            return EXIT_ERROR
-    return EXIT_ERROR if skipped else EXIT_OK
+    after = (await graph.aget_state(cfg)).values or {}
+    # apply reports a failed or partial write through state, not an interrupt
+    if gates and (after.get("last_error") or after.get("pending") is not None):
+        reason = after.get("last_error") or "changes still pending"
+        out(f"check-in: apply did not complete: {reason}\n")
+        return EXIT_ERROR
+    # nothing reached review (or apply cleared it): a nutrition plan may still sit refused
+    refused = _refused_nutrition(after.get("proposals") or [])
+    for line in refused:
+        out(f"check-in: {line}\n")
+    return EXIT_ERROR if skipped or refused else EXIT_OK
