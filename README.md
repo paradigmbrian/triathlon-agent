@@ -142,6 +142,12 @@ uv run ruff check . && uv run ruff format --check . && uv run mypy
 uv run python scripts/spike_mcp.py   # re-record packages/tri-core/tests/fixtures/mcp/ (scrub before committing)
 ```
 
+CI (`.github/workflows/ci.yml`) runs the same checks on every push to `main` and every pull
+request: a Postgres 16 service, `tri migrate` on both databases, `ruff format --check`, `ruff
+check`, `pytest` (failing if anything but a `--live` test skips), `mypy`, and in `web/` `npm run
+lint`, `npm run build` (strict TypeScript) and `npm test`. Playwright stays local. Branch
+protection on `main` is set in the GitHub UI.
+
 ## Layout
 
 ```

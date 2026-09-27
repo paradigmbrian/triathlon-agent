@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash  # -eo pipefail: a failing command before a pipe fails the step
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: tri_analyze
+          POSTGRES_PASSWORD: tri_analyze
+          POSTGRES_DB: tri_analyze
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tri_analyze"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://tri_analyze:tri_analyze@localhost:5432/tri_analyze
+      TEST_DATABASE_URL: postgresql://tri_analyze:tri_analyze@localhost:5432/tri_analyze_test
+      LANGSMITH_TRACING: "false"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          enable-cache: true
+          python-version: "3.12"
+      - run: uv sync --locked
+      - name: Create the test database
+        run: PGPASSWORD=tri_analyze psql -h localhost -U tri_analyze -d tri_analyze -c "create database tri_analyze_test"
+      - run: uv run tri migrate
+      - run: uv run tri migrate --test
+      - run: uv run ruff format --check .
+      - run: uv run ruff check .
+      - name: pytest
+        run: uv run pytest -q -rs | tee pytest.log
+      - name: Only the --live tests may skip
+        run: |
+          unexpected=$(grep '^SKIPPED' pytest.log | grep -v 'needs --live' || true)
+          if [[ -n "$unexpected" ]]; then
+            echo "::error::tests skipped in CI (is the Postgres service up and migrated?)"
+            echo "$unexpected"
+            exit 1
+          fi
+      - run: uv run mypy
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
