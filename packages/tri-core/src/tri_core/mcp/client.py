@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 from contextlib import AsyncExitStack
 from typing import Any
 
@@ -12,6 +11,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.types import TextContent
 
+from tri_core.mcp.env import child_env
 from tri_core.mcp.servers import ServerSpec
 
 SESSION_TIMEOUT_S = 120  # uvx cold start + Garmin login can take a while
@@ -59,7 +59,7 @@ class McpToolClient:
         params = StdioServerParameters(
             command=self.spec.command,
             args=self.spec.args,
-            env={**os.environ, **self.spec.env},
+            env=child_env(self.spec),
         )
         try:
             await asyncio.wait_for(self._open(params), timeout=SESSION_TIMEOUT_S)

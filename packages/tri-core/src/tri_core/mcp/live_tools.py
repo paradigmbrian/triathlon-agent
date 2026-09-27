@@ -8,7 +8,6 @@ calls are fast. The allow-list keeps the bound tool count small on purpose.
 from __future__ import annotations
 
 import asyncio
-import os
 from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import AsyncExitStack, asynccontextmanager
 
@@ -17,6 +16,7 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_mcp_adapters.sessions import StdioConnection
 from langchain_mcp_adapters.tools import load_mcp_tools
 
+from tri_core.mcp.env import child_env
 from tri_core.mcp.servers import ServerSpec
 
 SESSION_TIMEOUT_S = 120  # uvx cold start + Garmin login can take a while
@@ -32,7 +32,7 @@ def _connection(spec: ServerSpec) -> StdioConnection:
         transport="stdio",
         command=spec.command,
         args=spec.args,
-        env={**os.environ, **spec.env},
+        env=child_env(spec),
     )
 
 

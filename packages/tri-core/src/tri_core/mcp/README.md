@@ -35,8 +35,11 @@ environment, and our client speaks the wire protocol. Our own project uses `mcp`
 `langchain-mcp-adapters` pins `<2`.
 
 `uvx` caches the build, so cold start is a couple of seconds; the Garmin server also logs in
-on start. `ServerSpec.env` is merged over `os.environ` when launching, because `uvx` needs
-`PATH` and `HOME` and the MCP SDK's default child environment is minimal.
+on start. The child's environment is `tri_core.mcp.env.child_env(spec)`: `PATH`, `HOME`,
+`TMPDIR`, `LANG` and `LC_ALL` when set, then `ServerSpec.env`. Nothing else from the shell, so
+the servers never see `ANTHROPIC_API_KEY`, the database URLs or the LangSmith key. (The MCP
+SDK's `stdio_client` adds its own short default list, such as `USER` and `SHELL`, underneath.)
+The TrainingPeaks cookie comes from the macOS Keychain and needs no variable.
 
 ## Two client paths
 
