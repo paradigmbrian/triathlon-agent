@@ -7,6 +7,8 @@ from datetime import date, timedelta
 from typing import Any
 
 from tri_core.mcp.client import McpToolError
+from tri_planning.planning.models import Intensity, Sport
+from tri_planning.planning.tss import INTENSITY_IF, ROUND_MIN, session_tss
 
 MONDAY = date(2026, 9, 14)
 ALL_DAYS = {d: "any" for d in ("mon", "tue", "wed", "thu", "fri", "sat", "sun")}
@@ -27,43 +29,37 @@ GOAL_ARGS: dict[str, Any] = {
 def week_json(
     week_start: date, target_tss: float, *, hard_on_consecutive_days: bool = False
 ) -> dict[str, Any]:
-    """A PlannedWeek as the model would return it (JSON-safe). Three sessions summing to target."""
-    a = round(target_tss * 0.4)
-    b = round(target_tss * 0.3)
-    c = target_tss - a - b
+    """A week as the designer would return it (JSON-safe): three sessions whose durations put
+    the week within a few percent of `target_tss`, so scaling leaves it alone. Each session
+    also carries its `tss_planned`, so the dict validates as a PlannedWeek too; DesignedWeek
+    ignores the field."""
     d2 = 3 if hard_on_consecutive_days else 2  # Thu run + Fri swim are consecutive hard days
+    swim: Intensity = "threshold" if hard_on_consecutive_days else "endurance"
+    rows: list[tuple[int, Sport, str, str, Intensity, float]] = [
+        (0, "bike", "Endurance ride", "z2", "endurance", 0.4),
+        (d2, "run", "Threshold run", "4x6", "threshold", 0.3),
+        (4, "swim", "CSS swim", "10x100", swim, 0.3),
+    ]
+    sessions = []
+    for day, sport, title, description, intensity, share in rows:
+        per_hour = INTENSITY_IF[intensity] ** 2 * 100
+        steps = int(target_tss * share / per_hour * 60 / ROUND_MIN + 0.5)  # half rounds up
+        minutes = max(ROUND_MIN, steps * ROUND_MIN)
+        sessions.append(
+            {
+                "date": (week_start + timedelta(days=day)).isoformat(),
+                "sport": sport,
+                "title": title,
+                "description": description,
+                "duration_minutes": minutes,
+                "tss_planned": session_tss(minutes, intensity),
+                "intensity": intensity,
+            }
+        )
     return {
         "week_start": week_start.isoformat(),
         "coach_note": "steady aerobic week",
-        "sessions": [
-            {
-                "date": week_start.isoformat(),
-                "sport": "bike",
-                "title": "Endurance ride",
-                "description": "z2",
-                "duration_minutes": 90,
-                "tss_planned": a,
-                "intensity": "endurance",
-            },
-            {
-                "date": (week_start + timedelta(days=d2)).isoformat(),
-                "sport": "run",
-                "title": "Threshold run",
-                "description": "4x6",
-                "duration_minutes": 60,
-                "tss_planned": b,
-                "intensity": "threshold",
-            },
-            {
-                "date": (week_start + timedelta(days=4)).isoformat(),
-                "sport": "swim",
-                "title": "CSS swim",
-                "description": "10x100",
-                "duration_minutes": 45,
-                "tss_planned": c,
-                "intensity": "threshold" if hard_on_consecutive_days else "endurance",
-            },
-        ],
+        "sessions": sessions,
     }
 
 

@@ -7,13 +7,20 @@ from typing import Any
 
 from tri_planning.planning.models import WEEKDAYS, PlannedWeek, TrainingGoal, WeekTarget
 
+PROMPT_VERSION = "2"  # bump when DESIGN_SYSTEM changes; names the eval experiment design-v<N>
+
 DESIGN_SYSTEM = """\
 You are a triathlon coach writing one week of sessions for one self-coached athlete. You return a
-PlannedWeek: week_start, coach_note (two sentences on the week's intent), and sessions. Each
+DesignedWeek: week_start, coach_note (two sentences on the week's intent), and sessions. Each
 session has date (YYYY-MM-DD inside the week), sport (swim | bike | run | brick | strength | rest),
 title (short, specific), description (what to do, in the athlete's language, with targets in the
-athlete's zones), duration_minutes, tss_planned, intensity (recovery | endurance | tempo |
-threshold | vo2 | race) and optionally structure.
+athlete's zones), duration_minutes, intensity (recovery | endurance | tempo | threshold | vo2 |
+race) and optionally structure.
+
+The planner computes each session's load from its duration and intensity, then scales every
+duration together (by at most a quarter) to meet the week's load target. You do not estimate
+load: choose the sessions, their intensities and durations that fit the hours target and the
+phase. If the planner cannot reach the target, it asks you for more or fewer sessions.
 
 structure is TrainingPeaks' simplified format: {"primaryIntensityMetric": "percentOfFtp" for
 bike, "percentOfThresholdPace" for run and swim, "percentOfThresholdHr" if no pace or power
@@ -23,14 +30,13 @@ threshold exists, "steps": [ {"name", "duration_seconds", "intensity_min", "inte
 structure to interval sessions; leave it out for steady endurance and swims described in text.
 
 Hard rules (a validator rejects the week otherwise):
-- The sessions' tss_planned must sum to within 10 % of the target.
 - No session on an unavailable day; only the day's allowed sports. Brick is allowed when the
   day lists brick, or both bike and run.
 - Sessions with intensity threshold, vo2 or race are never on consecutive days.
-- Total duration must not exceed the weekly hours max.
-Do not include rest days as sessions. Estimate TSS from duration and intensity factor:
-TSS = hours * IF^2 * 100 with IF about 0.65 recovery, 0.70 endurance, 0.80 tempo, 0.90 threshold,
-1.0 vo2/race."""
+- Total duration must not exceed the weekly hours max, and must reach 80 % of the target hours
+  except in recovery, taper and race weeks.
+- No session longer than 6 hours; no vo2 session longer than 90 minutes.
+Do not include rest days as sessions."""
 
 
 def _availability_block(goal: TrainingGoal) -> str:
@@ -64,8 +70,9 @@ def render_design_prompt(
     event = f", {goal.event_name} on {goal.event_date}" if goal.event_date else ""
     parts = [
         f"Design the week starting {target.week_start} (Monday). Phase: {target.phase}{recovery}. "
-        f"Target {target.target_tss:.0f} TSS in about {target.target_hours:.1f} hours; the "
-        f"athlete's range is {goal.weekly_hours_min:g} to {goal.weekly_hours_max:g} hours.",
+        f"Target about {target.target_hours:.1f} hours; the planner scales durations to "
+        f"{target.target_tss:.0f} TSS. The athlete's range is {goal.weekly_hours_min:g} to "
+        f"{goal.weekly_hours_max:g} hours.",
         f"Phase guidance: {target.sport_hint}",
         f"Goal: {goal.goal_type}{event}",
         "Availability:\n" + _availability_block(goal),

@@ -180,7 +180,9 @@ async def test_design_next_week_extends_window(nocommit, make_deps):
     model = ScriptedChatModel(
         script=[
             tool_call("design_next_week", {}),
-            tool_call("PlannedWeek", week_json(MONDAY + timedelta(weeks=1), targets[1].target_tss)),
+            tool_call(
+                "DesignedWeek", week_json(MONDAY + timedelta(weeks=1), targets[1].target_tss)
+            ),
             AIMessage(content="Next week designed; nothing else to change."),
         ]
     )
@@ -255,7 +257,9 @@ async def test_directed_brief_ends_on_the_proposal_and_merges_the_designed_week(
     model = ScriptedChatModel(
         script=[
             tool_call("design_next_week", {}),
-            tool_call("PlannedWeek", week_json(MONDAY + timedelta(weeks=1), targets[1].target_tss)),
+            tool_call(
+                "DesignedWeek", week_json(MONDAY + timedelta(weeks=1), targets[1].target_tss)
+            ),
             tool_call(
                 "propose_calendar_changes",
                 {
@@ -305,8 +309,8 @@ async def test_design_violations_become_pending_violations(nocommit, make_deps):
     model = ScriptedChatModel(
         script=[
             tool_call("design_next_week", {}),
-            tool_call("PlannedWeek", bad),
-            tool_call("PlannedWeek", bad),  # the retry is as bad
+            tool_call("DesignedWeek", bad),
+            tool_call("DesignedWeek", bad),  # the retry is as bad
             AIMessage(content="Next week designed."),
         ]
     )

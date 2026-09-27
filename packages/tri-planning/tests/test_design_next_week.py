@@ -23,7 +23,7 @@ def seed(conn, **over):
 
 
 def structured(week: dict) -> AIMessage:
-    return tool_call("PlannedWeek", week)
+    return tool_call("DesignedWeek", week)
 
 
 def design_all(conn, pid, targets):

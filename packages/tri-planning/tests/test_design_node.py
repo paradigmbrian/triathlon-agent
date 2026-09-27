@@ -13,6 +13,7 @@ from tri_planning.graph.deps import GraphDeps
 from tri_planning.graph.deps import make_deps as real_make_deps
 from tri_planning.graph.nodes.design import design_week, make_design_node, window_weeks
 from tri_planning.planning.models import (
+    DesignedWeek,
     FitnessSnapshot,
     PlannedWeek,
     PlanWeekRow,
@@ -20,7 +21,8 @@ from tri_planning.planning.models import (
     TrainingGoal,
 )
 from tri_planning.planning.targets import build
-from tri_planning.prompts.design import DESIGN_SYSTEM, render_design_prompt
+from tri_planning.planning.tss import session_tss
+from tri_planning.prompts.design import DESIGN_SYSTEM, PROMPT_VERSION, render_design_prompt
 from tri_planning.testing import GOAL_ARGS, MONDAY, week_json
 
 pytestmark = pytest.mark.db
@@ -36,7 +38,7 @@ def seed(conn, start=MONDAY, **over):
 
 
 def structured(week: dict) -> AIMessage:
-    return tool_call("PlannedWeek", week)
+    return tool_call("DesignedWeek", week)
 
 
 async def node_out(deps, gid, pid):
@@ -193,7 +195,7 @@ async def test_design_week_uses_the_design_model_when_one_is_set(monkeypatch):
     deps.design_model = designer
     with pytest.raises(_Stop):
         await design_week(deps, None, None, None, None, None, {})
-    assert seen == [(agent, PlannedWeek), (designer, PlannedWeek)]
+    assert seen == [(agent, DesignedWeek), (designer, DesignedWeek)]
 
 
 def test_make_deps_takes_an_optional_design_model():
@@ -281,3 +283,27 @@ async def test_a_violation_retry_without_a_week_keeps_the_first_design_and_its_v
         s["title"] for s in bad["sessions"]
     ]
     assert any("consecutive" in v for v in out["pending_violations"][MONDAY.isoformat()])
+
+
+async def test_the_designer_gives_no_tss_and_the_week_is_scaled_to_the_target(nocommit, make_deps):
+    gid, pid, targets = seed(nocommit)
+    light = week_json(MONDAY, targets[0].target_tss * 0.85)
+    for s in light["sessions"]:
+        s["tss_planned"] = 999  # whatever the model sends, the planner computes the load
+    model = ScriptedChatModel(script=[structured(light)])
+    out = await node_out(make_deps(model), gid, pid)
+    assert model.calls == 1
+    sessions = [c.workout for c in out["pending_changes"]]
+    assert all(s.tss_planned == session_tss(s.duration_minutes, s.intensity) for s in sessions)
+    total = sum(s.tss_planned for s in sessions)
+    assert abs(total - targets[0].target_tss) <= 0.1 * targets[0].target_tss
+    assert [s.duration_minutes for s in sessions] != [
+        s["duration_minutes"] for s in light["sessions"]
+    ]
+
+
+def test_the_design_prompt_leaves_load_to_the_planner():
+    assert PROMPT_VERSION == "2"
+    assert "tss_planned" not in DESIGN_SYSTEM and "10 %" not in DESIGN_SYSTEM
+    assert "computes" in DESIGN_SYSTEM and "hours" in DESIGN_SYSTEM
+    assert "6 hours" in DESIGN_SYSTEM and "90 minutes" in DESIGN_SYSTEM

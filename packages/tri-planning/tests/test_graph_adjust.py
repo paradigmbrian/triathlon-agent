@@ -145,8 +145,8 @@ async def test_review_payload_carries_the_designed_weeks_violations(nocommit, ma
     model = ScriptedChatModel(
         script=[
             tool_call("design_next_week", {}),
-            tool_call("PlannedWeek", bad),
-            tool_call("PlannedWeek", bad),
+            tool_call("DesignedWeek", bad),
+            tool_call("DesignedWeek", bad),
             AIMessage(content="Next week designed."),
         ]
     )

@@ -16,6 +16,7 @@ from tri_planning.graph.state import PlanningState
 from tri_planning.planning import validate
 from tri_planning.planning.models import (
     CalendarChange,
+    DesignedWeek,
     PlannedWeek,
     PlanWeekRow,
     TrainingGoal,
@@ -23,6 +24,7 @@ from tri_planning.planning.models import (
 )
 from tri_planning.planning.targets import week_monday
 from tri_planning.planning.tp_calls import event_change
+from tri_planning.planning.tss import scale_to_target
 from tri_planning.prompts.design import DESIGN_SYSTEM, render_design_prompt
 
 NO_WEEK = "the designer returned no week in two attempts"
@@ -38,6 +40,19 @@ def window_weeks(weeks: list[PlanWeekRow], today: date, horizon: int) -> list[Pl
     return [w for w in weeks if first <= w.week_start <= last and not w.written_to_tp]
 
 
+def checked_week(
+    designed: DesignedWeek, target: WeekTarget, goal: TrainingGoal
+) -> tuple[PlannedWeek, list[str]]:
+    """The designed week scaled to its target, and its violations. When scaling cannot reach
+    the target, its line (which asks for more or fewer sessions) replaces the validator's sum
+    line."""
+    week, scaling = scale_to_target(designed, target)
+    violations = validate.week(week, target, goal)
+    if scaling:
+        violations = scaling + [v for v in violations if not v.startswith(validate.TSS_SUM_PREFIX)]
+    return week, violations
+
+
 async def design_week(
     deps: GraphDeps,
     goal: TrainingGoal,
@@ -47,31 +62,31 @@ async def design_week(
     note: str | None,
     config: RunnableConfig,
 ) -> tuple[PlannedWeek, list[str]]:
-    designer = structured(deps.design_model or deps.model, PlannedWeek)
+    designer = structured(deps.design_model or deps.model, DesignedWeek)
     cfg = merge_configs(
         config, {"tags": [f"week_start:{target.week_start}", f"phase:{target.phase}"]}
     )
 
-    async def one(prompt: str) -> PlannedWeek | None:
+    async def one(prompt: str) -> DesignedWeek | None:
         out = await designer.ainvoke(
             [SystemMessage(DESIGN_SYSTEM), HumanMessage(prompt)], config=cfg
         )
-        return out if isinstance(out, PlannedWeek) else None
+        return out if isinstance(out, DesignedWeek) else None
 
     first = render_design_prompt(goal, target, thresholds, previous, note, None, None)
-    week = await one(first)
-    if week is None:
-        week = await one(first)  # a reply without the structured week gets one more try
-    if week is None:
+    designed = await one(first)
+    if designed is None:
+        designed = await one(first)  # a reply without the structured week gets one more try
+    if designed is None:
         empty = PlannedWeek(week_start=target.week_start, sessions=[], coach_note=NO_WEEK)
         return empty, [NO_WEEK]
-    violations = validate.week(week, target, goal)
+    week, violations = checked_week(designed, target, goal)
     if violations:
         retry = await one(
             render_design_prompt(goal, target, thresholds, previous, note, violations, week)
         )
         if retry is not None:
-            week, violations = retry, validate.week(retry, target, goal)
+            week, violations = checked_week(retry, target, goal)
     return week, violations
 
 

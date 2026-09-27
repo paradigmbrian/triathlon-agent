@@ -24,7 +24,7 @@ def intake_script():
 
 
 def week_call(target_tss, week_start=MONDAY, **k):
-    return tool_call("PlannedWeek", week_json(week_start, target_tss, **k))
+    return tool_call("DesignedWeek", week_json(week_start, target_tss, **k))
 
 
 async def first_target(nocommit):
