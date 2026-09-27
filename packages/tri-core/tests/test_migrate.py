@@ -67,6 +67,17 @@ def test_discover_rejects_a_name_without_a_version(tmp_path):
         discover(tmp_path)
 
 
+def test_discover_raises_when_the_directory_does_not_exist(tmp_path):
+    missing = tmp_path / "does_not_exist"
+    with pytest.raises(MigrationError, match="no migrations found"):
+        discover(missing)
+
+
+def test_discover_raises_when_the_directory_has_no_sql_files(tmp_path):
+    with pytest.raises(MigrationError, match="no migrations found"):
+        discover(tmp_path)
+
+
 def test_the_real_migrations_have_distinct_versions_and_probes_for_the_hand_applied_set():
     ms = discover()
     versions = [m.version for m in ms]

@@ -91,6 +91,8 @@ def discover(directory: Path = MIGRATIONS_DIR) -> list[Migration]:
             )
         sha = hashlib.sha256(path.read_bytes()).hexdigest()
         found[version] = Migration(version, path.stem, path, sha)
+    if not found:
+        raise MigrationError(f"{directory}: no migrations found")
     return [found[v] for v in sorted(found)]
 
 

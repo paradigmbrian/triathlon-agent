@@ -39,6 +39,8 @@ def make_test_deps(
 ) -> CoachDeps:
     url = Settings().test_database_url
     connect = lambda: contextlib.nullcontext(nocommit)  # noqa: E731
+    # readonly_db_url=url is the owner role here on purpose (tests need it to see uncommitted
+    # rows on `nocommit`); the tri_reader boundary itself is covered by tri-core's role tests.
     return CoachDeps(
         model=coach,
         analyst_model=analyst,

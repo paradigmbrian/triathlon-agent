@@ -101,4 +101,6 @@ The assistant never runs `INSERT/UPDATE/DELETE` or DDL against the store. Writes
 through `tri sync`, which Brian runs, and through tests inside rolled-back
 transactions. The agents' `query_training_db` tool connects as `tri_reader` (migration 010:
 SELECT only, read-only transactions, no `pg_signal_backend`) through `readonly_url(settings)`,
-on a `read_only=True` connection, after `validate_select`'s lexical check.
+on a `read_only=True` connection, after `validate_select`'s lexical check. `tri_reader` can also
+SELECT LangGraph's checkpoint and store tables and `schema_migrations` (010's grant covers every
+table in `public`); that is the athlete's own data and is accepted.

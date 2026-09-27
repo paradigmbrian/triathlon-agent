@@ -85,7 +85,7 @@ Targets `settings.database_url`, or `settings.test_database_url` with `--test`. 
 |---|---|---|
 | `TRI_READONLY_DATABASE_URL` | `tri_readonly_database_url: str \| None = None` | resolved by `readonly_url(settings)`: the field when set, else `database_url` with the user and password replaced by `tri_reader` / `tri_reader` |
 
-`readonly_url` lives in `tri_core.config` and is what every `make_query_tool` caller passes. The password default matches migration 007; the athlete overrides both together to change it.
+`readonly_url` lives in `tri_core.config` and is what every `make_query_tool` caller passes. The password default matches migration 010; the athlete overrides both together to change it.
 
 ### 4.4 SQL tool
 

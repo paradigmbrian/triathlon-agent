@@ -78,7 +78,7 @@ def migrate(
         if not dry_run:
             ensure_langgraph_tables(url)
             out("checkpoint and store tables ready")
-    except (MigrationError, psycopg.Error) as exc:
+    except (MigrationError, psycopg.Error, OSError) as exc:
         console.print(str(exc), style="red", markup=False, highlight=False)
         raise typer.Exit(code=1) from exc
 

@@ -12,6 +12,13 @@ TEST = "postgresql://o:p@h:1/test"
 UNREACHABLE = "postgresql://nobody:nothing@127.0.0.1:1/nope"
 
 
+@pytest.fixture(autouse=True)
+def _no_dotenv(monkeypatch):
+    """CliRunner invokes `main`'s `load_dotenv()` for real; stub it so a developer's .env
+    never leaks into os.environ during these tests."""
+    monkeypatch.setattr(cli, "load_dotenv", lambda *a, **k: False)
+
+
 @pytest.fixture
 def calls(monkeypatch):
     seen: dict[str, object] = {"connect": [], "apply": [], "langgraph": []}
@@ -67,6 +74,17 @@ def test_migrate_exits_1_on_a_migration_error(calls, monkeypatch):
     result = CliRunner().invoke(cli.app, ["migrate"])
     assert result.exit_code == 1
     assert "003_x.sql was edited" in result.output and calls["langgraph"] == []
+
+
+def test_migrate_exits_1_when_discover_cannot_read_the_migrations(calls, monkeypatch):
+    def boom() -> list[object]:
+        raise OSError("permission denied")
+
+    monkeypatch.setattr(cli, "discover", boom)
+    result = CliRunner().invoke(cli.app, ["migrate"])
+    assert result.exit_code == 1
+    assert "permission denied" in result.output
+    assert calls["langgraph"] == []
 
 
 def test_migrate_exits_1_when_the_database_is_unreachable(monkeypatch):

@@ -146,7 +146,7 @@ def reader(db):
     the test database: the role is cluster-wide but its grants are per database."""
     ok = db.execute(
         "select case when exists (select 1 from pg_roles where rolname = 'tri_reader') "
-        "then has_schema_privilege('tri_reader', 'public', 'usage') else false end as ok"
+        "then has_table_privilege('tri_reader', 'sync_state', 'select') else false end as ok"
     ).fetchone()["ok"]
     if not ok:
         pytest.skip("tri_reader is not set up here: Brian runs `uv run tri migrate --test`")
