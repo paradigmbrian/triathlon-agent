@@ -33,15 +33,27 @@ def _is_nutrition_follow_on(payload: dict[str, Any]) -> bool:
     return bool(proposals) and all(p.get("domain") == "nutrition" for p in proposals)
 
 
-def _refused_nutrition(proposals: list[Proposal]) -> list[str]:
-    """Fuel plans a nutrition sub-agent stored but never proposed, read from the turn's final
-    state: with no changes to review, `without_violations` never runs over them."""
-    return [
-        f"{p.id} {key}: not proposed: " + "; ".join(v)
-        for p in proposals
-        if p.domain == "nutrition"
-        for key, v in not_proposed(cast(list[NutritionChange], p.changes), p.pending_violations)
-    ]
+def _refused(proposals: list[Proposal]) -> list[str]:
+    """Fuel plans or designed weeks a sub-agent stored but never proposed, read from the turn's
+    final state: with no changes to review, `without_violations` never runs over them. Nutrition
+    may cover some of its own pending_violations keys with other changes; a no-change planning
+    proposal covers none of them, so every key is refused."""
+    lines: list[str] = []
+    for p in proposals:
+        if p.domain == "nutrition":
+            lines += [
+                f"{p.id} {key}: not proposed: " + "; ".join(v)
+                for key, v in not_proposed(
+                    cast(list[NutritionChange], p.changes), p.pending_violations
+                )
+            ]
+        elif p.domain == "planning" and not p.changes:
+            lines += [
+                f"{p.id} week of {week}: not proposed: " + "; ".join(v)
+                for week, v in sorted(p.pending_violations.items())
+                if v
+            ]
+    return lines
 
 
 def without_violations(payload: dict[str, Any]) -> tuple[list[Proposal], list[str]]:
@@ -142,8 +154,9 @@ async def run_checkin(
         reason = after.get("last_error") or "changes still pending"
         out(f"check-in: apply did not complete: {reason}\n")
         return EXIT_ERROR
-    # nothing reached review (or apply cleared it): a nutrition plan may still sit refused
-    refused = _refused_nutrition(after.get("proposals") or [])
+    # nothing reached review (or apply cleared it): a fuel plan or a designed week may still
+    # sit refused
+    refused = _refused(after.get("proposals") or [])
     for line in refused:
         out(f"check-in: {line}\n")
     return EXIT_ERROR if skipped or refused else EXIT_OK

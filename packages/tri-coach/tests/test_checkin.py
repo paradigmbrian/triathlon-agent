@@ -216,6 +216,22 @@ async def test_checkin_exits_1_on_a_nutrition_refusal_with_nothing_to_review():
     assert "p1 w2: not proposed: product Mystery is not in the library" in text
 
 
+async def test_checkin_exits_1_on_a_planning_refusal_with_nothing_to_review():
+    refused = Proposal(
+        id="p1",
+        domain="planning",
+        summary="s",
+        violations=["week of 2026-09-21: hard sessions on consecutive days"],
+        pending_violations={"2026-09-21": ["hard sessions on consecutive days"]},
+        question="Nothing can be written: state the violations and stop.",
+    )
+    after = SimpleNamespace(next=(), values={"proposals": [refused]}, tasks=())
+    graph = Graph([[DONE]], [IDLE, after])
+    code, text = await run(graph)
+    assert code == EXIT_ERROR
+    assert "p1 week of 2026-09-21: not proposed: hard sessions on consecutive days" in text
+
+
 def flagged(pid: str, domain: str, changes: list[dict[str, Any]], violations: dict) -> tuple:
     p = Proposal.model_validate(
         {
