@@ -16,6 +16,10 @@ from tri_planning.planning.models import (
 
 TSS_TOLERANCE = 0.10
 STRUCTURE_TOLERANCE_MIN = 5
+TSS_SUM_PREFIX = "total TSS "  # the sum rule's line; design_week swaps it for the scaling one
+HOURS_MIN_FRACTION = 0.8
+MAX_SESSION_MIN = 360
+MAX_VO2_MIN = 90
 
 
 def structure_seconds(structure: dict[str, Any]) -> int | None:
@@ -53,9 +57,20 @@ def week(planned: PlannedWeek, target: WeekTarget, goal: TrainingGoal) -> list[s
 
     total = planned.total_tss
     if target.target_tss and abs(total - target.target_tss) > TSS_TOLERANCE * target.target_tss:
-        out.append(f"total TSS {total:.0f} is more than 10% from target {target.target_tss:.0f}")
+        out.append(
+            f"{TSS_SUM_PREFIX}{total:.0f} is more than 10% from target {target.target_tss:.0f}"
+        )
 
     for s in planned.sessions:
+        if s.duration_minutes > MAX_SESSION_MIN:
+            out.append(
+                f"{s.date} {s.title}: {s.duration_minutes} min is over the "
+                f"{MAX_SESSION_MIN // 60}-hour session limit"
+            )
+        if s.intensity == "vo2" and s.duration_minutes > MAX_VO2_MIN:
+            out.append(
+                f"{s.date} {s.title}: vo2 for {s.duration_minutes} min is over {MAX_VO2_MIN} min"
+            )
         if not target.week_start <= s.date <= week_end:
             out.append(f"{s.date} {s.sport}: outside the week starting {target.week_start}")
             continue
@@ -83,4 +98,11 @@ def week(planned: PlannedWeek, target: WeekTarget, goal: TrainingGoal) -> list[s
     hours = planned.total_hours
     if hours > goal.weekly_hours_max:
         out.append(f"total hours {hours:.1f} exceed weekly max {goal.weekly_hours_max:g}")
+    light = target.is_recovery or target.phase in ("recovery", "taper", "race")
+    floor = HOURS_MIN_FRACTION * target.target_hours
+    if not light and hours < floor:
+        out.append(
+            f"total hours {hours:.1f} are under {floor:.1f} "
+            f"(80% of the target {target.target_hours:.1f})"
+        )
     return out
