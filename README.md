@@ -78,7 +78,7 @@ uv run tri migrate [--test] [--dry-run]
 uv run tri-analyze chat [--no-live]     # --no-live binds only the database tool
 uv run tri-analyze eval [--recreate-dataset]   # LangSmith feedback eval
 uv run tri-planning chat [--no-live]    # plan; every TrainingPeaks write is approved first
-uv run tri-planning check-in [--yes] [--no-sync] [--no-live]   # sync, review last 7 days, propose; exit 3 when paused, 1 on a model error or a week --yes skipped for violations
+uv run tri-planning check-in [--yes] [--no-sync] [--no-live]   # sync, review last 7 days, propose; exit 3 when paused, 1 on a model error, a week or note not proposed for violations, or a change --yes skipped for violations
 uv run tri-planning reset [--yes]       # abandon goal and plan, clear the thread
 uv run tri-wellness ingest <file.pdf|csv> [--kind pdf|export] [--drawn-on YYYY-MM-DD]   # extract, review, store a lab panel
 uv run tri-wellness report [--panel ID] [--out path.md]   # interpret a stored panel; saved to lab_reports
@@ -86,7 +86,7 @@ uv run tri-wellness chat                                   # ask about panels an
 uv run tri-wellness panels                                 # list stored panels
 uv run tri-wellness eval [--recreate-dataset]              # LangSmith report evaluators
 uv run tri-coach chat [--no-live]       # the front door: one conversation over the analyst, wellness, planning and nutrition
-uv run tri-coach check-in [--yes] [--no-sync] [--no-live]   # sync, weekly checklist over plan and nutrition; exit 3 when paused, 1 on a model error or a change --yes skipped for violations
+uv run tri-coach check-in [--yes] [--no-sync] [--no-live]   # sync, weekly checklist over plan and nutrition; exit 3 when paused, 1 on a model error, a week or note not proposed for violations, or a change --yes skipped for violations
 uv run tri-coach eval [--recreate-dataset]                   # LangSmith routing eval
 uv run tri-coach memory [--forget ID]   # the coach's athlete memory
 uv run tri-coach reset [--yes] [--forget-memory]
@@ -153,7 +153,7 @@ protection on `main` is set in the GitHub UI.
 ```
 pyproject.toml          workspace root: members, shared ruff/mypy/pytest config
 conftest.py             pytest options and the shared `db` fixture plugin
-migrations/             001_initial.sql (sync tables), 002_planning.sql and 003_rename_skeleton_to_targets.sql (planning tables), 004_nutrition.sql (nutrition tables), 005_wellness.sql (lab tables), 006_fixes.sql (2026-09-24 correctness fixes), 007_data_layer.sql (tombstones, garmin_activities, change status), 009_schema_migrations.sql (the tri migrate record), 010_reader_role.sql (the SQL tool's tri_reader role)
+migrations/             001_initial.sql (sync tables), 002_planning.sql and 003_rename_skeleton_to_targets.sql (planning tables), 004_nutrition.sql (nutrition tables), 005_wellness.sql (lab tables), 006_fixes.sql (2026-09-24 correctness fixes), 007_data_layer.sql (tombstones, garmin_activities, change status), 008_guardrails.sql (plan_weeks.violations for a refused week), 009_schema_migrations.sql (the tri migrate record), 010_reader_role.sql (the SQL tool's tri_reader role)
 packages/tri-core/      src/tri_core/{config,cli,mcp,db,sync,testing}
 packages/tri-analyze/   src/tri_analyze/{config,cli,llm,agent,repo,repl,testing,allowlist,prompts,tools,evals}
 packages/tri-planning/  src/tri_planning/{config,cli,repo,repl,testing,planning,graph,tools,prompts}

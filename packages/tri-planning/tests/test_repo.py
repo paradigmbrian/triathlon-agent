@@ -163,3 +163,29 @@ def test_recent_sessions_skip_deleted_workouts(pdb):
     crepo.upsert_workouts(pdb, [workout_row("keep", day), workout_row("gone", day)])
     crepo.mark_missing_deleted(pdb, day, day, {"keep"})
     assert [s["title"] for s in repo.recent_sessions(pdb, day, day)] == ["ride keep"]
+
+
+def test_a_refused_design_is_stored_as_null_and_a_clean_one_clears_it(pdb):
+    gid = repo.insert_goal(pdb, goal())
+    pid = repo.insert_plan(pdb, gid, "generated", None, targets())
+    designed = PlannedWeek(week_start=MON, sessions=[], coach_note="first")
+    repo.set_week_designed(pdb, pid, MON, designed)
+    assert repo.list_weeks(pdb, pid)[0].violations == []
+
+    # a re-design of the unapproved week is refused: the old design goes, the reasons stay
+    repo.set_week_designed(pdb, pid, MON, None, ["hard sessions on consecutive days"])
+    first = repo.list_weeks(pdb, pid)[0]
+    assert first.designed is None
+    assert first.violations == ["hard sessions on consecutive days"]
+    raw = pdb.execute(
+        "select designed from plan_weeks where plan_id = %s and week_start = %s", (pid, MON)
+    ).fetchone()
+    assert raw["designed"] is None  # SQL null, not JSON null
+
+    repo.set_week_designed(pdb, pid, MON, designed)
+    first = repo.list_weeks(pdb, pid)[0]
+    assert first.designed == designed and first.violations == []
+    raw = pdb.execute(
+        "select violations from plan_weeks where plan_id = %s and week_start = %s", (pid, MON)
+    ).fetchone()
+    assert raw["violations"] is None

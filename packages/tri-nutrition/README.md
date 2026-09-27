@@ -105,7 +105,9 @@ regenerates targets; approve persists them, reject discards them.
 - `tri-nutrition check-in [--yes] [--no-sync] [--no-live]`: runs `tri sync`, sends the fixed
   check-in request on the nutrition thread, prints the report and any proposed change set, and
   exits 3 while it waits at review. `--yes` approves the changes that passed validation; a
-  note whose plan still has violations is skipped and printed, and the exit code is 1. A review
+  note whose plan still has violations is skipped and printed, and the exit code is 1. A plan
+  refused for violations (stored, not proposed) is printed and exits 1 too, even when nothing
+  else is up for review. A review
   left by an earlier run is shown but never approved here (exit 3): answer it in `chat`.
 - `tri-nutrition eval [--judge/--no-judge] [--prefix NAME] [--recreate-dataset]`: creates the
   LangSmith dataset `tri_nutrition_fueling` from `evals/cases.py` when missing, runs the fueling

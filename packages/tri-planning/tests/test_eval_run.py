@@ -18,7 +18,10 @@ def test_the_dataset_keeps_the_scripts_name_and_examples_carry_empty_outputs():
 
 def test_render_pass_rates_lists_each_key():
     out = render_pass_rates({"validator_pass": 0.75}, 4)
-    assert out.splitlines() == ["pass rate over 4 examples:", "  validator_pass             75%"]
+    assert out.splitlines() == [
+        "pass rate over 4 examples (prompt version 2):",
+        "  validator_pass             75%",
+    ]
 
 
 async def test_run_eval_designs_on_the_design_role(monkeypatch):
@@ -56,6 +59,6 @@ async def test_run_eval_designs_on_the_design_role(monkeypatch):
     settings = PlanningSettings(_env_file=None, langsmith_api_key="ls")
     assert await planning_run.run_eval(settings, models, log=lambda m: None) == {}
     assert roles == [Role.PLANNING_DESIGN]
-    assert captured["experiment_prefix"] == "design"
-    assert captured["metadata"] == {"model": "claude-opus-5", "effort": None}
+    assert captured["experiment_prefix"] == "design-v2"
+    assert captured["metadata"] == {"prompt_version": "2", "model": "claude-opus-5", "effort": None}
     assert [e.__name__ for e in captured["evaluators"]] == ["validator_pass"]

@@ -13,6 +13,7 @@ from langchain_core.runnables import RunnableConfig
 from tri_core.db.sql_tool import make_query_tool
 from tri_core.harness.agents import make_subagent
 from tri_planning.graph.deps import GraphDeps
+from tri_planning.graph.nodes.design import not_designed_line
 from tri_planning.graph.state import PlanningState
 from tri_planning.planning.models import CalendarChange
 from tri_planning.prompts.adjust import load_adjust_context, render_adjust_prompt
@@ -40,6 +41,8 @@ def changes_from_messages(
 
     A week designed twice in one turn would otherwise be created twice, so a repeat replaces
     the earlier result (and its violations) instead of adding to it.
+
+    A refused week (violations, no changes) adds a "not designed" line to the summary.
     """
     designed: dict[str, list[CalendarChange]] = {}
     violations: dict[str, list[str]] = {}
@@ -62,12 +65,15 @@ def changes_from_messages(
         elif msg.name == "propose_calendar_changes":
             proposed = changes
             summary = data.get("summary") or None
-    designed_weeks = list(designed)
+    designed_weeks = [week for week in designed if designed[week]]
     all_changes = [c for week in designed_weeks for c in designed[week]] + proposed
     if summary is None and designed_weeks:
         summary = (
             "Designed week(s) " + ", ".join(designed_weeks) + " added to the calendar proposal."
         )
+    refused = [not_designed_line(date.fromisoformat(w), v) for w, v in violations.items()]
+    if refused:
+        summary = "\n".join([summary, *refused] if summary else refused)
     return all_changes, summary, violations
 
 
@@ -98,12 +104,13 @@ def make_adjust_node(deps: GraphDeps) -> Any:
                 "review_decision": None,
             }
         # adjust is entered with either no pending changes or its own rejected proposal;
-        # a turn that proposes nothing must clear that proposal so it isn't re-reviewed.
+        # a turn that proposes nothing must clear that proposal so it isn't re-reviewed. A
+        # refused week stays in pending_violations so check-in can report it.
         return {
             "messages": new,
             "pending_changes": [],
-            "pending_summary": None,
-            "pending_violations": {},
+            "pending_summary": summary,
+            "pending_violations": violations,
             "changes_from": None,
             "review_decision": None,
         }

@@ -39,6 +39,7 @@ def proposal_from_nutrition(out: dict[str, Any], pid: str) -> Proposal:
             domain="nutrition",
             summary=out.get("pending_summary") or "",
             violations=violations,
+            pending_violations=keyed,
             question=last_ai_text(out.get("messages", [])) or "no answer",
         )
     return Proposal(

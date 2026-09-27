@@ -12,6 +12,7 @@ from tri_coach.checkin import (
     EXIT_OK,
     EXIT_PAUSED,
     run_checkin,
+    without_violations,
 )
 from tri_coach.models import ChangeSet, Proposal
 from tri_coach.prompts.coach import CHECKIN_REQUEST
@@ -199,6 +200,38 @@ async def test_a_model_error_exits_1():
     assert code == EXIT_ERROR and "model down" in text
 
 
+async def test_checkin_exits_1_on_a_nutrition_refusal_with_nothing_to_review():
+    refused = Proposal(
+        id="p1",
+        domain="nutrition",
+        summary="s",
+        violations=["session w2: product Mystery is not in the library"],
+        pending_violations={"w2": ["product Mystery is not in the library"]},
+        question="Nothing can be written: state the violations and stop.",
+    )
+    after = SimpleNamespace(next=(), values={"proposals": [refused]}, tasks=())
+    graph = Graph([[DONE]], [IDLE, after])
+    code, text = await run(graph)
+    assert code == EXIT_ERROR
+    assert "p1 w2: not proposed: product Mystery is not in the library" in text
+
+
+async def test_checkin_exits_1_on_a_planning_refusal_with_nothing_to_review():
+    refused = Proposal(
+        id="p1",
+        domain="planning",
+        summary="s",
+        violations=["week of 2026-09-21: hard sessions on consecutive days"],
+        pending_violations={"2026-09-21": ["hard sessions on consecutive days"]},
+        question="Nothing can be written: state the violations and stop.",
+    )
+    after = SimpleNamespace(next=(), values={"proposals": [refused]}, tasks=())
+    graph = Graph([[DONE]], [IDLE, after])
+    code, text = await run(graph)
+    assert code == EXIT_ERROR
+    assert "p1 week of 2026-09-21: not proposed: hard sessions on consecutive days" in text
+
+
 def flagged(pid: str, domain: str, changes: list[dict[str, Any]], violations: dict) -> tuple:
     p = Proposal.model_validate(
         {
@@ -255,3 +288,70 @@ async def test_yes_skips_flagged_changes_at_both_gates_and_exits_1():
     assert [c["op"] for p in fuel["proposals"] for c in p["changes"]] == ["set_day_targets"]
     assert "skipping p1 week of 2026-09-21: hard sessions on consecutive days" in text
     assert "skipping p2 set_session_note w2: carbs 95 g/h above the 90 g/h ceiling" in text
+
+
+def test_without_violations_names_a_fuel_plan_that_was_not_proposed():
+    payload = {
+        "proposals": [
+            {
+                "id": "p1",
+                "domain": "nutrition",
+                "summary": "s",
+                "changes": [
+                    {
+                        "op": "set_session_note",
+                        "target_key": "w1",
+                        "day": "2026-09-14",
+                        "payload": {},
+                        "reason": "r",
+                    }
+                ],
+                "pending_violations": {"w2": ["product Mystery is not in the library"]},
+            }
+        ]
+    }
+    kept, skipped = without_violations(payload)
+    assert [c.target_key for c in kept[0].changes] == ["w1"]
+    assert skipped == ["p1 w2: not proposed: product Mystery is not in the library"]
+
+
+REFUSED_WEEK = Proposal(
+    id="p1",
+    domain="planning",
+    summary="s",
+    violations=["week of 2026-09-21: hard sessions on consecutive days"],
+    pending_violations={"2026-09-21": ["hard sessions on consecutive days"]},
+    question="Nothing can be written: state the violations and stop.",
+)
+REFUSED_WEEK_LINE = "p1 week of 2026-09-21: not proposed: hard sessions on consecutive days"
+
+
+class ByTurn(Graph):
+    """aget_state returns the snapshot for the number of turns run so far, as a checkpointer
+    would: before the first turn, at the first gate, after the resumed turn."""
+
+    async def aget_state(self, config: Any) -> Any:
+        return self.states[len(self.inputs)]
+
+
+async def test_yes_exits_1_on_a_refused_week_beside_an_approved_nutrition_change():
+    """Apply clears `proposals`, so the refused week has to be read at the gate."""
+    targets = nutrition_proposal().model_copy(update={"id": "p2"})
+    value = {"narration": "Targets.", "proposals": [targets.model_dump(mode="json")]}
+    gate = ((), "updates", {"__interrupt__": (Interrupt(value=value),)})
+    at_gate = SimpleNamespace(
+        next=("review",), values={"proposals": [REFUSED_WEEK, targets]}, tasks=()
+    )
+    applied = SimpleNamespace(next=(), values={"proposals": []}, tasks=())
+    graph = ByTurn([[gate], [DONE]], [IDLE, at_gate, applied])
+    code, text = await run(graph, yes=True)
+    assert code == EXIT_ERROR and graph.inputs[1].resume == {"action": "approve"}
+    assert text.count(REFUSED_WEEK_LINE) == 1
+
+
+async def test_checkin_exits_1_on_a_refused_week_beside_planning_changes_never_reviewed():
+    partial = REFUSED_WEEK.model_copy(update={"changes": proposal().changes, "question": None})
+    after = SimpleNamespace(next=(), values={"proposals": [partial]}, tasks=())
+    graph = Graph([[DONE]], [IDLE, after])
+    code, text = await run(graph)
+    assert code == EXIT_ERROR and REFUSED_WEEK_LINE in text

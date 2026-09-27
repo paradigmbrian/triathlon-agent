@@ -382,10 +382,10 @@ async def test_checkin_yes_leaves_out_a_designed_week_with_violations(
             propose("Your next three weeks.", ["p1"]),
         ],
         planning=[
-            tool_call("PlannedWeek", stray),
-            tool_call("PlannedWeek", stray),  # the retry keeps the stray
-            tool_call("PlannedWeek", week2),
-            tool_call("PlannedWeek", week3),
+            tool_call("DesignedWeek", stray),
+            tool_call("DesignedWeek", stray),  # the retry keeps the stray
+            tool_call("DesignedWeek", week2),
+            tool_call("DesignedWeek", week3),
         ],
     )
     buf: list[str] = []

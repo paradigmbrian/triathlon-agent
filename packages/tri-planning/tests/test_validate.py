@@ -142,3 +142,41 @@ def test_structure_step_without_duration_is_a_violation_not_an_error():
     assert validate.structure_seconds(structure) is None
     out = validate.week(week(session(0, tss=300, structure=structure)), target(), goal())
     assert any("duration_seconds" in v for v in out)
+
+
+def test_hours_under_eighty_percent_of_the_target():
+    short = week(session(0, minutes=120, tss=150), session(2, minutes=120, tss=150))  # 4 h
+    out = validate.week(short, target(hours=6.0), goal())
+    assert any("under 4.8" in v and "hours" in v for v in out)
+    enough = week(session(0, minutes=150, tss=150), session(2, minutes=150, tss=150))  # 5 h
+    assert not any("under" in v for v in validate.week(enough, target(hours=6.0), goal()))
+
+
+def test_light_weeks_have_no_hours_floor():
+    short = week(session(0, minutes=120, tss=150), session(2, minutes=120, tss=150))
+    for light in (
+        WeekTarget(week_start=MON, phase="taper", target_tss=300, target_hours=6),
+        WeekTarget(week_start=MON, phase="race", target_tss=300, target_hours=6),
+        WeekTarget(week_start=MON, phase="recovery", target_tss=300, target_hours=6),
+        WeekTarget(week_start=MON, phase="base", target_tss=300, target_hours=6, is_recovery=True),
+    ):
+        assert not any("under" in v for v in validate.week(short, light, goal()))
+
+
+def test_no_session_over_six_hours():
+    out = validate.week(week(session(0, minutes=365, tss=300)), target(), goal())
+    assert any("365 min" in v and "6-hour" in v for v in out)
+    out = validate.week(week(session(0, minutes=360, tss=300)), target(), goal())
+    assert not any("6-hour" in v for v in out)
+
+
+def test_no_vo2_session_over_ninety_minutes():
+    out = validate.week(week(session(0, minutes=95, tss=300, intensity="vo2")), target(), goal())
+    assert any("vo2 for 95 min" in v for v in out)
+    out = validate.week(week(session(0, minutes=90, tss=300, intensity="vo2")), target(), goal())
+    assert not any("vo2 for" in v for v in out)
+
+
+def test_the_tss_sum_line_starts_with_the_prefix():
+    out = validate.week(week(session(0, tss=100)), target(), goal())
+    assert any(v.startswith(validate.TSS_SUM_PREFIX) for v in out)

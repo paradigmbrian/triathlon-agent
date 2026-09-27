@@ -48,7 +48,7 @@ async def test_second_process_resumes_from_postgres(nocommit, make_deps):
     script = [
         tool_call("set_training_goal", GOAL_ARGS),
         AIMessage(content="Goal saved."),
-        tool_call("PlannedWeek", week_json(MONDAY, 300)),
+        tool_call("DesignedWeek", week_json(MONDAY, 300)),
     ]
     tp = FakeTp()
     try:

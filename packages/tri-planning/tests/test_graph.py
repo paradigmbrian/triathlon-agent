@@ -3,11 +3,12 @@ from datetime import timedelta
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.graph import END
 from langgraph.types import Command
 
 from tri_core.testing import ScriptedChatModel, tool_call
 from tri_planning import repo
-from tri_planning.graph.graph import after_review, build_graph, route_start
+from tri_planning.graph.graph import after_design, after_review, build_graph, route_start
 from tri_planning.planning.models import ReviewDecision, TrainingGoal, WeekTarget
 from tri_planning.testing import GOAL_ARGS, MONDAY, FakeTp, week_json
 
@@ -24,7 +25,7 @@ def intake_script():
 
 
 def week_call(target_tss, week_start=MONDAY, **k):
-    return tool_call("PlannedWeek", week_json(week_start, target_tss, **k))
+    return tool_call("DesignedWeek", week_json(week_start, target_tss, **k))
 
 
 async def first_target(nocommit):
@@ -239,3 +240,18 @@ async def test_embedded_graph_has_no_review_and_ends_with_pending_changes(
     assert out["pending_changes"] and all(c.op == "create" for c in out["pending_changes"])
     assert out["changes_from"] == "design" and out["pending_summary"]
     assert fake_tp.calls == []
+
+
+def test_after_design_reviews_only_a_proposal():
+    assert after_design({"pending_changes": [object()]}) == "review"
+    assert after_design({"pending_changes": []}) == END
+
+
+async def test_a_refused_design_ends_the_turn_without_a_review(nocommit, make_deps, fake_tp):
+    repo.insert_goal(nocommit, TrainingGoal(**GOAL_ARGS))
+    model = ScriptedChatModel(script=[week_call(300, hard_on_consecutive_days=True)] * 2)
+    graph = build_graph(make_deps(model, tp=fake_tp), InMemorySaver())
+    out = await graph.ainvoke({"messages": [HumanMessage("continue")]}, CFG)
+    assert "__interrupt__" not in out and fake_tp.calls == []
+    assert "not designed" in out["messages"][-1].content
+    assert (await graph.aget_state(CFG)).next == ()

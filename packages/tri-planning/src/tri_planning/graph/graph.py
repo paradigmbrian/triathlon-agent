@@ -5,7 +5,7 @@ START -> route -> route_start: pending changes -> review; intake | targets | adj
 intake   -> targets (goal saved) | END
 targets  -> review (bought plan) | design (generated) | END (bought plan adopted, or nothing
             to adopt)
-design   -> review
+design   -> review (changes proposed) | END (every week refused, the summary is the note)
 review   -> apply (approve/edit) | design or adjust (reject) | END (nothing to review, or
             rejected apply_plan)
 apply    -> targets (after apply_plan) | END
@@ -70,6 +70,10 @@ def after_adjust(state: PlanningState) -> str:
     return "review" if state.get("pending_changes") else END
 
 
+def after_design(state: PlanningState) -> str:
+    return "review" if state.get("pending_changes") else END
+
+
 def build_graph(
     deps: GraphDeps, checkpointer: BaseCheckpointSaver[Any], *, embedded: bool = False
 ) -> Any:
@@ -97,7 +101,7 @@ def build_graph(
     g.add_conditional_edges(
         "targets", after_targets, {"review": review, "design": "design", END: END}
     )
-    g.add_edge("design", review)
+    g.add_conditional_edges("design", after_design, {"review": review, END: END})
     g.add_conditional_edges("adjust", after_adjust, {"review": review, END: END})
     if not embedded:
         g.add_conditional_edges("review", after_review, ["apply", "design", "adjust", END])

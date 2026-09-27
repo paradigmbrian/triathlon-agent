@@ -242,7 +242,7 @@ async def _reset() -> None:
 @app.command(name="eval")
 def eval_cmd(
     prefix: str | None = typer.Option(
-        None, "--prefix", help="Experiment name prefix (default design)"
+        None, "--prefix", help="Experiment name prefix (default design-v<PROMPT_VERSION>)"
     ),
     recreate: bool = typer.Option(
         False,

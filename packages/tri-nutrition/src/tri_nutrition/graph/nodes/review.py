@@ -4,7 +4,7 @@
 checkpoint records where we are. On `Command(resume=x)` the node runs again from the top and
 `interrupt()` returns x. Nothing before the interrupt may have side effects. With nothing to
 review there is no interrupt, and proposed profile overrides are persisted here, since `apply`
-never runs for an empty change set.
+never runs for an empty change set; the fuel plans refused this turn are named in the message.
 """
 
 from __future__ import annotations
@@ -31,6 +31,10 @@ async def review_node(state: NutritionState, *, store: BaseStore) -> dict[str, A
             if base is not None:
                 await S.put_profile(store, apply_overrides(base, overrides))
                 text = f"No nutrition changes to review; profile updated: {overrides}"
+        if state.get("pending_violations"):
+            # every plan was refused: the summary's "not proposed" lines are all there is to say
+            summary = (state.get("pending_summary") or "").splitlines()
+            text = "\n".join([text, *(x for x in summary if ": not proposed: " in x)])
         return {"review_decision": None, "profile_overrides": None, "messages": [AIMessage(text)]}
     raw = interrupt(
         {

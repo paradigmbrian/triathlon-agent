@@ -1,6 +1,8 @@
 """Create the LangSmith dataset of target weeks and run the design prompt over it. Needs
 LANGSMITH_API_KEY and ANTHROPIC_API_KEY. The dataset keeps the name the earlier script used, so
-experiments before and after this command compare. Each example costs one or two model calls."""
+experiments before and after this command compare. Each example costs one or two model calls.
+The experiment is named by PROMPT_VERSION (design-v<N>), so pass rates compare across prompt
+versions."""
 
 from __future__ import annotations
 
@@ -18,6 +20,7 @@ from tri_core.llm import ModelProvider, Role, eval_metadata
 from tri_planning.config import PlanningSettings
 from tri_planning.evals.design_eval import build_examples, design_target, validator_pass
 from tri_planning.graph.deps import GraphDeps
+from tri_planning.prompts.design import PROMPT_VERSION
 
 DATASET_NAME = "tri-planning-design-weeks"
 DATASET_DESCRIPTION = "Target weeks for the tri-planning design prompt"
@@ -46,7 +49,7 @@ def pass_rates(rows: list[dict[str, Any]]) -> dict[str, float]:
 
 
 def render_pass_rates(rates: dict[str, float], n: int) -> str:
-    lines = [f"pass rate over {n} examples:"]
+    lines = [f"pass rate over {n} examples (prompt version {PROMPT_VERSION}):"]
     lines += [f"  {key:26} {rate:.0%}" for key, rate in sorted(rates.items())]
     return "\n".join(lines)
 
@@ -78,8 +81,11 @@ async def run_eval(
         design_target(deps),
         data=DATASET_NAME,
         evaluators=[validator_pass],
-        experiment_prefix=prefix or "design",
-        metadata=eval_metadata(settings, Role.PLANNING_DESIGN, judge=False),
+        experiment_prefix=prefix or f"design-v{PROMPT_VERSION}",
+        metadata={
+            "prompt_version": PROMPT_VERSION,
+            **eval_metadata(settings, Role.PLANNING_DESIGN, judge=False),
+        },
         client=client,
         max_concurrency=2,
     )

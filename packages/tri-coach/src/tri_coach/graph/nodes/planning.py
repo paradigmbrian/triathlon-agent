@@ -39,6 +39,7 @@ def proposal_from_planning(out: dict[str, Any], pid: str) -> Proposal:
             domain="planning",
             summary=out.get("pending_summary") or "",
             violations=violations,
+            pending_violations=keyed,
             question=last_ai_text(out.get("messages", [])) or "no answer",
         )
     return Proposal(

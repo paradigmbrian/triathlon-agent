@@ -1,5 +1,6 @@
 """Fuel node: one structured-output call per qualifying session and one for the race, each
-validated with one retry, stored in fuel_plans, proposed as TrainingPeaks note changes."""
+validated with one retry and stored in fuel_plans. A plan that passes is proposed as a
+TrainingPeaks note change; one that still fails is named in the summary and not proposed."""
 
 from __future__ import annotations
 
@@ -39,6 +40,10 @@ from tri_nutrition.repl import RACE_VIOLATIONS_KEY, render_fuel, render_race
 
 LONG_SESSION_MIN = 75
 RACE_WINDOW_DAYS = 21
+
+
+def not_proposed_line(label: str, violations: list[str]) -> str:
+    return f"{label}: not proposed: " + "; ".join(violations)
 
 
 def qualifies(session: Session) -> bool:
@@ -152,6 +157,7 @@ def make_fuel_node(deps: GraphDeps) -> Any:
         fuels: list[SessionFuel] = []
         violations_by_id: dict[str, list[str]] = {}
         unmatched: list[str] = []
+        refused: list[str] = []
         caffeine_today: dict[date, int] = {}
 
         for s in [x for x in sessions if qualifies(x)]:
@@ -179,9 +185,12 @@ def make_fuel_node(deps: GraphDeps) -> Any:
             if s.tp_workout_id is None:
                 unmatched.append(f"{s.day} {s.sport} '{s.title}'")
                 continue
-            fuels.append(plan)
             if violations:
+                # still failing after the retry: stored above with its reasons, never proposed
                 violations_by_id[s.tp_workout_id] = violations
+                refused.append(not_proposed_line(f"{s.day} {s.title}", violations))
+                continue
+            fuels.append(plan)
             if _needs_write(by_workout.get(s.tp_workout_id), plan.note_text):
                 changes.append(session_note_change(plan))
 
@@ -190,20 +199,22 @@ def make_fuel_node(deps: GraphDeps) -> Any:
             cfg = merge_configs(config, {"tags": [f"day:{ctx.event_date}", "kind:race"]})
             target = targets.get(ctx.event_date)
             plan_r, rv = await planner.race(profile, library, fuel_log, ctx, target, cfg)
-            if rv:
-                violations_by_id[RACE_VIOLATIONS_KEY] = rv
             with deps.connect() as conn:
                 repo.upsert_fuel_plan(
                     conn, "race", ctx.event_date, None, plan_r.model_dump(mode="json"), rv
                 )
                 conn.commit()
-            race_text = render_race(plan_r, rv)
-            if _needs_write(stored_race, plan_r.note_text):
-                title = race_note_title(ctx.event_name, ctx.goal_type, ctx.event_date)
-                note_id = stored_race.tp_note_id if stored_race is not None else None
-                changes.append(race_note_change(plan_r, title, note_id))
+            if rv:
+                violations_by_id[RACE_VIOLATIONS_KEY] = rv
+                refused.append(not_proposed_line(f"{ctx.event_date} race", rv))
+            else:
+                race_text = render_race(plan_r, rv)
+                if _needs_write(stored_race, plan_r.note_text):
+                    title = race_note_title(ctx.event_name, ctx.goal_type, ctx.event_date)
+                    note_id = stored_race.tp_note_id if stored_race is not None else None
+                    changes.append(race_note_change(plan_r, title, note_id))
 
-        block = [render_fuel(fuels, violations_by_id)]
+        block = [render_fuel(fuels, violations_by_id)] if fuels or not refused else []
         if unmatched:
             block.append(
                 "Planned but not on the TrainingPeaks calendar yet (no note will be written): "
@@ -211,6 +222,7 @@ def make_fuel_node(deps: GraphDeps) -> Any:
             )
         if race_text:
             block.append(race_text)
+        block += refused
         summary = (state.get("pending_summary") or "") + "\n\n" + "\n".join(block)
         return {
             "pending_changes": changes,
