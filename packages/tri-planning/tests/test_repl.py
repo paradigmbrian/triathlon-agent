@@ -205,3 +205,26 @@ async def test_quitting_at_a_waiting_review_leaves_it_waiting():
 
     await chat_loop(graph, read=read, out=lambda s: None)
     assert graph.inputs == []
+
+
+class RemainderGraph(StubGraph):
+    """A partial apply's remainder: changes wait in `pending_changes`, no review is paused."""
+
+    async def aget_state(self, config):
+        values = {"pending_changes": [change()], "pending_summary": "left over", "phase": "active"}
+        return SimpleNamespace(next=(), values=values, tasks=())
+
+
+async def test_pending_on_a_remainder_prints_it_and_resumes_nothing():
+    graph = RemainderGraph([[]])
+    inputs = iter(["/pending", "approve", "/quit"])
+
+    async def read():
+        return next(inputs, None)
+
+    buf = []
+    await chat_loop(graph, read=read, out=buf.append)
+    text = "".join(buf)
+    assert "Ride" in text and "send any message to review it" in text
+    # no interrupt is waiting, so nothing is resumed; the next message goes to the graph
+    assert not any(isinstance(i, Command) for i in graph.inputs)

@@ -205,12 +205,20 @@ async def chat_loop(
                 elif not changes:
                     out("nothing pending\n")
                 else:
-                    pending = {
-                        "summary": snap.values.get("pending_summary") or "",
-                        "changes": [c.model_dump(mode="json") for c in changes],
-                        "violations": snap.values.get("pending_violations") or {},
-                        "last_error": snap.values.get("last_error"),
-                    }
+                    # a partial apply's remainder: no interrupt waits, so a resume would do
+                    # nothing; the next message routes to review (route_start)
+                    remainder = render_review(
+                        {
+                            "summary": snap.values.get("pending_summary") or "",
+                            "changes": [c.model_dump(mode="json") for c in changes],
+                            "violations": snap.values.get("pending_violations") or {},
+                            "last_error": snap.values.get("last_error"),
+                        }
+                    )
+                    out(
+                        remainder.removesuffix(" " + REVIEW_PROMPT)
+                        + "\n(left from an earlier apply; send any message to review it)\n"
+                    )
                 continue
             handler = commands.get(name)
             if handler is None:
