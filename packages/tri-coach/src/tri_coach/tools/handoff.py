@@ -19,8 +19,9 @@ from langgraph.types import Command
 from tri_coach.models import Brief, Domain, ProposalRequest
 from tri_core.harness.handoff import handoff
 
+CONSULT_BUDGET_PREFIX = "consult budget for "  # tri_web.thread tells the budget message apart
 CONSULT_BUDGET_SPENT = (
-    "consult budget for {domain} is spent this turn ({n} of {n}); explain what you have and "
+    CONSULT_BUDGET_PREFIX + "{domain} is spent this turn ({n} of {n}); explain what you have and "
     "stop, or ask the athlete"
 )
 
@@ -39,6 +40,7 @@ def _consult(
             content=CONSULT_BUDGET_SPENT.format(domain=domain, n=max_consults),
             tool_call_id=tool_call_id,
             name=f"consult_{domain}",
+            status="error",
         )
     message_id = str(uuid4())
     ack = ToolMessage(

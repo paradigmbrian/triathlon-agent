@@ -405,6 +405,7 @@ async def test_a_consult_past_the_budget_returns_the_budget_message_and_no_hando
     assert "reached" not in out
     tm = [m for m in out["messages"] if isinstance(m, ToolMessage)][0]
     assert tm.content == BUDGET and tm.name == "consult_planning"
+    assert tm.status == "error"
     assert out["messages"][-1].content == "I have what I need."
 
 
