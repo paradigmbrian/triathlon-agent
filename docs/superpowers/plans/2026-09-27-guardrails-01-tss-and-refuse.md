@@ -77,11 +77,9 @@ All are mechanical renames or assertions that flip because the spec changes the 
   - `PlanWeekRow.violations: list[str]` (default `[]`)
   - `repo.set_week_designed(conn, plan_id: int, week_start: date, week: PlannedWeek | None, violations: Sequence[str] = ()) -> None`. `week=None` writes SQL null to `designed`; empty `violations` writes SQL null to `violations`.
 
-- [ ] **Step 1: Create the branch**
+- [ ] **Step 1: Check out the branch**
 
-```bash
-git checkout -b feat/guardrails-tss
-```
+The plan commit created it: `git checkout feat/guardrails-tss`.
 
 - [ ] **Step 2: Write the migration**
 
