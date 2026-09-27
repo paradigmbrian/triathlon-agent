@@ -153,7 +153,7 @@ protection on `main` is set in the GitHub UI.
 ```
 pyproject.toml          workspace root: members, shared ruff/mypy/pytest config
 conftest.py             pytest options and the shared `db` fixture plugin
-migrations/             001_initial.sql (sync tables), 002_planning.sql and 003_rename_skeleton_to_targets.sql (planning tables), 004_nutrition.sql (nutrition tables), 005_wellness.sql (lab tables), 006_fixes.sql (2026-09-24 correctness fixes), 007_data_layer.sql (tombstones, garmin_activities, change status), 009_schema_migrations.sql (the tri migrate record), 010_reader_role.sql (the SQL tool's tri_reader role)
+migrations/             001_initial.sql (sync tables), 002_planning.sql and 003_rename_skeleton_to_targets.sql (planning tables), 004_nutrition.sql (nutrition tables), 005_wellness.sql (lab tables), 006_fixes.sql (2026-09-24 correctness fixes), 007_data_layer.sql (tombstones, garmin_activities, change status), 008_guardrails.sql (plan_weeks.violations for a refused week), 009_schema_migrations.sql (the tri migrate record), 010_reader_role.sql (the SQL tool's tri_reader role)
 packages/tri-core/      src/tri_core/{config,cli,mcp,db,sync,testing}
 packages/tri-analyze/   src/tri_analyze/{config,cli,llm,agent,repo,repl,testing,allowlist,prompts,tools,evals}
 packages/tri-planning/  src/tri_planning/{config,cli,repo,repl,testing,planning,graph,tools,prompts}

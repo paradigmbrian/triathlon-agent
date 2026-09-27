@@ -24,7 +24,7 @@ flowchart TD
     route["route\nno model call\nphase and ids from the tables"]
     intake["intake\ncreate_agent sub-agent\nasks questions, calls set_training_goal"]
     targets["targets\npure Python\ngoal + fitness -> week targets"]
-    design["design\nwith_structured_output(PlannedWeek)\none call per window week, validated"]
+    design["design\nwith_structured_output(DesignedWeek)\none call per window week, scaled, validated"]
     review["review\ninterrupt()\nwaits for approve / reject / edit"]
     apply["apply\nthe only TrainingPeaks writer\none call per change, each recorded"]
     adjust["adjust\ncreate_agent sub-agent"]
@@ -34,7 +34,8 @@ flowchart TD
     targets -->|bought plan: apply_plan proposed| review
     targets -->|generated plan| design
     targets -->|bought plan adopted| END2([END])
-    design --> review
+    design -->|changes proposed| review
+    design -->|every week refused| END6([END])
     review -->|approve / edit| apply
     review -->|reject, from design| design
     review -->|reject, from adjust| adjust
@@ -50,10 +51,10 @@ flowchart TD
 | `route` | none | nothing | `training_goals`, `training_plans`, `plan_weeks` | `phase`, `goal_id`, `plan_id` derived from the tables every run (a fresh thread and a stateless consultation start where the database says); phase is `active` only once a week is written to TrainingPeaks, `planning` when a plan row exists with nothing on the calendar |
 | `intake` | sub-agent loop with `query_training_db`, `list_tp_training_plans`, `set_training_goal` | `training_goals` (via the tool) | messages | new messages; `goal_id` and `phase: planning` once the goal is saved |
 | `targets` | none | `training_plans`, `plan_weeks` | goal, `daily_metrics` | `plan_id` and a summary message, or `pending_changes` for a bought plan |
-| `design` | one structured-output call per week in the horizon, plus one retry per week when the validator objects | `plan_weeks.designed` | goal, plan, thresholds | `pending_changes` (one `create` per session), `pending_summary` |
+| `design` | one structured-output call per week in the horizon (TSS scaled to target by `tss.py`), plus one retry per week when the validator objects | `plan_weeks.designed`; `plan_weeks.violations` for a week that still fails (refused, never proposed) | goal, plan, thresholds | `pending_changes` (one `create` per clean-week session), `pending_summary`, `pending_violations` (refused weeks); ends at END when nothing is proposed |
 | `review` | none | nothing before the interrupt | `pending_changes` | `review_decision`; a reject note as a `HumanMessage`; edited changes on edit |
 | `apply` | none | TrainingPeaks, `plan_changes`, `plan_weeks.written_to_tp` | `plan_changes` (ownership) | remaining changes, `last_error`, report message, `phase: active` when clean |
-| `adjust` | sub-agent loop with `query_training_db`, `get_training_readiness`, `get_hrv_data`, `tp_get_workouts`, `design_next_week`, `propose_calendar_changes` | `plan_weeks.designed` (when `design_next_week` runs) | this/next week targets, last 7 days planned vs actual, 3-day readiness/HRV vs 30-day baseline, TSB, owned workouts | new messages; `pending_changes`/`pending_summary`/`changes_from: adjust` when changes are proposed, cleared otherwise |
+| `adjust` | sub-agent loop with `query_training_db`, `get_training_readiness`, `get_hrv_data`, `tp_get_workouts`, `design_next_week`, `propose_calendar_changes` | `plan_weeks.designed` (when `design_next_week` runs) | this/next week targets, last 7 days planned vs actual, 3-day readiness/HRV vs 30-day baseline, TSB, owned workouts | new messages; `pending_changes`/`pending_summary`/`pending_violations`/`changes_from: adjust` when changes are proposed; otherwise changes cleared, summary and refused weeks kept |
 
 Two invariants hold by construction: no TrainingPeaks write tool is ever bound to a model, and
 there is no edge into `apply` except from `review`.
@@ -91,9 +92,10 @@ It may call `get_training_readiness`, `get_hrv_data`, `tp_get_workouts`, `query_
 `design_next_week` (when fewer than two designed weeks remain) and finally
 `propose_calendar_changes`. Every proposal goes through the same review and apply as the first plan.
 `check-in` runs the same review with a fixed prompt; exit code 3 means it is waiting for you.
-Exit code 1 means the model call failed, the apply failed, or (under `--yes`) a designed week
-still had validator violations and was skipped; nothing was changed for a model or apply
-failure, and the other weeks' changes were still applied for a skipped week.
+Exit code 1 means the model call failed, the apply failed, a designed week was refused for
+validator violations (stored, not proposed, even when nothing else was up for review), or
+(under `--yes`) a week with violations was skipped; nothing was changed for a model or apply
+failure, and the other weeks' changes were still applied for a refused or skipped week.
 For a cron job: `uv run tri-planning check-in --yes` applies the change set without asking,
 except any week with validator violations, which it skips and reports, exiting 1 so the run is
 noticed; leave `--yes` off to review in the next `chat`.
@@ -103,7 +105,7 @@ noticed; leave `--yes` off to review in the next `chat`.
 ```
 you> ...            intake sub-agent (create_agent) asks, queries the DB, finally calls set_training_goal
 [targets] ...       pure Python: goal + fitness -> week targets (training_plans, plan_weeks)
-[design]            one with_structured_output(PlannedWeek) call per window week, validated, retried once
+[design]            one with_structured_output(DesignedWeek) call per window week, scaled, validated, retried once
 <change table>      review node: interrupt(); the run is checkpointed in Postgres until you answer
 approve             apply: one TrainingPeaks call per change, each recorded in plan_changes
 ```
