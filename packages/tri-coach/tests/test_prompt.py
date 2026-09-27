@@ -67,6 +67,7 @@ def test_rules_cover_policy_routing_and_memory():
         "call remember with kind checkin",
         "Write it before propose_changes",
         "returns a budget message",
+        "not proposed",
     ):
         assert phrase in COACH_RULES, phrase
 

@@ -21,18 +21,27 @@ def keyed_violations(
     out: dict[str, Any], where: Callable[[str], str]
 ) -> tuple[list[str], dict[str, list[str]]]:
     """A sub-graph run's violations: `last_error`, then one line per `pending_violations` entry
-    (`where` names its key), for the coach and the review; and the entries themselves, which
-    check-in --yes uses to leave the flagged changes out."""
+    (a week or note the sub-agent refused and did not propose), for the coach and the review;
+    and the entries themselves, which check-in --yes uses to leave the flagged changes out."""
     raw: dict[str, list[str]] = out.get("pending_violations") or {}
     keyed = {k: list(v) for k, v in raw.items() if v}
     lines = [out["last_error"]] if out.get("last_error") else []
-    lines += [f"{where(k)}: " + "; ".join(keyed[k]) for k in sorted(keyed)]
+    lines += [f"{where(k)} not proposed: " + "; ".join(keyed[k]) for k in sorted(keyed)]
     return lines, keyed
 
 
 def proposal_from_planning(out: dict[str, Any], pid: str) -> Proposal:
     changes = list(out.get("pending_changes") or [])
     violations, keyed = keyed_violations(out, lambda week: f"week of {week}")
+    if not changes and keyed:
+        # every week was refused: not a question, the violations say why
+        return Proposal(
+            id=pid,
+            domain="planning",
+            summary=out.get("pending_summary") or "",
+            violations=violations,
+            pending_violations=keyed,
+        )
     if not changes:
         return Proposal(
             id=pid,

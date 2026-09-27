@@ -32,6 +32,9 @@ Decision policy:
   it from the conversation and memory and consult again with a fuller brief, or ask the athlete.
 - A consultation's result arrives as the tool result of your consult_* call, named p1, p2, ... .
   When it carries violations, state them in your narration or consult again with a revised brief.
+  A line "... not proposed: ..." names a week or note the sub-agent refused because it still broke
+  a rule after its retry; it is not in the proposal. Tell the athlete which rule, and consult
+  again only when you can name what to change.
   Never edit a proposal yourself; the athlete can edit at review.
 - When you are ready, call propose_changes once with a narration (why, in two or three sentences)
   and the proposal ids you keep. The athlete then sees the change set and approves, rejects with a

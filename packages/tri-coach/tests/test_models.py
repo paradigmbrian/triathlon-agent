@@ -197,3 +197,17 @@ def test_report_from_nutrition_carries_reconciled():
         reconciled=["set_day_targets 2026-09-14: found on Garmin; recorded as applied"],
     )
     assert report_from_nutrition(r).reconciled == r.reconciled
+
+
+def test_a_proposal_with_everything_refused_says_it_proposed_nothing():
+    p = Proposal(
+        id="p1",
+        domain="planning",
+        summary="week 2026-09-21: not designed: hard sessions on consecutive days",
+        violations=["week of 2026-09-21 not proposed: hard sessions on consecutive days"],
+        pending_violations={"2026-09-21": ["hard sessions on consecutive days"]},
+    )
+    assert p.render() == (
+        "p1 (planning) proposed no changes\n"
+        "violations: week of 2026-09-21 not proposed: hard sessions on consecutive days"
+    )

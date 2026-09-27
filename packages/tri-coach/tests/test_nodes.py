@@ -205,9 +205,9 @@ async def test_a_consultation_carries_the_planning_violations_by_week():
     out = await make_planning_node(graph)({"brief": brief, "proposals": []}, CONFIG)
     p = out["proposals"][0]
     assert p.pending_violations == {"2026-09-21": ["hard sessions on consecutive days"]}
-    assert p.violations == ["week of 2026-09-21: hard sessions on consecutive days"]
+    assert p.violations == ["week of 2026-09-21 not proposed: hard sessions on consecutive days"]
     # the coach reads them in the tool result; the athlete reads them at review
-    line = "violations: week of 2026-09-21: hard sessions on consecutive days"
+    line = "violations: week of 2026-09-21 not proposed: hard sessions on consecutive days"
     assert line in out["messages"][0].content
     assert line in render_review({"narration": "n", "proposals": [p.model_dump(mode="json")]})
 
@@ -236,8 +236,8 @@ async def test_nutrition_proposals_carry_fuel_violations_by_session_and_race():
     follow_on = (await node({"brief": regenerate, "proposals": []}, CONFIG))["proposals"][0]
     assert follow_on.pending_violations["w2"] == ["carbs 95 g/h above the 90 g/h ceiling"]
     assert follow_on.violations == [
-        "race note: no sodium",
-        "session w2: carbs 95 g/h above the 90 g/h ceiling",
+        "race note not proposed: no sodium",
+        "session w2 not proposed: carbs 95 g/h above the 90 g/h ceiling",
     ]
     consult = Brief(domain="nutrition", instruction="x", tool_call_id="c1", message_id="m1")
     p = (await node({"brief": consult, "proposals": []}, CONFIG))["proposals"][0]
@@ -254,7 +254,7 @@ def test_a_no_change_planning_proposal_keeps_its_refused_weeks():
         "messages": [AIMessage(content="Nothing can be written.")],
     }
     p = proposal_from_planning(out, "p1")
-    assert not p.changes and p.question == "Nothing can be written."
+    assert not p.changes and p.question is None
     assert p.pending_violations == {"2026-09-21": ["hard sessions on consecutive days"]}
 
 
@@ -267,7 +267,7 @@ def test_a_no_change_nutrition_proposal_keeps_its_refused_notes():
         "messages": [AIMessage(content="Nothing can be written.")],
     }
     p = proposal_from_nutrition(out, "p1")
-    assert not p.changes and p.question == "Nothing can be written."
+    assert not p.changes and p.question is None
     assert p.pending_violations == {"w2": ["product Mystery is not in the library"]}
 
 

@@ -33,6 +33,15 @@ def proposal_from_nutrition(out: dict[str, Any], pid: str) -> Proposal:
     changes = list(out.get("pending_changes") or [])
     violations, keyed = keyed_violations(out, fuel_where)
     overrides = out.get("profile_overrides") or None
+    if not changes and keyed:
+        # every note was refused: not a question, the violations say why
+        return Proposal(
+            id=pid,
+            domain="nutrition",
+            summary=out.get("pending_summary") or "",
+            violations=violations,
+            pending_violations=keyed,
+        )
     if not changes:
         return Proposal(
             id=pid,
