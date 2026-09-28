@@ -282,18 +282,28 @@ def eval_cmd(
         "--recreate-dataset",
         help="Delete and re-create the LangSmith dataset from the cases in code",
     ),
+    local: bool | None = typer.Option(
+        None,
+        "--local/--no-local",
+        help="Run without LangSmith: no dataset, traces or feedback are sent; results go to "
+        ".evals/ only",
+    ),
 ) -> None:
     """Run the coach over the routing dataset in LangSmith and print the pass rate per evaluator
     (exit 1 when any evaluator is below 100%)."""
-    raise typer.Exit(code=asyncio.run(_eval(judge=judge, prefix=prefix, recreate=recreate)))
+    raise typer.Exit(
+        code=asyncio.run(_eval(judge=judge, prefix=prefix, recreate=recreate, local=local))
+    )
 
 
-async def _eval(*, judge: bool, prefix: str | None, recreate: bool) -> int:
+async def _eval(*, judge: bool, prefix: str | None, recreate: bool, local: bool | None) -> int:
     from tri_coach.evals.run import run_eval
+    from tri_core.evals import local_default
     from tri_core.llm import make_model
 
     settings = get_coach_settings()
-    if not settings.langsmith_api_key:
+    local = local_default() if local is None else local
+    if not local and not settings.langsmith_api_key:
         console.print("LANGSMITH_API_KEY is not set in .env", style="red")
         return 2
     if not settings.anthropic_api_key:
@@ -305,6 +315,7 @@ async def _eval(*, judge: bool, prefix: str | None, recreate: bool) -> int:
         judge=judge,
         prefix=prefix,
         recreate=recreate,
+        local=local,
         log=lambda m: _out(m + "\n"),
     )
     return 0 if rates and all(r == 1.0 for r in rates.values()) else 1

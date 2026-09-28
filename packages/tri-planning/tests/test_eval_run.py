@@ -1,6 +1,9 @@
 from datetime import date
 
+from langsmith.schemas import Example
+
 import tri_planning.evals.run as planning_run
+from tri_core.evals import OFFLINE_API_URL
 from tri_core.llm import Role
 from tri_core.testing import ScriptedChatModel
 from tri_planning.config import PlanningSettings
@@ -57,3 +60,40 @@ async def test_run_eval_designs_on_the_design_role(monkeypatch):
     assert captured["metadata"] == {"prompt_version": "2", "model": "claude-opus-5", "effort": None}
     assert [e.__name__ for e in captured["evaluators"]] == ["validator_pass"]
     assert f"(prompt version {PROMPT_VERSION}):" in "\n".join(logged)
+
+
+async def test_run_eval_local_skips_the_dataset_and_uses_local_examples(monkeypatch):
+    captured: dict = {}
+
+    class FakeResults:
+        experiment_name = "exp"
+
+        def __aiter__(self):
+            async def rows():
+                return
+                yield
+
+            return rows()
+
+    async def fake_aevaluate(target, **kw):
+        captured.update(kw)
+        return FakeResults()
+
+    def raising_client(*a, **kw):
+        raise AssertionError("Client must not be constructed in local mode")
+
+    monkeypatch.setattr(planning_run, "Client", raising_client)
+    monkeypatch.setattr(planning_run, "aevaluate", fake_aevaluate)
+
+    def models(role: Role):
+        return ScriptedChatModel(script=[])
+
+    settings = PlanningSettings(_env_file=None, langsmith_api_key=None)
+    await planning_run.run_eval(settings, models, local=True, log=lambda m: None)
+    assert captured["client"].api_url == OFFLINE_API_URL
+    assert captured["upload_results"] is False
+    assert isinstance(captured["data"], list) and len(captured["data"]) == len(
+        case_examples(date.today())
+    )
+    assert all(isinstance(e, Example) for e in captured["data"])
+    assert captured["experiment_prefix"].endswith("-local")

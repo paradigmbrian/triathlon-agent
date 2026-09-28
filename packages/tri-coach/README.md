@@ -136,6 +136,9 @@ over stub tools with the real names and descriptions. It scores `routing_accurac
 that each brief is bounded and names the signal, the lever and the constraint. The experiment
 is `coach-v<PROMPT_VERSION>`.
 
+`--local` (or `TRI_EVAL_LOCAL=true`) skips LangSmith entirely: no dataset, traces or feedback
+are sent, `LANGSMITH_API_KEY` is not required, and results still go to `.evals/` only.
+
 The brief judge sees what the coach saw: the context block, the memory, the conversation and
 every answer the stub tools served. `brief_quality` fails a brief with a number, date or lab
 value that appears in none of them (`grounded`), naming the brief by index.

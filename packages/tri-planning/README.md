@@ -73,8 +73,11 @@ checklist is for `tri-planning check-in` and the athlete's own messages.
 uv run tri-planning chat [--no-live]   # intake -> targets -> design -> review -> apply
 uv run tri-planning reset [--yes]      # abandon goal and plan, clear the thread; TrainingPeaks untouched
 uv run tri-planning check-in [--yes] [--no-sync] [--no-live]   # sync, review last 7 days, propose; exit 3 when paused, 1 on a model error
-uv run tri-planning eval [--prefix NAME] [--recreate-dataset]    # LangSmith pass rate for the design prompt
+uv run tri-planning eval [--prefix NAME] [--recreate-dataset] [--local]    # LangSmith pass rate for the design prompt
 ```
+
+`--local` (or `TRI_EVAL_LOCAL=true`) runs `eval` without LangSmith: no dataset, traces or
+feedback are sent, and results still go to `.evals/` only.
 
 In chat: `/status` (goal, phase, this week's target vs actual, weeks on the calendar), `/pending`
 (re-show a paused change set), `/sync`, `/quit`. At review: `approve`, `reject <note>`, or

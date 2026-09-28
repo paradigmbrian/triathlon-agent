@@ -116,7 +116,8 @@ regenerates targets; approve persists them, reject discards them.
   prompts over it as experiment `fuel-v<PROMPT_VERSION>`, and prints the pass rate per
   evaluator (`targets_within_bounds`, `fuel_within_bounds`, `fuel_respects_profile`). Bump
   `PROMPT_VERSION` in `prompts/fuel.py` whenever a fueling prompt changes and compare runs in
-  LangSmith.
+  LangSmith. `--local` (or `TRI_EVAL_LOCAL=true`) skips LangSmith entirely: no dataset, traces
+  or feedback are sent, and results still go to `.evals/` only.
 - `tri-nutrition reset [--yes] [--forget-profile]`: clears the thread and unwritten rows; only
   `--forget-profile` deletes the Store keys.
 

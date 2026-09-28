@@ -56,3 +56,38 @@ def test_eval_exit_code_follows_rates(monkeypatch):
     stub({})
     assert runner.invoke(app, ["eval"]).exit_code == 1
     assert seen[-1]["prefix"] is None and seen[-1]["recreate"] is False
+
+
+def test_eval_local_needs_no_langsmith_key_and_passes_local_through(monkeypatch):
+    monkeypatch.setattr(
+        cli,
+        "get_planning_settings",
+        lambda: PlanningSettings(_env_file=None, anthropic_api_key="k", langsmith_api_key=None),
+    )
+    seen: list[dict] = []
+
+    async def run_eval(settings, models, **kw):
+        seen.append(kw)
+        return {"validator_pass": 1.0}
+
+    monkeypatch.setattr("tri_planning.evals.run.run_eval", run_eval)
+    result = runner.invoke(app, ["eval", "--local"])
+    assert result.exit_code == 0 and seen[-1]["local"] is True
+
+
+def test_tri_eval_local_env_makes_it_local_without_the_flag(monkeypatch):
+    monkeypatch.setenv("TRI_EVAL_LOCAL", "TRUE")
+    monkeypatch.setattr(
+        cli,
+        "get_planning_settings",
+        lambda: PlanningSettings(_env_file=None, anthropic_api_key="k", langsmith_api_key=None),
+    )
+    seen: list[dict] = []
+
+    async def run_eval(settings, models, **kw):
+        seen.append(kw)
+        return {"validator_pass": 1.0}
+
+    monkeypatch.setattr("tri_planning.evals.run.run_eval", run_eval)
+    result = runner.invoke(app, ["eval"])
+    assert result.exit_code == 0 and seen[-1]["local"] is True

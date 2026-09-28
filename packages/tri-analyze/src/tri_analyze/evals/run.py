@@ -5,9 +5,10 @@ rate per evaluator is what changes between prompt versions."""
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import nullcontext
 from typing import Any
 
-from langsmith import Client, aevaluate
+from langsmith import Client, aevaluate, tracing_context
 
 from tri_analyze.config import AnalyzeSettings
 from tri_analyze.evals.cases import CASES
@@ -22,8 +23,11 @@ from tri_analyze.evals.target import make_target
 from tri_analyze.prompts.analyst import PROMPT_VERSION
 from tri_core.config import reader_url
 from tri_core.evals import (
+    disable_network_sampling,
     errored,
     failure_lines,
+    local_examples,
+    offline_client,
     pass_rates,
     record_rows,
     render_pass_rates,
@@ -61,38 +65,49 @@ async def run_eval(
     judge: bool = True,
     prefix: str | None = None,
     recreate: bool = False,
+    local: bool = False,
     log: Callable[[str], None] = print,
     eval_db_url: str | None = None,
 ) -> tuple[dict[str, float], int]:
     """Returns the pass rate per evaluator key and the number of errored examples. The analyst
     runs on its role's model and the judge on the judge role's. The history in evals/seed.py is
     seeded into the eval database (the test database unless given) and the tables are emptied
-    afterwards, pass or fail."""
+    afterwards, pass or fail. `local=True` never talks to LangSmith: no dataset, traces or
+    feedback are sent."""
     url = eval_db_url or settings.test_database_url
     if url == settings.database_url:
         raise AthletesDatabaseRefused(
             "refusing to seed the athlete's database; use the test database"
         )
-    client = Client(api_key=settings.langsmith_api_key)
-    ensure_dataset(client, recreate=recreate)
+    if local:
+        client = offline_client()
+        data: Any = local_examples(case_examples())
+        disable_network_sampling()
+    else:
+        client = Client(api_key=settings.langsmith_api_key)
+        ensure_dataset(client, recreate=recreate)
+        data = DATASET_NAME
     evaluators: list[Any] = [uses_sql, pulls_splits, states_window]
     if judge:
         evaluators.append(make_judge(models(Role.JUDGE)))
+    experiment_prefix = (prefix or f"analyst-v{PROMPT_VERSION}") + ("-local" if local else "")
     seed_database(url)
     try:
         verify_readable(url)
-        results = await aevaluate(
-            make_target(models(Role.ANALYST), reader_url(url)),
-            data=DATASET_NAME,
-            evaluators=evaluators,
-            experiment_prefix=prefix or f"analyst-v{PROMPT_VERSION}",
-            metadata={
-                "prompt_version": PROMPT_VERSION,
-                **eval_metadata(settings, Role.ANALYST, judge=judge),
-            },
-            client=client,
-            max_concurrency=2,
-        )
+        with tracing_context(enabled="local", client=client) if local else nullcontext():
+            results = await aevaluate(
+                make_target(models(Role.ANALYST), reader_url(url)),
+                data=data,
+                evaluators=evaluators,
+                experiment_prefix=experiment_prefix,
+                metadata={
+                    "prompt_version": PROMPT_VERSION,
+                    **eval_metadata(settings, Role.ANALYST, judge=judge),
+                },
+                client=client,
+                upload_results=not local,
+                max_concurrency=2,
+            )
         rows: list[Any] = [row async for row in results]
     finally:
         try:

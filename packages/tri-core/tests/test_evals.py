@@ -1,14 +1,28 @@
 import json
+import os
+import uuid
 from types import SimpleNamespace
 
+import pytest
+import requests
+from langchain_core.messages import AIMessage
+from langsmith import aevaluate, run_trees, tracing_context
+from langsmith.schemas import Example
+
 from tri_core.evals import (
+    LOCAL_DATASET_ID,
+    disable_network_sampling,
     errored,
     failure_lines,
+    local_default,
+    local_examples,
+    offline_client,
     pass_rates,
     record_rows,
     render_pass_rates,
     scored_counts,
 )
+from tri_core.testing import ScriptedChatModel
 
 
 def R(key, score):
@@ -109,3 +123,103 @@ def test_record_rows_writes_one_json_line_per_example(tmp_path):
 def test_the_directory_defaults_to_the_environment(tmp_path, monkeypatch):
     monkeypatch.setenv("TRI_EVAL_DIR", str(tmp_path / "evals"))
     assert record_rows([], "e").parent == tmp_path / "evals"
+
+
+def test_local_examples_builds_examples_from_inputs_outputs_and_metadata():
+    examples = local_examples(
+        [
+            {"inputs": {"q": 1}, "outputs": {"a": 2}, "metadata": {"case": "x"}},
+            {"inputs": {"q": 2}},
+        ]
+    )
+    assert len(examples) == 2
+    assert all(isinstance(e, Example) for e in examples)
+    assert all(e.dataset_id == LOCAL_DATASET_ID for e in examples)
+    assert uuid.UUID(int=0) == LOCAL_DATASET_ID
+    assert len({e.id for e in examples}) == 2  # each example gets its own id
+    assert examples[0].inputs == {"q": 1}
+    assert examples[0].outputs == {"a": 2}
+    assert examples[0].metadata == {"case": "x"}
+    assert examples[1].outputs == {} and examples[1].metadata == {}
+
+
+def test_local_default_is_false_when_unset(monkeypatch):
+    monkeypatch.delenv("TRI_EVAL_LOCAL", raising=False)
+    assert local_default() is False
+
+
+@pytest.mark.parametrize("value", ["1", "true", "True", "TRUE", "yes", "Yes", "YES"])
+def test_local_default_is_true_for_truthy_values(monkeypatch, value):
+    monkeypatch.setenv("TRI_EVAL_LOCAL", value)
+    assert local_default() is True
+
+
+@pytest.mark.parametrize("value", ["0", "false", "False", "no", "", "banana"])
+def test_local_default_is_false_for_other_values(monkeypatch, value):
+    monkeypatch.setenv("TRI_EVAL_LOCAL", value)
+    assert local_default() is False
+
+
+# langsmith's own: ast.Str inside its evaluator key extraction, and the upload_results beta notice
+@pytest.mark.filterwarnings("ignore:ast.Str is deprecated:DeprecationWarning")
+@pytest.mark.filterwarnings("ignore:'upload_results' parameter is in beta")
+async def test_aevaluate_in_local_mode_makes_no_network_call(monkeypatch):
+    """A real aevaluate() the way run_eval runs it in local mode (the offline client, in-memory
+    Examples, upload_results=False, a local tracing context), with a target that makes a real
+    LangChain model call so LangChain's own tracer is exercised too. Every request attempt is
+    recorded (not raised: LangSmith swallows errors from its background thread); the offline
+    client is flushed before asserting none, and langsmith's process-wide client must never
+    have been created."""
+    disable_network_sampling()
+    monkeypatch.setattr(run_trees, "_CLIENT", None)
+    attempted: list[tuple] = []
+
+    def refuse(self, *a, **kw):
+        attempted.append(a[:2])
+        raise AssertionError(f"unexpected network call: {a[:2]}")
+
+    monkeypatch.setattr(requests.Session, "request", refuse)
+    model = ScriptedChatModel(script=[AIMessage(content="2"), AIMessage(content="4")])
+
+    async def target(inputs: dict) -> dict:
+        reply = await model.ainvoke(f"double {inputs['n']}")
+        return {"answer": int(str(reply.content))}
+
+    def doubled(run, example) -> dict:
+        return {
+            "key": "doubled",
+            "score": 1 if run.outputs["answer"] == example.inputs["n"] * 2 else 0,
+        }
+
+    client = offline_client()
+    data = local_examples([{"inputs": {"n": 1}}, {"inputs": {"n": 2}}])
+    with tracing_context(enabled="local", client=client):
+        results = await aevaluate(
+            target,
+            data=data,
+            evaluators=[doubled],
+            client=client,
+            upload_results=False,
+            experiment_prefix="local-mode-no-network-test",
+            max_concurrency=0,
+        )
+        rows = [row async for row in results]
+    client.flush(timeout=5)
+    assert attempted == []
+    # nothing fell back to langsmith's process-wide client (which starts a sender thread)
+    assert run_trees._CLIENT is None
+    assert len(rows) == 2
+    for row in rows:
+        scores = [r.score for r in row["evaluation_results"]["results"]]
+        assert scores == [1]
+
+
+def test_the_offline_client_never_points_at_langsmith():
+    client = offline_client()
+    assert "langchain.com" not in client.api_url and client.tracing_queue is None
+
+
+def test_local_mode_overrides_a_sampling_rate_already_set(monkeypatch):
+    monkeypatch.setenv("LANGSMITH_TRACING_SAMPLING_RATE", "1")
+    disable_network_sampling()
+    assert os.environ["LANGSMITH_TRACING_SAMPLING_RATE"] == "0"

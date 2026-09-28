@@ -4,6 +4,7 @@ from datetime import date
 from typing import Any
 
 from langchain_core.messages import AIMessage
+from langsmith.schemas import Example
 
 import tri_coach.evals.run as coach_run
 from tri_coach.config import CoachSettings
@@ -20,6 +21,7 @@ from tri_coach.evals.target import classify, make_target, stub_tools
 from tri_coach.prompts.coach import CHECKIN_REQUEST, PROMPT_VERSION
 from tri_coach.tools.analyst import make_analyst_tool
 from tri_coach.tools.wellness import make_wellness_tool
+from tri_core.evals import OFFLINE_API_URL
 from tri_core.harness.agents import one_tool_call_at_a_time
 from tri_core.llm import Role
 from tri_core.testing import ScriptedChatModel, tool_call
@@ -336,3 +338,25 @@ async def test_a_raising_judge_keeps_the_failures_already_found():
     res = await judge(case("knee_pain_planning").inputs(), {"briefs": ["one", "two"]})
     assert res["score"] == 0 and res["comment"].startswith("judge failed: IndexError")
     assert "brief 1: Ferritin 18 appears nowhere" in res["comment"]
+
+
+async def test_run_eval_local_skips_the_dataset_and_uses_local_examples(monkeypatch):
+    captured: dict = {}
+
+    async def fake_aevaluate(target, **kw):
+        captured.update(kw)
+        return _FakeResults()
+
+    def raising_client(*a, **kw):
+        raise AssertionError("Client must not be constructed in local mode")
+
+    monkeypatch.setattr(coach_run, "Client", raising_client)
+    monkeypatch.setattr(coach_run, "aevaluate", fake_aevaluate)
+    models, _ = _recording_models()
+    settings = CoachSettings(_env_file=None, langsmith_api_key=None)
+    await coach_run.run_eval(settings, models, judge=False, local=True, log=lambda m: None)
+    assert captured["client"].api_url == OFFLINE_API_URL
+    assert captured["upload_results"] is False
+    assert isinstance(captured["data"], list) and len(captured["data"]) == len(CASES)
+    assert all(isinstance(e, Example) for e in captured["data"])
+    assert captured["experiment_prefix"].endswith("-local")

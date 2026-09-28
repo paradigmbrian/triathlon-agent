@@ -1,6 +1,9 @@
 from datetime import date
 
+from langsmith.schemas import Example
+
 import tri_nutrition.evals.run as nutrition_run
+from tri_core.evals import OFFLINE_API_URL
 from tri_core.llm import Role
 from tri_core.testing import ScriptedChatModel, tool_call
 from tri_nutrition.config import NutritionSettings
@@ -147,3 +150,25 @@ async def test_run_eval_uses_the_fuel_and_judge_roles(monkeypatch):
         "judge_model": "claude-opus-5",
     }
     assert f"(prompt version {PROMPT_VERSION}):" in "\n".join(logged)
+
+
+async def test_run_eval_local_skips_the_dataset_and_uses_local_examples(monkeypatch):
+    captured: dict = {}
+
+    async def fake_aevaluate(target, **kw):
+        captured.update(kw)
+        return _FakeResults()
+
+    def raising_client(*a, **kw):
+        raise AssertionError("Client must not be constructed in local mode")
+
+    monkeypatch.setattr(nutrition_run, "Client", raising_client)
+    monkeypatch.setattr(nutrition_run, "aevaluate", fake_aevaluate)
+    models, _ = _recording_models()
+    settings = NutritionSettings(_env_file=None, langsmith_api_key=None)
+    await nutrition_run.run_eval(settings, models, judge=False, local=True, log=lambda m: None)
+    assert captured["client"].api_url == OFFLINE_API_URL
+    assert captured["upload_results"] is False
+    assert isinstance(captured["data"], list) and len(captured["data"]) == len(CASES)
+    assert all(isinstance(e, Example) for e in captured["data"])
+    assert captured["experiment_prefix"].endswith("-local")

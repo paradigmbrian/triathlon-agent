@@ -142,12 +142,20 @@ def eval_cmd(
         help="Postgres URL the eval seeds and empties (default: TEST_DATABASE_URL); never the "
         "athlete's database",
     ),
+    local: bool | None = typer.Option(
+        None,
+        "--local/--no-local",
+        help="Run without LangSmith: no dataset, traces or feedback are sent; results go to "
+        ".evals/ only",
+    ),
 ) -> None:
     """Run the analyst over the feedback dataset in LangSmith and print the pass rate per
     evaluator (exit 1 when any evaluator is below 100% or any example errored). The analyst's SQL
     runs against a history seeded into the test database (or --eval-db), which is emptied
     afterwards."""
-    raise typer.Exit(code=asyncio.run(_eval(prefix=prefix, recreate=recreate, eval_db=eval_db)))
+    raise typer.Exit(
+        code=asyncio.run(_eval(prefix=prefix, recreate=recreate, eval_db=eval_db, local=local))
+    )
 
 
 def _masked(url: str) -> str:
@@ -159,7 +167,9 @@ def _masked(url: str) -> str:
     return urlunsplit(parts._replace(netloc=netloc))
 
 
-async def _eval(*, prefix: str | None, recreate: bool, eval_db: str | None) -> int:
+async def _eval(
+    *, prefix: str | None, recreate: bool, eval_db: str | None, local: bool | None
+) -> int:
     import psycopg
 
     from tri_analyze.evals.run import run_eval
@@ -168,10 +178,12 @@ async def _eval(*, prefix: str | None, recreate: bool, eval_db: str | None) -> i
         EvalDatabaseInUse,
         EvalDatabaseUnreadable,
     )
+    from tri_core.evals import local_default
     from tri_core.llm import make_model
 
     settings = get_analyze_settings()
-    if not settings.langsmith_api_key:
+    local = local_default() if local is None else local
+    if not local and not settings.langsmith_api_key:
         console.print("LANGSMITH_API_KEY is not set in .env", style="red")
         return 2
     if not settings.anthropic_api_key:
@@ -186,6 +198,7 @@ async def _eval(*, prefix: str | None, recreate: bool, eval_db: str | None) -> i
             lambda role: make_model(settings, role),
             prefix=prefix,
             recreate=recreate,
+            local=local,
             log=lambda m: _out(m + "\n"),
             eval_db_url=eval_db,
         )

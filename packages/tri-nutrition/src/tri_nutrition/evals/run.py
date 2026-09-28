@@ -5,14 +5,18 @@ is named by PROMPT_VERSION and the pass rate per evaluator is what changes betwe
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import nullcontext
 from typing import Any
 
-from langsmith import Client, aevaluate
+from langsmith import Client, aevaluate, tracing_context
 
 from tri_core.config import Settings
 from tri_core.evals import (
+    disable_network_sampling,
     errored,
     failure_lines,
+    local_examples,
+    offline_client,
     pass_rates,
     record_rows,
     render_pass_rates,
@@ -55,25 +59,36 @@ async def run_eval(
     judge: bool = True,
     prefix: str | None = None,
     recreate: bool = False,
+    local: bool = False,
     log: Callable[[str], None] = print,
 ) -> dict[str, float]:
-    client = Client(api_key=settings.langsmith_api_key)
-    ensure_dataset(client, recreate=recreate)
+    """`local=True` never talks to LangSmith: no dataset, traces or feedback are sent."""
+    if local:
+        client = offline_client()
+        data: Any = local_examples(case_examples())
+        disable_network_sampling()
+    else:
+        client = Client(api_key=settings.langsmith_api_key)
+        ensure_dataset(client, recreate=recreate)
+        data = DATASET_NAME
     evaluators: list[Any] = [targets_within_bounds, fuel_within_bounds]
     if judge:
         evaluators.append(make_fuel_judge(models(Role.JUDGE)))
-    results = await aevaluate(
-        make_target(models(Role.NUTRITION_FUEL)),
-        data=DATASET_NAME,
-        evaluators=evaluators,
-        experiment_prefix=prefix or f"fuel-v{PROMPT_VERSION}",
-        metadata={
-            "prompt_version": PROMPT_VERSION,
-            **eval_metadata(settings, Role.NUTRITION_FUEL, judge=judge),
-        },
-        client=client,
-        max_concurrency=2,
-    )
+    experiment_prefix = (prefix or f"fuel-v{PROMPT_VERSION}") + ("-local" if local else "")
+    with tracing_context(enabled="local", client=client) if local else nullcontext():
+        results = await aevaluate(
+            make_target(models(Role.NUTRITION_FUEL)),
+            data=data,
+            evaluators=evaluators,
+            experiment_prefix=experiment_prefix,
+            metadata={
+                "prompt_version": PROMPT_VERSION,
+                **eval_metadata(settings, Role.NUTRITION_FUEL, judge=judge),
+            },
+            client=client,
+            upload_results=not local,
+            max_concurrency=2,
+        )
     rows: list[Any] = [row async for row in results]
     dict_rows = [dict(r) for r in rows]
     rates = pass_rates(dict_rows)

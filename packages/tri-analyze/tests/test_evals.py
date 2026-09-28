@@ -6,6 +6,7 @@ from datetime import date
 import psycopg
 import pytest
 from langchain_core.messages import AIMessage
+from langsmith.schemas import Example
 
 import tri_analyze.evals.run as analyze_run
 from tri_analyze.allowlist import GARMIN_LIVE_TOOLS, TP_LIVE_TOOLS
@@ -35,6 +36,7 @@ from tri_analyze.evals.target import Canned, athlete_from_inputs, make_target, s
 from tri_analyze.prompts.analyst import FEEDBACK_RULES, PROMPT_VERSION
 from tri_analyze.repo import AthleteContext
 from tri_core.db.sql_tool import make_query_tool
+from tri_core.evals import OFFLINE_API_URL
 from tri_core.llm import Role
 from tri_core.testing import ScriptedChatModel, tool_call
 
@@ -620,3 +622,29 @@ async def test_run_eval_logs_failed_checks_and_writes_the_results_file(monkeypat
     assert "  grounded  threshold_rpe9: -18 appears nowhere" in text
     assert f"results: {tmp_path / 'exp.jsonl'}" in text
     assert '"case": "threshold_rpe9"' in (tmp_path / "exp.jsonl").read_text()
+
+
+async def test_run_eval_local_skips_the_dataset_and_uses_local_examples(monkeypatch):
+    captured: dict = {}
+
+    async def fake_aevaluate(target, **kw):
+        captured.update(kw)
+        return _FakeResults()
+
+    def raising_client(*a, **kw):
+        raise AssertionError("Client must not be constructed in local mode")
+
+    monkeypatch.setattr(analyze_run, "Client", raising_client)
+    monkeypatch.setattr(analyze_run, "aevaluate", fake_aevaluate)
+    monkeypatch.setattr(analyze_run, "seed_database", lambda url: None)
+    monkeypatch.setattr(analyze_run, "clear_database", lambda url: None)
+    monkeypatch.setattr(analyze_run, "verify_readable", lambda url: None)
+    models, _ = _recording_models()
+    settings = AnalyzeSettings(_env_file=None, langsmith_api_key=None)
+    logged: list[str] = []
+    await analyze_run.run_eval(settings, models, judge=False, local=True, log=logged.append)
+    assert captured["client"].api_url == OFFLINE_API_URL
+    assert captured["upload_results"] is False
+    assert isinstance(captured["data"], list) and len(captured["data"]) == len(CASES)
+    assert all(isinstance(e, Example) for e in captured["data"])
+    assert captured["experiment_prefix"].endswith("-local")
