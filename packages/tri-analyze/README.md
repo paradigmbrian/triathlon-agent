@@ -93,7 +93,7 @@ so tests assert on the rendered system prompt. `testing.athlete_context()` is th
 
 ```
 uv run tri-analyze chat [--no-live]                    # /tools /prompt /sync /quit
-uv run tri-analyze eval [--prefix P] [--recreate-dataset] [--eval-db URL]   # the LangSmith feedback eval
+uv run tri-analyze eval [--prefix P] [--recreate-dataset] [--eval-db URL] [--cases A,B] [--failed-from F] [--rescore F]   # the LangSmith feedback eval
 ```
 
 `--no-live` binds only the database tool. Exit 2 when `ANTHROPIC_API_KEY` is unset or the
@@ -158,6 +158,11 @@ arithmetic. Needs Postgres, `LANGSMITH_API_KEY` and `ANTHROPIC_API_KEY`.
 
 `--local` (or `TRI_EVAL_LOCAL=true`) runs the same eval without LangSmith: no dataset, traces or
 feedback are sent, `LANGSMITH_API_KEY` is not required, and results still go to `.evals/` only.
+
+`--cases A,B` and `--failed-from .evals/<file>.jsonl` run only those cases (marked `-subset`,
+never a gate). `--rescore .evals/<file>.jsonl` re-runs the evaluators over a results file's saved
+outputs, with no target calls and always local. Every run ends with a usage line (tokens and
+estimated $ per role). See the root README's "Evals and cost".
 
 Today is fixed at 2026-09-16.
 

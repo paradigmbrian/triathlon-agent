@@ -121,5 +121,10 @@ regenerates targets; approve persists them, reject discards them.
 - `tri-nutrition reset [--yes] [--forget-profile]`: clears the thread and unwritten rows; only
   `--forget-profile` deletes the Store keys.
 
+`--cases A,B` and `--failed-from .evals/<file>.jsonl` run only those cases (marked `-subset`,
+never a gate). `--rescore .evals/<file>.jsonl` re-runs the evaluators over a results file's saved
+outputs, with no target calls and always local. Every run ends with a usage line (tokens and
+estimated $ per role). See the root README's "Evals and cost".
+
 Setup once per database: `uv run tri migrate && uv run tri migrate --test` (also creates the
 checkpoint and store tables).

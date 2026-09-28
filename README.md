@@ -76,7 +76,7 @@ Steps 3 (the API key), 4 and 5 stay manual. The steps it automates:
 uv run tri sync [--since YYYY-MM-DD] [--source trainingpeaks|garmin|all] [--full]
 uv run tri migrate [--test] [--dry-run]
 uv run tri-analyze chat [--no-live]     # --no-live binds only the database tool
-uv run tri-analyze eval [--recreate-dataset]   # LangSmith feedback eval
+uv run tri-analyze eval [--recreate-dataset] [--cases A,B] [--failed-from F] [--rescore F]   # LangSmith feedback eval; see Evals and cost
 uv run tri-planning chat [--no-live]    # plan; every TrainingPeaks write is approved first
 uv run tri-planning check-in [--yes] [--no-sync] [--no-live]   # sync, review last 7 days, propose; exit 3 when paused, 1 on a model error, a week or note not proposed for violations, or a change --yes skipped for violations
 uv run tri-planning reset [--yes]       # abandon goal and plan, clear the thread
@@ -84,10 +84,10 @@ uv run tri-wellness ingest <file.pdf|csv> [--kind pdf|export] [--drawn-on YYYY-M
 uv run tri-wellness report [--panel ID] [--out path.md]   # interpret a stored panel; saved to lab_reports
 uv run tri-wellness chat                                   # ask about panels and reports
 uv run tri-wellness panels                                 # list stored panels
-uv run tri-wellness eval [--recreate-dataset]              # LangSmith report evaluators
+uv run tri-wellness eval [--recreate-dataset] [--cases A,B] [--failed-from F] [--rescore F]  # LangSmith report evaluators
 uv run tri-coach chat [--no-live]       # the front door: one conversation over the analyst, wellness, planning and nutrition
 uv run tri-coach check-in [--yes] [--no-sync] [--no-live]   # sync, weekly checklist over plan and nutrition; exit 3 when paused, 1 on a model error, a week or note not proposed for violations, or a change --yes skipped for violations
-uv run tri-coach eval [--recreate-dataset]                   # LangSmith routing eval
+uv run tri-coach eval [--recreate-dataset] [--cases A,B] [--failed-from F] [--rescore F]     # LangSmith routing eval
 uv run tri-coach memory [--forget ID]   # the coach's athlete memory
 uv run tri-coach reset [--yes] [--forget-memory]
 uv run tri-web serve [--no-live] [--port 8321]   # the coach in the browser, same thread and memory as tri-coach chat
@@ -102,6 +102,30 @@ data and context without losing the conversation, `/quit` exits. Every tool call
 
 Incremental syncs resume from a per-source watermark with a 3-day overlap; rerunning is
 always safe.
+
+### Evals and cost
+
+Every `eval` run calls Claude on the target's model and, where the package has one, on the judge.
+A full run costs about $1 (2026-09-24: nine runs for about $9.50). Each run ends with a usage
+line, and writes the same figures to the `usage` key of its `.evals/` file:
+
+```text
+usage: analyst 400k in / 40k out (cache read 300k) $1.65 · judge 96k in / 8.0k out $0.68 · total $2.33
+```
+
+There are cheaper ways to check a change before the full run that gates it:
+
+```bash
+uv run tri-analyze eval --rescore .evals/<file>.jsonl      # judge change: re-score saved answers; no analyst calls, always local
+uv run tri-analyze eval --failed-from .evals/<file>.jsonl  # re-run only what failed or errored
+uv run tri-analyze eval --cases last_z2_ride,brick_sunday  # re-run named cases
+TRI_MODEL_JUDGE=claude-sonnet-5 uv run tri-analyze eval --rescore .evals/<file>.jsonl  # iteration only: a cheaper judge
+```
+
+The same flags work on every package's `eval`. A subset's experiment name ends in `-subset`, and
+its header reads `N of M examples (subset)`; it is never a gate. `--rescore` with `--failed-from`
+on the same file re-judges only the failures. Plans estimate a run from the latest `.evals/`
+file's `usage.total_cost` (see `CLAUDE.md`).
 
 ### First conversation
 
