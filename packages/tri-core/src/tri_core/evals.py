@@ -181,7 +181,7 @@ def record_rows(
                     for r in results
                 ],
             }
-            if hasattr(example, "outputs"):
+            if example is not None and hasattr(example, "outputs"):
                 line["reference_outputs"] = example.outputs
             if metadata is not None:
                 line["metadata"] = metadata

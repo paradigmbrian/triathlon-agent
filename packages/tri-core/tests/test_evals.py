@@ -9,6 +9,7 @@ from langchain_core.messages import AIMessage
 from langsmith import aevaluate, run_trees, tracing_context
 from langsmith.schemas import Example
 
+from tri_core.eval_usage import TokenCounts, UsageByRole
 from tri_core.evals import (
     LOCAL_DATASET_ID,
     disable_network_sampling,
@@ -24,7 +25,6 @@ from tri_core.evals import (
     render_pass_rates,
     scored_counts,
 )
-from tri_core.eval_usage import TokenCounts, UsageByRole
 from tri_core.testing import ScriptedChatModel
 
 
