@@ -9,6 +9,7 @@ is not the answer's window and is ignored."""
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -19,7 +20,7 @@ from langsmith.evaluation import EvaluationResult, EvaluationResults
 from pydantic import BaseModel, Field
 
 from tri_analyze.evals.target import athlete_from_inputs, stub_tools
-from tri_analyze.prompts.analyst import render_system_prompt
+from tri_analyze.prompts.analyst import WEEKDAYS, calendar_line, render_system_prompt
 from tri_core.llm import structured
 
 _MONTH = (
@@ -152,17 +153,55 @@ one or two concrete takeaways for the next similar session, and there is no gene
 encouragement. Judge the answer's text literally; return a FeedbackJudgement."""
 
 
+def _value(v: Any) -> str:
+    return v if isinstance(v, str) else json.dumps(v, default=str, ensure_ascii=False)
+
+
+def _sql_lines(content: str) -> str:
+    """A query_training_db envelope as one `- col: value; …` line per row and a closing
+    `row_count; truncated[; note]` line, so a wide row cannot be read out of position. Anything
+    that is not that envelope (an error, a bad row, not JSON) comes back unchanged."""
+    try:
+        env = json.loads(content)
+    except ValueError:
+        return content
+    if not isinstance(env, dict):
+        return content
+    columns, body = env.get("columns"), env.get("rows")
+    if not isinstance(columns, list) or not isinstance(body, list):
+        return content
+    if not all(isinstance(r, list) and len(r) == len(columns) for r in body):
+        return content
+    lines = [
+        "- " + "; ".join(f"{c}: {_value(v)}" for c, v in zip(columns, r, strict=True)) for r in body
+    ]
+    closing = f"row_count: {len(body)}; truncated: {_value(bool(env.get('truncated')))}"
+    if env.get("note"):
+        closing += f"; note: {env['note']}"
+    return "\n".join([*lines, closing])
+
+
 def render_judge_prompt(inputs: dict[str, Any], outputs: dict[str, Any]) -> str:
     """Grounds the judge on what the analyst actually received: `outputs["tool_results"]`
     (the served `ToolMessage`s from `run_case`), not the case's full canned corpus — a canned
-    fixture the analyst never called never appears here."""
-    system = render_system_prompt(athlete_from_inputs(inputs), [t.name for t in stub_tools(inputs)])
+    fixture the analyst never called never appears here. A calendar line names today's weekday
+    and the week starts; query_training_db envelopes render as `col: value` lines."""
+    ctx = athlete_from_inputs(inputs)
+    system = render_system_prompt(ctx, [t.name for t in stub_tools(inputs)])
     served = outputs.get("tool_results") or []
     grouped: dict[str, list[str]] = {}
     for result in served:
-        grouped.setdefault(str(result["name"]), []).append(str(result["content"]))
+        name, content = str(result["name"]), str(result["content"])
+        if name == "query_training_db":
+            content = _sql_lines(content)
+        grouped.setdefault(name, []).append(content)
     rendered = "\n".join(f"{name}:\n" + "\n".join(responses) for name, responses in grouped.items())
+    calendar = (
+        f"Calendar: today {ctx.today.isoformat()} is a {WEEKDAYS[ctx.today.weekday()]}. "
+        f"{calendar_line(ctx.today)}"
+    )
     return (
+        f"{calendar}\n\n"
         f"Analyst system prompt:\n{system}\n\n"
         f"Question:\n{inputs.get('question', '')}\n\n"
         f"Tool results:\n{rendered or '(none)'}\n\n"

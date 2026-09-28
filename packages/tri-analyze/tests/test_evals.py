@@ -652,3 +652,83 @@ async def test_run_eval_local_skips_the_dataset_and_uses_local_examples(monkeypa
     [named] = [m for m in logged if m.startswith("experiment: ")]
     assert named.startswith(f"experiment: {captured['experiment_prefix']}-")
     assert f"/{named.removeprefix('experiment: ')}.jsonl" in logged[-1]
+
+
+def _judged(content: str, name: str = "query_training_db") -> str:
+    return render_judge_prompt(
+        case("last_z2_ride").inputs(),
+        {"calls": [], "answer": "ok", "tool_results": [{"name": name, "content": content}]},
+    )
+
+
+# The row the analyst fetched in fresh-decision-92, in its column order: a wide row whose
+# positions the judge misread (power as HR and cadence).
+Z2_ROW = {
+    "workout_date": "2026-09-14",
+    "sport": "bike",
+    "title": "Z2 ride",
+    "actual_duration_sec": 5460,
+    "actual_tss": 58,
+    "actual_if": 0.62,
+    "normalized_power": 160,
+    "avg_power": 155,
+    "avg_hr": 132,
+    "avg_cadence": 88,
+    "feeling": 7,
+    "rpe": 4,
+    "comments": None,
+}
+
+
+def test_the_judge_sees_a_calendar_line_before_the_context():
+    text = render_judge_prompt(case("last_z2_ride").inputs(), {"calls": [], "answer": "ok"})
+    assert text.startswith(
+        "Calendar: today 2026-09-16 is a Wednesday. Weeks start Monday: 2026-08-17, "
+        "2026-08-24, 2026-08-31, 2026-09-07, 2026-09-14, 2026-09-21.\n\nAnalyst system prompt:\n"
+    )
+
+
+def test_the_judge_reads_sql_rows_as_column_value_lines():
+    served = sql_rows(Z2_ROW)
+    text = _judged(served)
+    assert "query_training_db:\n- workout_date: 2026-09-14; sport: bike; title: Z2 ride; " in text
+    assert "normalized_power: 160; avg_power: 155; avg_hr: 132" in text
+    assert "comments: null" in text
+    assert "row_count: 1; truncated: false" in text
+    assert served not in text
+
+
+def test_the_judge_keeps_the_empty_result_and_the_truncation_note():
+    assert "query_training_db:\nrow_count: 0; truncated: false" in _judged(SQL_ENVELOPE_EMPTY)
+    cut = json.dumps(
+        {
+            "columns": ["n", "tags"],
+            "rows": [[1, ["a", "b"]], [2, None]],
+            "row_count": 2,
+            "truncated": True,
+            "note": "result cut at 2 rows",
+        }
+    )
+    assert (
+        '- n: 1; tags: ["a", "b"]\n- n: 2; tags: null\n'
+        "row_count: 2; truncated: true; note: result cut at 2 rows"
+    ) in _judged(cut)
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        '{"error": "sql error: boom"}',
+        "not json",
+        "[1, 2]",
+        '{"columns": ["a", "b"], "rows": [[1]], "row_count": 1, "truncated": false}',
+        '{"columns": ["a"], "rows": "x", "row_count": 1, "truncated": false}',
+    ],
+)
+def test_the_judge_passes_anything_but_the_envelope_through(content):
+    assert f"query_training_db:\n{content}" in _judged(content)
+
+
+def test_other_tools_pass_through_even_when_shaped_like_the_envelope():
+    env = sql_rows({"a": 1})
+    assert f"get_activity:\n{env}" in _judged(env, name="get_activity")
