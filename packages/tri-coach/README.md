@@ -5,6 +5,9 @@ interpreter, decides on its own authority when the training plan or the nutritio
 change, briefs the planning and nutrition agents to produce that change, and presents one change
 set for approval. Nothing is written to Garmin or TrainingPeaks until the athlete approves.
 
+Architecture: [`docs/architecture/tri-coach.md`](../../docs/architecture/tri-coach.md) has the current
+diagram; the [architecture index](../../docs/architecture/README.md) shows how it fits the whole repo.
+
 ## Commands
 
 ```

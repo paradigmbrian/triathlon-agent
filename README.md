@@ -5,7 +5,7 @@ TrainingPeaks data, synced into a local Postgres store.
 
 | Package | Module | Command | What it does |
 |---|---|---|---|
-| `packages/tri-core` | `tri_core` | `tri sync` | Settings, MCP client, Postgres store, the ETL, test helpers. No LLM code. |
+| `packages/tri-core` | `tri_core` | `tri sync \| migrate` | Settings, the agent harness, the model for each role, MCP client, Postgres store, the ETL, the shared eval tail, test helpers. |
 | `packages/tri-analyze` | `tri_analyze` | `tri-analyze chat \| eval` | Analyst agent: feedback on completed sessions, trends. |
 | `packages/tri-planning` | `tri_planning` | `tri-planning chat` | Planning agent: goal intake, periodized plan, approved writes to the TrainingPeaks calendar. |
 | `packages/tri-nutrition` | `tri_nutrition` | `tri-nutrition chat \| today \| check-in \| eval` | Nutrition agent: profile intake, periodized daily targets and fueling plans, approved writes to Garmin Connect and TrainingPeaks. |
@@ -18,15 +18,11 @@ Repo: github.com/paradigmbrian/triathlon-agent.
 
 ## How it fits together
 
-```
- Garmin MCP server ──┐                        ┌──► Postgres ◄── query_training_db (read-only)
-                     ├── tri sync ────────────┤                        │
- TrainingPeaks MCP ──┘   (tri-core ETL)       └──► sync_state          │
-                                                                       ▼
- Garmin MCP server ──┐                                        tri-analyze chat
- TrainingPeaks MCP ──┴── live tools (allow-listed) ─────────► LangChain agent on Claude
-                                                              streams to your terminal
-```
+![The whole repo](docs/architecture/diagrams/repo.svg)
+
+[`docs/architecture/`](docs/architecture/README.md) has this diagram explained, one page per
+package with its own diagram, and the [harness](docs/architecture/harness.md) every agent is
+built on.
 
 Deeper context lives next to the code:
 
@@ -185,6 +181,7 @@ packages/tri-nutrition/ src/tri_nutrition/{config,cli,repo,repl,store,plan_loade
 packages/tri-wellness/  src/tri_wellness/{config,cli,repo,repl,report,agent,testing,ranges,labs,graph,prompts,tools,evals}
 packages/tri-web/       src/tri_web/{config,cli,app,runtime,events,thread,review,schemas,routes}
 web/                    Vite + React app: src/{api,components,pages,lib}, tests/ (Vitest, Playwright e2e)
+docs/architecture/      architecture diagrams: the whole repo, one page per package, the harness
 docs/superpowers/       specs and implementation plans
 ```
 

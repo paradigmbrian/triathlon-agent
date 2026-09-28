@@ -4,6 +4,8 @@ A local web UI over the head coach. The server (`tri_web`, FastAPI on 127.0.0.1:
 
 Spec: `docs/superpowers/specs/2026-09-14-tri-web-design.md`.
 
+Architecture: [`docs/architecture/tri-web.md`](../../docs/architecture/tri-web.md) has the current diagram; the [architecture index](../../docs/architecture/README.md) shows how it fits the whole repo.
+
 ## Run
 
 ```

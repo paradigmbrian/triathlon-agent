@@ -7,6 +7,9 @@ sleep and recovery data tri-core syncs to Postgres. Design:
 `docs/superpowers/specs/2026-09-10-tri-wellness-design.md`. Plans:
 `docs/superpowers/plans/2026-09-11-tri-wellness-0*.md`.
 
+Architecture: [`docs/architecture/tri-wellness.md`](../../docs/architecture/tri-wellness.md) has the current
+diagram; the [architecture index](../../docs/architecture/README.md) shows how it fits the whole repo.
+
 ## After Plan 3 (v1 complete)
 
 All five commands are here: ingest, report, chat, panels, eval. Pure layer underneath:

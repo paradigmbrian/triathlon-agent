@@ -2,7 +2,7 @@
 
 LangGraph is the runtime. The harness is the layer this repo builds on top of it: how agents are built, how an agent runs as a tool, how a sub-agent hands control back to its parent graph, how state is persisted, how a turn is streamed to a terminal or the browser, and which model each role runs on. That layer lives in `packages/tri-core/src/tri_core/harness/` and `tri_core/llm.py`. Each package keeps its own graphs, nodes, prompts, tools and domain dialogues, and imports the rest.
 
-The diagrams below are SVG files in `docs/architecture/harness/`. They follow the reader's light or dark theme.
+The diagrams below are SVG files in `docs/architecture/harness/`. They follow the reader's light or dark theme. For the whole repo and one page per package, see the [architecture index](README.md).
 
 ## One coach turn, layer by layer
 
@@ -25,6 +25,8 @@ Dashed edges are tools that return `Command(graph=Command.PARENT)`, so a model's
 - `consult_planning` and `consult_nutrition` run the embedded planning or nutrition graph with no checkpointer (`checkpointer=False`; the parent graph owns the messages, and each consultation starts fresh) and swap the result into the original tool message.
 - `propose_changes` goes to `review`, which pauses the thread with `interrupt()` until the athlete approves, edits or rejects.
 - `apply` writes the approved changes. If sessions moved and nutrition targets exist in the horizon, nutrition runs once more to regenerate them.
+- Each domain can be consulted at most twice per turn (`tri_coach_max_consults_per_domain`). After that, the consult tool returns an error message instead of handing off. `start` clears the counts, and a rejected review resets them.
+- Proposals the request does not name, and whatever a partial apply could not write, stay held in `pending` (`held-planning`, `held-nutrition`) until a later review. [tri-coach.md](tri-coach.md) has the current graph with these paths drawn in.
 
 ## Packages on the harness
 
@@ -49,7 +51,7 @@ Which harness modules each package's `src/` imports:
 | tri-nutrition | ● | | | | ● | ● |
 | tri-wellness | ● | | | ● | ● | ● |
 | tri-analyze | ● | | | ● | | ● |
-| tri-web | | | | ● | ● | |
+| tri-web | | | | ● | ● | ● |
 
 ## One model per role
 
@@ -72,8 +74,8 @@ Read it left to right. Every model in the app comes from `tri_core.llm.make_mode
 | Durable state | `harness/persistence.py` | each package's `graph/state.py` (`STATE_TYPES`) | A paused review survives a restart. |
 | Turn driver | `harness/turns.py` | `tri_coach/repl.py` (`TurnClassifier`, `TurnPrinter`), `tri_web/events.py` | Terminal and web share one stream loop and the same error lines. |
 | Orchestration | | `tri_coach/graph/graph.py` | The coach routes; planning and nutrition start fresh on every consult. |
-| Tool plane | | `tri_core/mcp/*`, `tri_core/db/sql_tool.py` | One session per MCP server; SQL is a single SELECT in a read-only transaction. |
-| Guardrails | | `review.py` → `apply.py`, `allowlist.py` | Models propose. Only `apply` writes. |
+| Tool plane | | `tri_core/mcp/*`, `tri_core/db/sql_tool.py` | One session per MCP server; SQL is a single SELECT in a read-only transaction as the `tri_reader` role. |
+| Guardrails | | `review.py` → `apply.py`, `allowlist.py`, `tri_core/db/writes.py` | Models propose. Only `apply` writes, and each write is recorded as pending before it runs. The coach's consults are budgeted per turn. |
 | Model choice | `tri_core/llm.py` | `.env` overrides per role; `evals/run.py` per package | One model, effort and fallback chain per role; a default changes only after its eval passes the gate. |
 
 ## Rules to keep

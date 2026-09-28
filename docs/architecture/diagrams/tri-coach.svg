@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 540" width="1000" height="540" role="img" aria-labelledby="cc-title">
+<title id="cc-title">tri-coach graph: coach consults planning and nutrition, proposes to review, and apply writes</title>
+<style>
+svg { --bg:#F8FAF9; --ink:#16201E; --muted:#5A6A66; --rule:#C3CECB; --sys:#EDF2F0; --acc:#0E6B66; --tint:#DAEAE7; --accline:#8DBDB7; --w:#B4470F; --wtint:#F6E4D8; --sans:-apple-system,"Segoe UI","Public Sans",Helvetica,Arial,sans-serif; --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace; }
+@media (prefers-color-scheme: dark) { svg { --bg:#151D1C; --ink:#E2EAE8; --muted:#93A39F; --rule:#2C3836; --sys:#1C2725; --acc:#5BBDB4; --tint:#15302E; --accline:#2F6660; --w:#EE8C4E; --wtint:#3A2518; } }
+.bg { fill:var(--bg); }
+.bx { fill:var(--bg); stroke:var(--rule); stroke-width:1; }
+.bl { fill:var(--tint); stroke:var(--accline); stroke-width:1; fill-opacity:.55; }
+.ba { fill:var(--tint); stroke:var(--acc); stroke-width:1.4; }
+.bs { fill:var(--bg); stroke:var(--acc); stroke-width:1.4; }
+.bw { fill:var(--wtint); stroke:var(--w); stroke-width:1.4; }
+.bs2 { fill:var(--sys); stroke:var(--muted); stroke-width:1; stroke-dasharray:4 3; }
+.ln { fill:none; stroke:var(--ink); stroke-width:1.4; }
+.la { fill:none; stroke:var(--acc); stroke-width:1.4; }
+.lw { fill:none; stroke:var(--w); stroke-width:1.6; }
+.dash { stroke-dasharray:5 4; }
+.ah { fill:var(--ink); } .ah-c { fill:var(--acc); } .ah-w { fill:var(--w); }
+.dot { fill:var(--ink); } .ring { fill:none; stroke:var(--ink); stroke-width:1.4; }
+.t { font:600 13px var(--sans); fill:var(--ink); }
+.s { font:600 12px var(--sans); fill:var(--ink); }
+.ss { font:500 11px var(--sans); fill:var(--ink); }
+.m { font:400 11px var(--mono); fill:var(--muted); }
+.mi { font:400 11px var(--mono); fill:var(--ink); }
+.m10 { font:400 10px var(--mono); fill:var(--muted); }
+.ma { font:500 11px var(--mono); fill:var(--acc); }
+.ma10 { font:500 10px var(--mono); fill:var(--acc); }
+.mw { font:500 10.5px var(--mono); fill:var(--w); }
+.lab { font:600 10.5px var(--mono); letter-spacing:.08em; fill:var(--muted); }
+</style>
+<defs><marker id="cc-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah"/></marker><marker id="cc-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah-c"/></marker><marker id="cc-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah-w"/></marker></defs>
+<rect class="bg" x="0" y="0" width="1000" height="540"/>
+<circle class="dot" cx="30" cy="200" r="6"/>
+<text class="m10" x="30" y="222" text-anchor="middle">START</text>
+<path class="ln" d="M36 200 H53" marker-end="url(#cc-a)"/>
+<rect class="bx" x="56" y="180" width="100" height="40" rx="3"/>
+<text class="mi" x="106.0" y="196.0" text-anchor="middle">start</text>
+<text class="m10" x="106.0" y="212.0" text-anchor="middle">clears counts</text>
+<path class="ln" d="M156 200 H217" marker-end="url(#cc-a)"/>
+<rect class="ba" x="220" y="165" width="150" height="70" rx="3"/>
+<text class="t" x="295.0" y="189.0" text-anchor="middle">coach</text>
+<text class="m10" x="295.0" y="205.0" text-anchor="middle">Role.COACH · prompt v4</text>
+<text class="m10" x="295.0" y="219.0" text-anchor="middle">one tool call per step</text>
+<rect class="bx" x="480" y="30" width="150" height="60" rx="3"/>
+<text class="s" x="555.0" y="49.0" text-anchor="middle">planning</text>
+<text class="m10" x="555.0" y="65.0" text-anchor="middle">embedded graph</text>
+<text class="m10" x="555.0" y="79.0" text-anchor="middle">fresh each consult</text>
+<path class="la dash" d="M330 165 V50 H477" marker-end="url(#cc-c)"/>
+<text class="ma" x="404" y="43" text-anchor="middle">consult_planning</text>
+<path class="ln" d="M480 75 H355 V162" marker-end="url(#cc-a)"/>
+<text class="m10" x="417" y="69" text-anchor="middle">proposal · count +1</text>
+<rect class="bx" x="480" y="310" width="150" height="60" rx="3"/>
+<text class="s" x="555.0" y="329.0" text-anchor="middle">nutrition</text>
+<text class="m10" x="555.0" y="345.0" text-anchor="middle">embedded graph</text>
+<text class="m10" x="555.0" y="359.0" text-anchor="middle">fresh each consult</text>
+<path class="la dash" d="M330 235 V340 H477" marker-end="url(#cc-c)"/>
+<text class="ma" x="404" y="356" text-anchor="middle">consult_nutrition</text>
+<path class="ln" d="M480 325 H355 V238" marker-end="url(#cc-a)"/>
+<text class="m10" x="417" y="319" text-anchor="middle">proposal · count +1</text>
+<text class="mw" x="322" y="118" text-anchor="end">budget: 2 per domain</text>
+<text class="mw" x="322" y="133" text-anchor="end">per turn, then an error</text>
+<path class="ln" d="M260 235 V271" marker-end="url(#cc-a)"/>
+<circle class="ring" cx="260" cy="282" r="8"/><circle class="dot" cx="260" cy="282" r="3.5"/>
+<text class="m10" x="260" y="306" text-anchor="middle">END</text>
+<text class="m10" x="268" y="256">reply</text>
+<rect class="bw" x="480" y="170" width="150" height="60" rx="3"/>
+<text class="t" x="555.0" y="196.0" text-anchor="middle">review</text>
+<text class="m10" x="555.0" y="212.0" text-anchor="middle">interrupt()</text>
+<path class="lw dash" d="M370 185 H477" marker-end="url(#cc-w)"/>
+<text class="mw" x="424" y="178" text-anchor="middle">propose_changes</text>
+<path class="ln" d="M480 215 H373" marker-end="url(#cc-a)"/>
+<text class="m10" x="424" y="229" text-anchor="middle">reject · bad ids</text>
+<rect class="bw" x="740" y="170" width="120" height="60" rx="3"/>
+<text class="t" x="800.0" y="196.0" text-anchor="middle">apply</text>
+<text class="m10" x="800.0" y="212.0" text-anchor="middle">only writer</text>
+<path class="lw" d="M630 200 H737" marker-end="url(#cc-w)"/>
+<text class="mw" x="684" y="192" text-anchor="middle">approve · edit</text>
+<path class="ln" d="M860 200 H933" marker-end="url(#cc-a)"/>
+<circle class="ring" cx="944" cy="200" r="8"/><circle class="dot" cx="944" cy="200" r="3.5"/>
+<text class="m10" x="944" y="224" text-anchor="middle">END</text>
+<rect class="bs2" x="720" y="30" width="160" height="60" rx="3"/>
+<text class="s" x="800.0" y="56.0" text-anchor="middle">TP + Garmin</text>
+<text class="m10" x="800.0" y="72.0" text-anchor="middle">via ToolsCaller</text>
+<path class="lw" d="M800 170 V93" marker-end="url(#cc-w)"/>
+<text class="mw" x="808" y="128">recorded_write</text>
+<text class="m10" x="808" y="143">→ *_changes rows</text>
+<path class="ln" d="M800 230 V340 H633" marker-end="url(#cc-a)"/>
+<text class="m10" x="716" y="332" text-anchor="middle">regenerate targets</text>
+<text class="mw" x="792" y="262" text-anchor="end">a partial apply holds the rest</text>
+<text class="m10" x="792" y="277" text-anchor="end">as held-planning / -nutrition</text>
+<path class="la" d="M300 235 V397" marker-end="url(#cc-c)"/>
+<text class="ma" x="308" y="385">tool calls</text>
+<rect class="bl" x="20" y="400" width="960" height="122" rx="4"/>
+<text class="lab" x="36" y="422">COACH TOOLS</text>
+<rect class="bs" x="36" y="436" width="148" height="70" rx="3"/>
+<text class="s" x="110.0" y="460.0" text-anchor="middle">ask_analyst</text>
+<text class="m10" x="110.0" y="476.0" text-anchor="middle">tri-analyze agent</text>
+<text class="m10" x="110.0" y="490.0" text-anchor="middle">read-only · limit 40</text>
+<rect class="bs" x="190" y="436" width="148" height="70" rx="3"/>
+<text class="s" x="264.0" y="460.0" text-anchor="middle">ask_wellness</text>
+<text class="m10" x="264.0" y="476.0" text-anchor="middle">tri-wellness chat</text>
+<text class="m10" x="264.0" y="490.0" text-anchor="middle">if TRI_ATHLETE_SEX set</text>
+<rect class="bx" x="344" y="436" width="148" height="70" rx="3"/>
+<text class="s" x="418.0" y="460.0" text-anchor="middle">consult_planning</text>
+<text class="m10" x="418.0" y="476.0" text-anchor="middle">handoff → planning</text>
+<text class="m10" x="418.0" y="490.0" text-anchor="middle">counts toward budget</text>
+<rect class="bx" x="498" y="436" width="148" height="70" rx="3"/>
+<text class="s" x="572.0" y="460.0" text-anchor="middle">consult_nutrition</text>
+<text class="m10" x="572.0" y="476.0" text-anchor="middle">handoff → nutrition</text>
+<text class="m10" x="572.0" y="490.0" text-anchor="middle">counts toward budget</text>
+<rect class="bw" x="652" y="436" width="148" height="70" rx="3"/>
+<text class="s" x="726.0" y="460.0" text-anchor="middle">propose_changes</text>
+<text class="m10" x="726.0" y="476.0" text-anchor="middle">handoff → review</text>
+<text class="m10" x="726.0" y="490.0" text-anchor="middle">names proposal ids</text>
+<rect class="bx" x="806" y="436" width="148" height="70" rx="3"/>
+<text class="s" x="880.0" y="460.0" text-anchor="middle">remember · forget</text>
+<text class="m10" x="880.0" y="476.0" text-anchor="middle">Store (athlete, coach)</text>
+<text class="m10" x="880.0" y="490.0" text-anchor="middle">check-ins last 14 d</text>
+</svg>

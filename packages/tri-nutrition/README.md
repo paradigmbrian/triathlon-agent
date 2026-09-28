@@ -6,6 +6,9 @@ writes them to Garmin Connect and TrainingPeaks after approval, and checks in ag
 intake and body composition. Design: `docs/superpowers/specs/2026-09-10-tri-nutrition-design.md`.
 Plans: `docs/superpowers/plans/2026-09-10-tri-nutrition-0*.md`.
 
+Architecture: [`docs/architecture/tri-nutrition.md`](../../docs/architecture/tri-nutrition.md) has the current
+diagram; the [architecture index](../../docs/architecture/README.md) shows how it fits the whole repo.
+
 ## Layout so far
 
 - `nutrition/models.py`: profile, product, session, day target, session fuel, race plan, change.

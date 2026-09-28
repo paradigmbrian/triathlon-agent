@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 400" width="1000" height="400" role="img" aria-labelledby="wb-title">
+<title id="wb-title">tri-web: React SPA calls FastAPI routes; one runtime lock guards coach turns, reviews and check-ins</title>
+<style>
+svg { --bg:#F8FAF9; --ink:#16201E; --muted:#5A6A66; --rule:#C3CECB; --sys:#EDF2F0; --acc:#0E6B66; --tint:#DAEAE7; --accline:#8DBDB7; --w:#B4470F; --wtint:#F6E4D8; --sans:-apple-system,"Segoe UI","Public Sans",Helvetica,Arial,sans-serif; --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace; }
+@media (prefers-color-scheme: dark) { svg { --bg:#151D1C; --ink:#E2EAE8; --muted:#93A39F; --rule:#2C3836; --sys:#1C2725; --acc:#5BBDB4; --tint:#15302E; --accline:#2F6660; --w:#EE8C4E; --wtint:#3A2518; } }
+.bg { fill:var(--bg); }
+.bx { fill:var(--bg); stroke:var(--rule); stroke-width:1; }
+.bl { fill:var(--tint); stroke:var(--accline); stroke-width:1; fill-opacity:.55; }
+.ba { fill:var(--tint); stroke:var(--acc); stroke-width:1.4; }
+.bs { fill:var(--bg); stroke:var(--acc); stroke-width:1.4; }
+.bw { fill:var(--wtint); stroke:var(--w); stroke-width:1.4; }
+.bs2 { fill:var(--sys); stroke:var(--muted); stroke-width:1; stroke-dasharray:4 3; }
+.ln { fill:none; stroke:var(--ink); stroke-width:1.4; }
+.la { fill:none; stroke:var(--acc); stroke-width:1.4; }
+.lw { fill:none; stroke:var(--w); stroke-width:1.6; }
+.dash { stroke-dasharray:5 4; }
+.ah { fill:var(--ink); } .ah-c { fill:var(--acc); } .ah-w { fill:var(--w); }
+.dot { fill:var(--ink); } .ring { fill:none; stroke:var(--ink); stroke-width:1.4; }
+.t { font:600 13px var(--sans); fill:var(--ink); }
+.s { font:600 12px var(--sans); fill:var(--ink); }
+.ss { font:500 11px var(--sans); fill:var(--ink); }
+.m { font:400 11px var(--mono); fill:var(--muted); }
+.mi { font:400 11px var(--mono); fill:var(--ink); }
+.m10 { font:400 10px var(--mono); fill:var(--muted); }
+.ma { font:500 11px var(--mono); fill:var(--acc); }
+.ma10 { font:500 10px var(--mono); fill:var(--acc); }
+.mw { font:500 10.5px var(--mono); fill:var(--w); }
+.lab { font:600 10.5px var(--mono); letter-spacing:.08em; fill:var(--muted); }
+</style>
+<defs><marker id="wb-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah"/></marker><marker id="wb-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah-c"/></marker><marker id="wb-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah-w"/></marker></defs>
+<rect class="bg" x="0" y="0" width="1000" height="400"/>
+<rect class="bl" x="20" y="40" width="210" height="260" rx="4"/>
+<text class="t" x="36" y="64">React SPA</text>
+<text class="m10" x="36" y="82">web/src · react-query</text>
+<rect class="bx" x="36" y="96" width="178" height="50" rx="3"/>
+<text class="s" x="125.0" y="117.0" text-anchor="middle">Today</text>
+<text class="m10" x="125.0" y="133.0" text-anchor="middle">cards · Chat · Gate</text>
+<rect class="bx" x="36" y="156" width="178" height="50" rx="3"/>
+<text class="s" x="125.0" y="177.0" text-anchor="middle">Settings</text>
+<text class="m10" x="125.0" y="193.0" text-anchor="middle">memory · reset · readiness</text>
+<rect class="bx" x="36" y="216" width="178" height="70" rx="3"/>
+<text class="s" x="125.0" y="233.0" text-anchor="middle">streams</text>
+<text class="m10" x="125.0" y="249.0" text-anchor="middle">useTurnStream</text>
+<text class="m10" x="125.0" y="263.0" text-anchor="middle">useJobStream</text>
+<text class="m10" x="125.0" y="277.0" text-anchor="middle">fetch + readSse</text>
+<path class="ln" d="M230 120 H287" marker-end="url(#wb-a)"/>
+<text class="m10" x="259" y="114" text-anchor="middle">HTTP</text>
+<path class="la" d="M290 160 H233" marker-end="url(#wb-c)"/>
+<text class="ma10" x="261" y="176" text-anchor="middle">SSE</text>
+<rect class="bl" x="290" y="40" width="240" height="260" rx="4"/>
+<text class="t" x="306" y="64">FastAPI routes</text>
+<text class="m10" x="306" y="82">loopback hosts only</text>
+<text class="mi" x="306" y="104">/api/coach</text>
+<text class="m10" x="306" y="119">POST turns · review (SSE)</text>
+<text class="m10" x="306" y="133">review schema · validate · yaml</text>
+<text class="m10" x="306" y="147">memory · reset · GET thread</text>
+<text class="mi" x="306" y="176">/api/jobs</text>
+<text class="m10" x="306" y="191">POST sync · checkin</text>
+<text class="m10" x="306" y="205">GET {id}/events (SSE)</text>
+<text class="mi" x="306" y="234">/api/system/status</text>
+<text class="m10" x="306" y="249">live · tools · readiness</text>
+<text class="mi" x="306" y="272">/api/today</text>
+<text class="m10" x="306" y="287">the Today cards</text>
+<rect class="bw" x="590" y="40" width="200" height="110" rx="3"/>
+<text class="s" x="602" y="70.0">Runtime</text>
+<text class="m10" x="602" y="86.0">one coach graph, thread coach</text>
+<text class="m10" x="602" y="100.0">asyncio.Lock: turn · review</text>
+<text class="m10" x="602" y="114.0">· checkin · reset</text>
+<text class="mw" x="602" y="128.0">409 when busy or paused</text>
+<rect class="bx" x="590" y="170" width="200" height="80" rx="3"/>
+<text class="s" x="602" y="192.0">Jobs</text>
+<text class="m10" x="602" y="208.0">in memory · replayable</text>
+<text class="m10" x="602" y="222.0">sync: no lock</text>
+<text class="m10" x="602" y="236.0">checkin: holds the lock</text>
+<rect class="bx" x="590" y="262" width="200" height="38" rx="3"/>
+<text class="s" x="602" y="284.0">build_today</text>
+<path class="ln" d="M530 120 H587" marker-end="url(#wb-a)"/>
+<path class="ln" d="M530 200 H587" marker-end="url(#wb-a)"/>
+<path class="ln" d="M530 281 H587" marker-end="url(#wb-a)"/>
+<rect class="ba" x="830" y="40" width="150" height="110" rx="3"/>
+<text class="s" x="905.0" y="77.0" text-anchor="middle">tri-coach graph</text>
+<text class="m10" x="905.0" y="93.0" text-anchor="middle">run_turn</text>
+<text class="m10" x="905.0" y="107.0" text-anchor="middle">TurnEmitter wraps</text>
+<text class="m10" x="905.0" y="121.0" text-anchor="middle">TurnPrinter</text>
+<path class="ln" d="M790 95 H827" marker-end="url(#wb-a)"/>
+<text class="m10" x="808" y="89" text-anchor="middle">turn</text>
+<rect class="bx" x="830" y="170" width="150" height="80" rx="3"/>
+<text class="s" x="905.0" y="199.0" text-anchor="middle">job bodies</text>
+<text class="m10" x="905.0" y="215.0" text-anchor="middle">tri_core run_sync</text>
+<text class="m10" x="905.0" y="229.0" text-anchor="middle">coach run_checkin</text>
+<path class="ln" d="M790 210 H827" marker-end="url(#wb-a)"/>
+<rect class="bs2" x="830" y="262" width="150" height="38" rx="3"/>
+<text class="s" x="905.0" y="284.0" text-anchor="middle">Postgres reads</text>
+<path class="ln" d="M790 281 H827" marker-end="url(#wb-a)"/>
+<text class="lab" x="20" y="336">TURN SSE EVENTS</text>
+<rect class="bx" x="20" y="348" width="100" height="24" rx="12"/>
+<text class="mi" x="70" y="364" text-anchor="middle">token</text>
+<rect class="bx" x="132" y="348" width="100" height="24" rx="12"/>
+<text class="mi" x="182" y="364" text-anchor="middle">tool_call</text>
+<rect class="bx" x="244" y="348" width="100" height="24" rx="12"/>
+<text class="mi" x="294" y="364" text-anchor="middle">tool_result</text>
+<rect class="bx" x="356" y="348" width="100" height="24" rx="12"/>
+<text class="mi" x="406" y="364" text-anchor="middle">consult</text>
+<rect class="bx" x="468" y="348" width="100" height="24" rx="12"/>
+<text class="mi" x="518" y="364" text-anchor="middle">report</text>
+<rect class="bw" x="580" y="348" width="100" height="24" rx="12"/>
+<text class="mi" x="630" y="364" text-anchor="middle">interrupt</text>
+<rect class="bx" x="692" y="348" width="100" height="24" rx="12"/>
+<text class="mi" x="742" y="364" text-anchor="middle">error</text>
+<rect class="bx" x="804" y="348" width="100" height="24" rx="12"/>
+<text class="mi" x="854" y="364" text-anchor="middle">done</text>
+</svg>

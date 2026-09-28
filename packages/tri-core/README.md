@@ -7,6 +7,9 @@ fallbacks), `tri_core.harness` (the agent harness every package builds on), and
 `tri_core.testing` (the `db` fixture, `ScriptedChatModel` and `StateSample`). See the READMEs
 inside `src/tri_core/{mcp,db,sync}/`.
 
+Architecture: [`docs/architecture/tri-core.md`](../../docs/architecture/tri-core.md) has the current
+diagram; the [architecture index](../../docs/architecture/README.md) shows how it fits the whole repo.
+
 ## Harness
 
 | Module | What it holds |
