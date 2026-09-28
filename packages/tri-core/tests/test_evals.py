@@ -1,6 +1,14 @@
+import json
 from types import SimpleNamespace
 
-from tri_core.evals import errored, pass_rates, render_pass_rates, scored_counts
+from tri_core.evals import (
+    errored,
+    failure_lines,
+    pass_rates,
+    record_rows,
+    render_pass_rates,
+    scored_counts,
+)
 
 
 def R(key, score):
@@ -52,3 +60,52 @@ def test_errored_counts_rows_whose_run_carries_an_error():
         {},
     ]
     assert errored(rows) == 1 and errored([]) == 0
+
+
+def _row(case, results, *, outputs=None, error=None):
+    return {
+        "run": SimpleNamespace(outputs=outputs or {}, error=error),
+        "example": SimpleNamespace(id="ex-1", inputs={"question": "q"}, metadata={"case": case}),
+        "evaluation_results": {"results": results},
+    }
+
+
+def test_failure_lines_name_the_case_key_and_comment():
+    rows = [
+        _row("z2", [R("grounded", 1)]),
+        _row("threshold", [R("grounded", 0), R("uses_sql", 1)]),
+        _row("brick", [R("pulls_splits", None)]),
+    ]
+    rows[1]["evaluation_results"]["results"][0].comment = "TSB -18 appears nowhere"
+    assert failure_lines(rows) == ["  grounded  threshold: TSB -18 appears nowhere"]
+
+
+def test_a_failure_without_a_comment_or_case_still_prints():
+    row = _row("x", [SimpleNamespace(key="grounded", score=0)])
+    row["example"].metadata = {}
+    assert failure_lines([row]) == ["  grounded  ex-1: (no comment)"]
+
+
+def test_record_rows_writes_one_json_line_per_example(tmp_path):
+    rows = [
+        _row(
+            "z2", [SimpleNamespace(key="grounded", score=0, comment="no")], outputs={"answer": "58"}
+        ),
+        _row("run", [], error="IndexError: boom"),
+    ]
+    path = record_rows(rows, "analyst-v2-x", directory=tmp_path)
+    assert path == tmp_path / "analyst-v2-x.jsonl"
+    lines = [json.loads(line) for line in path.read_text().splitlines()]
+    assert lines[0] == {
+        "case": "z2",
+        "inputs": {"question": "q"},
+        "outputs": {"answer": "58"},
+        "error": None,
+        "results": [{"key": "grounded", "score": 0, "comment": "no"}],
+    }
+    assert lines[1]["error"] == "IndexError: boom" and lines[1]["results"] == []
+
+
+def test_the_directory_defaults_to_the_environment(tmp_path, monkeypatch):
+    monkeypatch.setenv("TRI_EVAL_DIR", str(tmp_path / "evals"))
+    assert record_rows([], "e").parent == tmp_path / "evals"

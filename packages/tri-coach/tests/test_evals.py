@@ -320,3 +320,19 @@ async def test_a_raising_brief_judge_scores_zero_with_the_error():
 
 def test_the_eval_context_names_the_consults_left():
     assert "Consults left this turn: planning 2, nutrition 2." in case("knee_pain_planning").context
+
+
+async def test_a_raising_judge_keeps_the_failures_already_found():
+    bad = {
+        "bounded": True,
+        "names_signal": True,
+        "names_lever": True,
+        "names_constraint": True,
+        "grounded": False,
+        "problems": ["Ferritin 18 appears nowhere"],
+    }
+    # the second call finds the script empty and raises IndexError
+    judge = make_brief_judge(ScriptedChatModel(script=[tool_call("BriefJudgement", bad)]))
+    res = await judge(case("knee_pain_planning").inputs(), {"briefs": ["one", "two"]})
+    assert res["score"] == 0 and res["comment"].startswith("judge failed: IndexError")
+    assert "brief 1: Ferritin 18 appears nowhere" in res["comment"]

@@ -1,9 +1,14 @@
 """Pass rates for every package's LangSmith eval, in one format: the rate and the scored count
-per evaluator key, so "every example passed" can be read from the log without LangSmith."""
+per evaluator key, so "every example passed" can be read from the log without LangSmith. Each
+run's examples, outputs and judge comments are also written to a local JSONL file, so a run
+LangSmith did not ingest (the monthly trace limit, 2026-09-28) can still be read."""
 
 from __future__ import annotations
 
+import json
+import os
 from collections import defaultdict
+from pathlib import Path
 from typing import Any
 
 KEY_WIDTH = 26
@@ -48,3 +53,47 @@ def render_pass_rates(
         passed, scored = counts.get(key, (0, 0))
         lines.append(f"  {key:{KEY_WIDTH}} {rate:>4.0%} ({passed}/{scored})")
     return "\n".join(lines)
+
+
+def _case(row: dict[str, Any]) -> str:
+    example = row.get("example")
+    metadata = getattr(example, "metadata", None) or {}
+    return str(metadata.get("case") or getattr(example, "id", "?"))
+
+
+def failure_lines(rows: list[dict[str, Any]]) -> list[str]:
+    """One line per failed check (a score below 1): the key, the case and the evaluator's
+    comment."""
+    lines: list[str] = []
+    for row in rows:
+        for r in (row.get("evaluation_results") or {}).get("results") or []:
+            if r.score is not None and float(r.score) < 1.0:
+                comment = getattr(r, "comment", None) or "(no comment)"
+                lines.append(f"  {r.key}  {_case(row)}: {comment}")
+    return lines
+
+
+def record_rows(
+    rows: list[dict[str, Any]], experiment: str, *, directory: Path | None = None
+) -> Path:
+    """Writes `<experiment>.jsonl` under `directory` (default `$TRI_EVAL_DIR`, else `.evals`):
+    one line per example with its case, inputs, outputs, error and evaluator results."""
+    out_dir = directory or Path(os.environ.get("TRI_EVAL_DIR") or ".evals")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / f"{experiment}.jsonl"
+    with path.open("w") as fh:
+        for row in rows:
+            run, example = row.get("run"), row.get("example")
+            results = (row.get("evaluation_results") or {}).get("results") or []
+            line = {
+                "case": _case(row),
+                "inputs": getattr(example, "inputs", None),
+                "outputs": getattr(run, "outputs", None),
+                "error": getattr(run, "error", None),
+                "results": [
+                    {"key": r.key, "score": r.score, "comment": getattr(r, "comment", None)}
+                    for r in results
+                ],
+            }
+            fh.write(json.dumps(line, default=str) + "\n")
+    return path

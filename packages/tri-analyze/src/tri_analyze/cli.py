@@ -6,6 +6,7 @@ import asyncio
 import os
 from datetime import date
 from typing import TYPE_CHECKING
+from urllib.parse import urlsplit, urlunsplit
 
 import typer
 from dotenv import load_dotenv
@@ -149,6 +150,15 @@ def eval_cmd(
     raise typer.Exit(code=asyncio.run(_eval(prefix=prefix, recreate=recreate, eval_db=eval_db)))
 
 
+def _masked(url: str) -> str:
+    """The URL with its password replaced, for an error message."""
+    parts = urlsplit(url)
+    if parts.password is None:
+        return url
+    netloc = parts.netloc.replace(f":{parts.password}@", ":***@", 1)
+    return urlunsplit(parts._replace(netloc=netloc))
+
+
 async def _eval(*, prefix: str | None, recreate: bool, eval_db: str | None) -> int:
     import psycopg
 
@@ -185,7 +195,8 @@ async def _eval(*, prefix: str | None, recreate: bool, eval_db: str | None) -> i
         EvalDatabaseUnreadable,
         AthletesDatabaseRefused,
     ) as exc:
-        console.print(f"eval database: {exc}", style="red")
+        url = _masked(eval_db or settings.test_database_url)
+        console.print(f"eval database {url}: {exc}", style="red")
         return 2
     return 0 if rates and errors == 0 and all(r == 1.0 for r in rates.values()) else 1
 

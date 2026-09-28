@@ -586,3 +586,37 @@ async def test_the_target_runs_real_sql_against_the_seeded_history():
         assert "58" in out["tool_results"][0]["content"]
     finally:
         seed.clear_database(url)
+
+
+async def test_run_eval_logs_failed_checks_and_writes_the_results_file(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    monkeypatch.setenv("TRI_EVAL_DIR", str(tmp_path))
+    _stub_langsmith(monkeypatch, analyze_run)
+    row = {
+        "run": SimpleNamespace(outputs={"answer": "TSB -18"}, error=None),
+        "example": SimpleNamespace(id="e1", inputs={}, metadata={"case": "threshold_rpe9"}),
+        "evaluation_results": {
+            "results": [SimpleNamespace(key="grounded", score=0, comment="-18 appears nowhere")]
+        },
+    }
+
+    class OneRow(_FakeResults):
+        def __aiter__(self):
+            async def rows():
+                yield row
+
+            return rows()
+
+    async def fake_aevaluate(target, **kw):
+        return OneRow()
+
+    monkeypatch.setattr(analyze_run, "aevaluate", fake_aevaluate)
+    models, _ = _recording_models()
+    logged: list[str] = []
+    settings = AnalyzeSettings(_env_file=None, langsmith_api_key="ls")
+    await analyze_run.run_eval(settings, models, judge=False, log=logged.append)
+    text = "\n".join(logged)
+    assert "  grounded  threshold_rpe9: -18 appears nowhere" in text
+    assert f"results: {tmp_path / 'exp.jsonl'}" in text
+    assert '"case": "threshold_rpe9"' in (tmp_path / "exp.jsonl").read_text()

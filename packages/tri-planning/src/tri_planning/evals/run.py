@@ -15,7 +15,14 @@ from langsmith import Client, aevaluate
 
 from tri_core.config import readonly_url
 from tri_core.db.repo import Conn
-from tri_core.evals import errored, pass_rates, render_pass_rates, scored_counts
+from tri_core.evals import (
+    errored,
+    failure_lines,
+    pass_rates,
+    record_rows,
+    render_pass_rates,
+    scored_counts,
+)
 from tri_core.llm import ModelProvider, Role, eval_metadata
 from tri_planning.config import PlanningSettings
 from tri_planning.evals.design_eval import build_examples, design_target, validator_pass
@@ -82,4 +89,8 @@ async def run_eval(
     log(render_pass_rates(rates, scored_counts(dict_rows), len(rows), version=PROMPT_VERSION))
     if errors:
         log(f"{errors} errored")
+    failures = failure_lines(dict_rows)
+    if failures:
+        log("failed checks:\n" + "\n".join(failures))
+    log(f"results: {record_rows(dict_rows, results.experiment_name)}")
     return rates

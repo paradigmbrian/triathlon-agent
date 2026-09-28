@@ -145,7 +145,8 @@ def _seconds(tss: float, intensity: float) -> int:
 def _templated(d: date, t: Template, factor: float) -> dict[str, Any]:
     _, sport, title, tss, intensity, speed = t
     planned = round(tss * factor)
-    actual = planned + d.toordinal() % 7 - 3
+    week = (d - START).days // 7  # varies the load week to week, not only day to day
+    actual = planned + (week * 5 + d.weekday()) % 7 - 3
     secs = _seconds(actual, intensity)
     row: dict[str, Any] = {
         "tp_workout_id": f"{EVAL_ID}-{d.isoformat()}-{sport}",
@@ -317,9 +318,16 @@ def verify_readable(url: str) -> None:
         )
 
 
+def _lock_and_refuse_foreign_rows(conn: Conn) -> None:
+    """Lock the seeded tables for the transaction, so no row can land between the guard's read
+    and the truncate, then refuse a database holding rows the eval did not write."""
+    conn.execute("lock table " + ", ".join(SEEDED_TABLES) + " in access exclusive mode")
+    _refuse_foreign_rows(conn)
+
+
 def clear_database(url: str) -> None:
     with connect(url) as conn:
-        _refuse_foreign_rows(conn)
+        _lock_and_refuse_foreign_rows(conn)
         conn.execute("truncate " + ", ".join(SEEDED_TABLES))
         conn.commit()
 
@@ -329,7 +337,7 @@ def seed_database(url: str) -> None:
     on its own connection."""
     rows = workouts()
     with connect(url) as conn:
-        _refuse_foreign_rows(conn)
+        _lock_and_refuse_foreign_rows(conn)
         conn.execute("truncate " + ", ".join(SEEDED_TABLES))
         upsert_athlete_profile(
             conn,

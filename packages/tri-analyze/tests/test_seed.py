@@ -155,3 +155,49 @@ def test_verify_readable_passes_once_seeded():
         seed.verify_readable(url)  # tri_reader sees exactly the seeded workouts; does not raise
     finally:
         seed.clear_database(url)
+
+
+def test_the_build_weeks_differ_in_load():
+    # a flat series gives trend questions nothing to find and derived arithmetic nothing to do
+    weekly: dict[date, float] = defaultdict(float)
+    for w in seed.workouts():
+        d = w["workout_date"]
+        if w["completed"] and w.get("actual_tss") is not None and d < seed.CASE_WEEK:
+            weekly[date.fromordinal(d.toordinal() - d.weekday())] += float(w["actual_tss"])
+    build = [t for m, t in weekly.items() if m >= seed.BUILD_START and m != seed.RECOVERY_WEEK]
+    assert len(build) >= 6 and len(set(build)) > 1
+
+
+class _Recording:
+    """A stand-in connection: records every statement, reports no foreign rows."""
+
+    def __init__(self) -> None:
+        self.sql: list[str] = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def execute(self, sql, params=None):
+        self.sql.append(sql)
+        return self
+
+    def fetchone(self):
+        return {"n": 0}
+
+    def commit(self):
+        pass
+
+
+def test_clearing_locks_the_tables_before_the_guard_reads_them(monkeypatch):
+    conn = _Recording()
+    monkeypatch.setattr(seed, "connect", lambda url: conn)
+    seed.clear_database("postgresql://u@h/evaldb")
+    lock = next(i for i, s in enumerate(conn.sql) if s.startswith("lock table"))
+    guard = next(i for i, s in enumerate(conn.sql) if "count(*)" in s)
+    truncate = next(i for i, s in enumerate(conn.sql) if s.startswith("truncate"))
+    assert lock < guard < truncate
+    assert all(t in conn.sql[lock] for t in seed.SEEDED_TABLES)
+    assert conn.sql[lock].endswith("in access exclusive mode")

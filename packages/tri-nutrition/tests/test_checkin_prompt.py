@@ -10,3 +10,10 @@ def test_directed_paragraph_names_the_prefix_and_bounds_the_run():
     assert "Today is 2026-09-14" in text and CHECKIN_REQUEST in text
     # the check-in steps come first; the directed paragraph is a later carve-out
     assert text.index("run these") < text.index(BRIEF_PREFIX) < text.index("Never diagnose")
+
+
+def test_the_check_in_queries_write_the_dates_as_literals():
+    text = render_checkin_prompt(date(2026, 9, 14))
+    assert "current_date" not in text  # the database server's day, not the athlete's
+    assert "metric_date >= date '2026-09-06'" in text
+    assert "workout_date between date '2026-09-07' and date '2026-09-13'" in text

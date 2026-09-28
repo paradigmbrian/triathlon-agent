@@ -185,3 +185,19 @@ def test_eval_passes_the_eval_database_through(monkeypatch):
     monkeypatch.setattr("tri_analyze.evals.run.run_eval", run_eval)
     result = runner.invoke(app, ["eval", "--eval-db", "postgresql://u:p@h:1/evaldb"])
     assert result.exit_code == 0 and seen[-1]["eval_db_url"] == "postgresql://u:p@h:1/evaldb"
+
+
+def test_an_eval_database_failure_names_the_url_without_its_password(monkeypatch):
+    settings = AnalyzeSettings(_env_file=None, anthropic_api_key="k", langsmith_api_key="ls")
+    monkeypatch.setattr(cli, "get_analyze_settings", lambda: settings)
+
+    async def run_eval(settings, model, **kw):
+        raise psycopg.OperationalError("connection refused")
+
+    monkeypatch.setattr("tri_analyze.evals.run.run_eval", run_eval)
+    url = "postgresql://tri:s3cret@db.example:5439/evaldb"
+    result = runner.invoke(app, ["eval", "--eval-db", url])
+    assert result.exit_code == 2
+    out = " ".join(result.output.split())  # rich may wrap the line
+    assert "postgresql://tri:***@db.example:5439/evaldb" in out and "s3cret" not in out
+    assert "connection refused" in out
