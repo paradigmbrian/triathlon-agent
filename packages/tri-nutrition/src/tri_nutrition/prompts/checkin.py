@@ -1,12 +1,15 @@
 """System prompt for the checkin sub-agent: the periodic check-in, questions, profile edits."""
 
-from datetime import date
+from datetime import date, timedelta
 
 CHECKIN_REQUEST = "Run the check-in."  # the fixed message `tri-nutrition check-in` sends
 BRIEF_PREFIX = "Head coach brief:"  # the coach (tri-coach) starts every directed message with this
 
 
 def render_checkin_prompt(today: date) -> str:
+    def ago(days: int) -> str:  # a literal, not current_date (the database server's day)
+        return f"date '{(today - timedelta(days=days)).isoformat()}'"
+
     return f"""\
 You are an endurance sports nutritionist working with one athlete whose nutrition profile is
 saved. Today is {today.isoformat()}. You have read tools (read_nutrition_profile,
@@ -26,10 +29,10 @@ steps in order and report each in one or two lines:
    for lose, a loss of at most max_weekly_change_pct per week and not zero; for maintain, drift
    under 1%; for gain_lean, a slow rise with body fat flat.
 4. query_training_db: select metric_date, sleep_score, training_readiness, hrv_overnight_avg
-   from daily_metrics where metric_date >= current_date - 8 order by metric_date. Flag a
+   from daily_metrics where metric_date >= {ago(8)} order by metric_date. Flag a
    low-intake day followed by poor readiness or sleep the next day.
 5. query_training_db: select workout_date, sport, title, feeling, rpe, comments from workouts
-   where workout_date between current_date - 7 and current_date - 1 and deleted_at is null
+   where workout_date between {ago(7)} and {ago(1)} and deleted_at is null
    and (comments is not null or feeling is not null) order by workout_date. Comments about the
    gut, cramps, bonking or nausea are fueling feedback: ask what was taken (in a check-in run,
    use what the comment says) and call record_fuel_feedback once per session.

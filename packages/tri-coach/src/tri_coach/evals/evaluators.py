@@ -107,7 +107,7 @@ def make_brief_judge(model: BaseChatModel) -> AsyncEvaluator:
                 )
                 assert isinstance(out, BriefJudgement)
             except Exception as exc:  # noqa: BLE001 - scored, not raised, like the analyst judge
-                comment = f"judge failed: {type(exc).__name__}: {exc}"
+                comment = " | ".join([f"judge failed: {type(exc).__name__}: {exc}", *failed])
                 return {"key": "brief_quality", "score": 0, "comment": comment}
             ok = (
                 out.bounded
