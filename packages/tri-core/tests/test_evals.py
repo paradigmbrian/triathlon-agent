@@ -283,3 +283,20 @@ def test_finish_run_logs_in_order_and_the_results_path_last(tmp_path, monkeypatc
     line = json.loads((tmp_path / "exp.jsonl").read_text().splitlines()[0])
     assert line["metadata"] == {"prompt_version": "3"}
     assert line["usage"]["total_cost"] == 0.68
+
+
+def test_finish_run_says_so_when_the_run_is_not_a_gate(tmp_path, monkeypatch):
+    monkeypatch.setenv("TRI_EVAL_DIR", str(tmp_path))
+    ok = _row("z2", [SimpleNamespace(key="grounded", score=1, comment=None)])
+    logged: list[str] = []
+    finish_run(
+        [ok],
+        "exp",
+        version="3",
+        metadata={"prompt_version": "3", "gate": False},
+        usage=UsageByRole(),
+        log=logged.append,
+    )
+    assert logged[2:4] == ["not a gate run", "usage: no model calls"]
+    line = json.loads((tmp_path / "exp.jsonl").read_text().splitlines()[0])
+    assert line["metadata"]["gate"] is False

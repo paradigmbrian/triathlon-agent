@@ -146,6 +146,7 @@ async def run_eval(
         metadata["judge_version"] = JUDGE_VERSION
     if chosen is not None:
         metadata["cases"] = chosen
+        metadata["gate"] = False
     seed_database(url)
     try:
         verify_readable(url)
