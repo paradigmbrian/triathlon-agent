@@ -136,6 +136,18 @@ over stub tools with the real names and descriptions. It scores `routing_accurac
 that each brief is bounded and names the signal, the lever and the constraint. The experiment
 is `coach-v<PROMPT_VERSION>`.
 
+The brief judge sees what the coach saw: the context block, the memory, the conversation and
+every answer the stub tools served. `brief_quality` fails a brief with a number, date or lab
+value that appears in none of them (`grounded`), naming the brief by index.
+
+Pass rates print in one format across all five packages: each key, its rate, and its
+passed/scored count, for example:
+
+```
+pass rate over 12 examples (prompt version 4):
+  brief_quality                67% (8/12)
+```
+
 ## Sessions
 
 One Garmin process (`GARMIN_ENABLED_TOOLS` set to the union of the analyst's, planning's and

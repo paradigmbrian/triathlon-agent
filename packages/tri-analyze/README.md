@@ -93,7 +93,7 @@ so tests assert on the rendered system prompt. `testing.athlete_context()` is th
 
 ```
 uv run tri-analyze chat [--no-live]                    # /tools /prompt /sync /quit
-uv run tri-analyze eval [--prefix P] [--recreate-dataset]   # the LangSmith feedback eval
+uv run tri-analyze eval [--prefix P] [--recreate-dataset] [--eval-db URL]   # the LangSmith feedback eval
 ```
 
 `--no-live` binds only the database tool. Exit 2 when `ANTHROPIC_API_KEY` is unset or the
@@ -138,14 +138,22 @@ the analyst's runs appear in `tri_coach` with the `analyst` tag.
 
 ## Evaluation
 
-`tri-analyze eval` runs the real agent (`build_agent`) over stub tools with canned results,
-so no database or MCP server is involved, on the LangSmith dataset `tri_analyze_feedback`
-(twelve cases in `evals/cases.py`: five session reviews, three trends, one readiness
-question and three edge cases: empty SQL, an interval question without live tools, a
-body-composition question with the coach's `read_body_composition` bound). The stubs carry
-the real tool names and argument names, `query_training_db` carries the real description,
-and its canned results use the real `{columns, rows, row_count, truncated}` envelope, so the
-model sees what it sees in production. Today is fixed at 2026-09-16.
+`tri-analyze eval` runs the real agent (`build_agent`) over stub tools, on the LangSmith
+dataset `tri_analyze_feedback` (twelve cases in `evals/cases.py`: five session reviews, three
+trends, one readiness question and three edge cases: empty SQL, an interval question without
+live tools, a body-composition question with the coach's `read_body_composition` bound). The
+stubs carry the real tool names and argument names, and `query_training_db` carries the real
+description.
+
+The analyst's SQL runs for real: `tri-analyze eval` seeds one synthetic athlete history
+(`evals/seed.py`: a June run block, a triathlon build from July with a recovery week, and the
+cases' own week of 2026-09-07) into the test database, binds the real `query_training_db` as
+`tri_reader`, and empties the tables when it finishes. `--eval-db URL` points it at another
+empty database; it refuses the athlete's database and any database holding rows it did not
+write. Garmin and TrainingPeaks tools stay canned. The judge accepts a derived number when the
+answer shows the arithmetic. Needs Postgres, `LANGSMITH_API_KEY` and `ANTHROPIC_API_KEY`.
+
+Today is fixed at 2026-09-16.
 
 Evaluators (a check that does not apply scores nothing):
 
@@ -160,11 +168,21 @@ Evaluators (a check that does not apply scores nothing):
 The judge is one `with_structured_output(FeedbackJudgement)` call per example over the
 case's rendered system prompt, the question, the tool results the analyst received and the
 answer. The experiment is `analyst-v<PROMPT_VERSION>` with `prompt_version` and `model` as
-metadata, so bump `PROMPT_VERSION` whenever the prompt text changes and compare runs. Latest
-run: `analyst-v1-77fb7f3b` on 2026-09-13, before the result-envelope, window-pattern and
-judge-grounding fixes, 12 examples, 0 errored: `uses_sql` 100%, `pulls_splits` 100%,
-`states_window` 80%, `feedback_quality` 100%, `grounded` 17%. The dataset inputs changed
-with those fixes, so the next run is `uv run tri-analyze eval --recreate-dataset`.
+metadata, so bump `PROMPT_VERSION` whenever the prompt text changes and compare runs.
+
+Pass rates print in one format across all five packages: each key, its rate, and its
+passed/scored count, for example:
+
+```
+pass rate over 12 examples (prompt version 2):
+  grounded                     67% (8/12)
+```
+
+Latest run: `analyst-v1-77fb7f3b` on 2026-09-13, before the result-envelope, window-pattern
+and judge-grounding fixes and before the prompt v2 / seeded-history changes, in the old
+prose format: 12 examples, 0 errored: `uses_sql` 100%, `pulls_splits` 100%, `states_window`
+80%, `feedback_quality` 100%, `grounded` 17%. Not yet re-run under prompt v2 with the real
+SQL history seeded; the next run is `uv run tri-analyze eval --recreate-dataset`.
 
 ## Design decisions
 
