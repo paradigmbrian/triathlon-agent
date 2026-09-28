@@ -9,11 +9,14 @@ import json
 import os
 import uuid
 from collections import defaultdict
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from langsmith import Client
 from langsmith.schemas import Example
+
+from tri_core.eval_usage import UsageByRole, render_usage
 
 KEY_WIDTH = 26
 
@@ -113,8 +116,14 @@ def render_pass_rates(
     n: int,
     *,
     version: str | None,
+    total: int | None = None,
 ) -> str:
-    head = f"pass rate over {n} examples"
+    """`total` is the full case count when the run was a subset of it."""
+    head = (
+        f"pass rate over {n} examples"
+        if total is None
+        else f"pass rate over {n} of {total} examples (subset)"
+    )
     if version is not None:
         head += f" (prompt version {version})"
     lines = [head + ":"]
@@ -148,10 +157,13 @@ def record_rows(
     *,
     directory: Path | None = None,
     metadata: dict[str, Any] | None = None,
+    usage: dict[str, Any] | None = None,
 ) -> Path:
     """Writes `<experiment>.jsonl` under `directory` (default `$TRI_EVAL_DIR`, else `.evals`):
     one line per example with its case, inputs, outputs, error and evaluator results, and the
-    experiment's `metadata` when given (so a results file says which prompt and judge scored it)."""
+    experiment's `metadata` when given (so a results file says which prompt and judge scored it).
+    `reference_outputs` (what the evaluators checked against) is written when the example has
+    outputs, and the run's `usage` beside `metadata` when given."""
     out_dir = directory or Path(os.environ.get("TRI_EVAL_DIR") or ".evals")
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{experiment}.jsonl"
@@ -169,7 +181,39 @@ def record_rows(
                     for r in results
                 ],
             }
+            if example is not None and hasattr(example, "outputs"):
+                line["reference_outputs"] = example.outputs
             if metadata is not None:
                 line["metadata"] = metadata
+            if usage is not None:
+                line["usage"] = usage
             fh.write(json.dumps(line, default=str) + "\n")
     return path
+
+
+def finish_run(
+    rows: list[dict[str, Any]],
+    experiment: str,
+    *,
+    version: str | None,
+    metadata: dict[str, Any],
+    usage: UsageByRole,
+    log: Callable[[str], None],
+    total: int | None = None,
+) -> tuple[dict[str, float], int]:
+    """The end every eval run shares: the experiment name, pass rates, errored count, failed
+    checks and usage line, then the results file, whose path is logged last. Returns the pass
+    rates and the errored count."""
+    rates = pass_rates(rows)
+    errors = errored(rows)
+    log(f"experiment: {experiment}")
+    log(render_pass_rates(rates, scored_counts(rows), len(rows), version=version, total=total))
+    if errors:
+        log(f"{errors} errored")
+    failures = failure_lines(rows)
+    if failures:
+        log("failed checks:\n" + "\n".join(failures))
+    log(render_usage(usage))
+    path = record_rows(rows, experiment, metadata=metadata, usage=usage.as_record())
+    log(f"results: {path}")
+    return rates, errors

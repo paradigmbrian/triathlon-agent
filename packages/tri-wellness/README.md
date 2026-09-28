@@ -89,5 +89,10 @@ run: not run yet (no panel provided).
   skips LangSmith entirely: no dataset, traces or feedback are sent, and results still go to
   `.evals/` only.
 
+`--cases A,B` and `--failed-from .evals/<file>.jsonl` run only those cases (marked `-subset`,
+never a gate). `--rescore .evals/<file>.jsonl` re-runs the evaluators over a results file's saved
+outputs, with no target calls and always local. Every run ends with a usage line (tokens and
+estimated $ per role). See the root README's "Evals and cost".
+
 Prompt versions: `prompts/report.py` `PROMPT_VERSION` names the experiment; bump it whenever
 `REPORT_SYSTEM` or `REPORT_RULES` changes.

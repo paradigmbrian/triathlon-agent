@@ -7,6 +7,7 @@ import os
 import subprocess
 import tempfile
 from datetime import date, timedelta
+from pathlib import Path
 from typing import Any
 
 import typer
@@ -14,6 +15,7 @@ import yaml
 from dotenv import load_dotenv
 from rich.console import Console
 
+from tri_core.eval_select import CASES_HELP, FAILED_FROM_HELP, RESCORE_HELP
 from tri_nutrition.config import get_nutrition_settings
 
 app = typer.Typer(help="Endurance nutrition agent", no_args_is_help=True)
@@ -335,20 +337,56 @@ def eval_cmd(
         help="Run without LangSmith: no dataset, traces or feedback are sent; results go to "
         ".evals/ only",
     ),
+    cases: str | None = typer.Option(None, "--cases", help=CASES_HELP),
+    failed_from: Path | None = typer.Option(None, "--failed-from", help=FAILED_FROM_HELP),
+    rescore: Path | None = typer.Option(None, "--rescore", help=RESCORE_HELP),
 ) -> None:
     """Run the fueling prompts over the LangSmith dataset and print the pass rate per evaluator
     (exit 1 when any evaluator is below 100%)."""
     raise typer.Exit(
-        code=asyncio.run(_eval(judge=judge, prefix=prefix, recreate=recreate, local=local))
+        code=asyncio.run(
+            _eval(
+                judge=judge,
+                prefix=prefix,
+                recreate=recreate,
+                local=local,
+                cases=cases,
+                failed_from=failed_from,
+                rescore=rescore,
+            )
+        )
     )
 
 
-async def _eval(*, judge: bool, prefix: str | None, recreate: bool, local: bool | None) -> int:
+async def _eval(
+    *,
+    judge: bool,
+    prefix: str | None,
+    recreate: bool,
+    local: bool | None,
+    cases: str | None = None,
+    failed_from: Path | None = None,
+    rescore: Path | None = None,
+) -> int:
+    from tri_core.eval_select import EvalArgsError, cli_selection
     from tri_core.evals import local_default
     from tri_core.llm import make_model
-    from tri_nutrition.evals.run import run_eval
+    from tri_nutrition.evals.run import case_names, run_eval
 
     settings = get_nutrition_settings()
+    chosen = cli_selection(
+        cases=cases,
+        failed_from=failed_from,
+        rescore=rescore,
+        known=case_names(),
+        recreate=recreate,
+        out=lambda m: _out(m + "\n"),
+        err=lambda m: console.print(m, style="red", markup=False),
+    )
+    if isinstance(chosen, int):
+        return chosen
+    if chosen.rescore is not None:
+        local = True
     local = local_default() if local is None else local
     if not local and not settings.langsmith_api_key:
         console.print("LANGSMITH_API_KEY is not set in .env", style="red")
@@ -356,15 +394,20 @@ async def _eval(*, judge: bool, prefix: str | None, recreate: bool, local: bool 
     if not settings.anthropic_api_key:
         console.print("ANTHROPIC_API_KEY is not set in .env", style="red")
         return 2
-    rates = await run_eval(
-        settings,
-        lambda role: make_model(settings, role),
-        judge=judge,
-        prefix=prefix,
-        recreate=recreate,
-        local=local,
-        log=lambda m: _out(m + "\n"),
-    )
+    try:
+        rates = await run_eval(
+            settings,
+            lambda role: make_model(settings, role),
+            judge=judge,
+            prefix=prefix,
+            recreate=recreate,
+            local=local,
+            log=lambda m: _out(m + "\n"),
+            selection=chosen,
+        )
+    except EvalArgsError as exc:
+        console.print(str(exc), style="red", markup=False)
+        return 2
     return 0 if rates and all(r == 1.0 for r in rates.values()) else 1
 
 

@@ -10,7 +10,7 @@ set for approval. Nothing is written to Garmin or TrainingPeaks until the athlet
 ```
 uv run tri-coach chat [--no-live]              # the conversation; /status /memory /pending /tools /prompt /sync /quit
 uv run tri-coach check-in [--yes] [--no-sync] [--no-live]   # sync, the weekly checklist, one change set; exit 3 when paused, 1 on a model error or a change --yes skipped for violations
-uv run tri-coach eval [--judge/--no-judge] [--prefix P] [--recreate-dataset]   # the LangSmith routing eval
+uv run tri-coach eval [--judge/--no-judge] [--prefix P] [--recreate-dataset] [--cases A,B] [--failed-from F] [--rescore F]   # the LangSmith routing eval
 uv run tri-coach memory [--forget ID]          # print the coach's athlete memory, or remove one entry
 uv run tri-coach reset [--yes] [--forget-memory]   # clear the coach thread (and optionally its memory)
 ```
@@ -138,6 +138,11 @@ is `coach-v<PROMPT_VERSION>`.
 
 `--local` (or `TRI_EVAL_LOCAL=true`) skips LangSmith entirely: no dataset, traces or feedback
 are sent, `LANGSMITH_API_KEY` is not required, and results still go to `.evals/` only.
+
+`--cases A,B` and `--failed-from .evals/<file>.jsonl` run only those cases (marked `-subset`,
+never a gate). `--rescore .evals/<file>.jsonl` re-runs the evaluators over a results file's saved
+outputs, with no target calls and always local. Every run ends with a usage line (tokens and
+estimated $ per role). See the root README's "Evals and cost".
 
 The brief judge sees what the coach saw: the context block, the memory, the conversation and
 every answer the stub tools served. `brief_quality` fails a brief with a number, date or lab

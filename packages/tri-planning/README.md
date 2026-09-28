@@ -79,6 +79,15 @@ uv run tri-planning eval [--prefix NAME] [--recreate-dataset] [--local]    # Lan
 `--local` (or `TRI_EVAL_LOCAL=true`) runs `eval` without LangSmith: no dataset, traces or
 feedback are sent, and results still go to `.evals/` only.
 
+`--cases A,B` and `--failed-from .evals/<file>.jsonl` run only those cases (marked `-subset`,
+never a gate). `--rescore .evals/<file>.jsonl` re-runs the evaluators over a results file's saved
+outputs, with no target calls and always local. Every run ends with a usage line (tokens and
+estimated $ per role). See the root README's "Evals and cost".
+
+Design examples are named `<goal_type>-<phase>` (for example `olympic-base`). A LangSmith-mode
+subset needs one `uv run tri-planning eval --recreate-dataset` first, so the stored examples carry
+those names. Local runs don't.
+
 In chat: `/status` (goal, phase, this week's target vs actual, weeks on the calendar), `/pending`
 (re-show a paused change set), `/sync`, `/quit`. At review: `approve`, `reject <note>`, or
 `edit` (opens the change set as YAML in `$EDITOR`). A review left waiting from an earlier

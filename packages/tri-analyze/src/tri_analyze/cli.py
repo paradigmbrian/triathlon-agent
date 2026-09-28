@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 from datetime import date
+from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit, urlunsplit
 
@@ -13,6 +14,7 @@ from dotenv import load_dotenv
 from rich.console import Console
 
 from tri_analyze.config import get_analyze_settings
+from tri_core.eval_select import CASES_HELP, FAILED_FROM_HELP, RESCORE_HELP
 
 if TYPE_CHECKING:
     from langchain_core.tools import BaseTool
@@ -148,13 +150,26 @@ def eval_cmd(
         help="Run without LangSmith: no dataset, traces or feedback are sent; results go to "
         ".evals/ only",
     ),
+    cases: str | None = typer.Option(None, "--cases", help=CASES_HELP),
+    failed_from: Path | None = typer.Option(None, "--failed-from", help=FAILED_FROM_HELP),
+    rescore: Path | None = typer.Option(None, "--rescore", help=RESCORE_HELP),
 ) -> None:
     """Run the analyst over the feedback dataset in LangSmith and print the pass rate per
     evaluator (exit 1 when any evaluator is below 100% or any example errored). The analyst's SQL
     runs against a history seeded into the test database (or --eval-db), which is emptied
     afterwards."""
     raise typer.Exit(
-        code=asyncio.run(_eval(prefix=prefix, recreate=recreate, eval_db=eval_db, local=local))
+        code=asyncio.run(
+            _eval(
+                prefix=prefix,
+                recreate=recreate,
+                eval_db=eval_db,
+                local=local,
+                cases=cases,
+                failed_from=failed_from,
+                rescore=rescore,
+            )
+        )
     )
 
 
@@ -168,20 +183,42 @@ def _masked(url: str) -> str:
 
 
 async def _eval(
-    *, prefix: str | None, recreate: bool, eval_db: str | None, local: bool | None
+    *,
+    prefix: str | None,
+    recreate: bool,
+    eval_db: str | None,
+    local: bool | None,
+    cases: str | None = None,
+    failed_from: Path | None = None,
+    rescore: Path | None = None,
 ) -> int:
     import psycopg
 
-    from tri_analyze.evals.run import run_eval
+    from tri_analyze.evals.run import case_names, run_eval
     from tri_analyze.evals.seed import (
         AthletesDatabaseRefused,
         EvalDatabaseInUse,
         EvalDatabaseUnreadable,
     )
+    from tri_core.eval_select import EvalArgsError, cli_selection
     from tri_core.evals import local_default
     from tri_core.llm import make_model
 
     settings = get_analyze_settings()
+    chosen = cli_selection(
+        cases=cases,
+        failed_from=failed_from,
+        rescore=rescore,
+        known=case_names(),
+        recreate=recreate,
+        eval_db=eval_db,
+        out=lambda m: _out(m + "\n"),
+        err=lambda m: console.print(m, style="red", markup=False),
+    )
+    if isinstance(chosen, int):
+        return chosen
+    if chosen.rescore is not None:
+        local = True
     local = local_default() if local is None else local
     if not local and not settings.langsmith_api_key:
         console.print("LANGSMITH_API_KEY is not set in .env", style="red")
@@ -201,7 +238,11 @@ async def _eval(
             local=local,
             log=lambda m: _out(m + "\n"),
             eval_db_url=eval_db,
+            selection=chosen,
         )
+    except EvalArgsError as exc:
+        console.print(str(exc), style="red", markup=False)
+        return 2
     except (
         psycopg.OperationalError,
         EvalDatabaseInUse,

@@ -28,19 +28,22 @@ from tri_analyze.evals.seed import (
 from tri_analyze.evals.target import make_target
 from tri_analyze.prompts.analyst import PROMPT_VERSION
 from tri_core.config import reader_url
+from tri_core.eval_select import (
+    CaseLookup,
+    Selection,
+    dataset_subset,
+    run_rescore,
+    subset_examples,
+)
+from tri_core.eval_usage import UsageByRole, with_usage
 from tri_core.evals import (
     disable_network_sampling,
-    errored,
-    failure_lines,
+    finish_run,
     local_examples,
     local_experiment_name,
     offline_client,
-    pass_rates,
-    record_rows,
-    render_pass_rates,
-    scored_counts,
 )
-from tri_core.llm import ModelProvider, Role, eval_metadata
+from tri_core.llm import ModelProvider, Role, eval_metadata, resolve
 
 DATASET_NAME = "tri_analyze_feedback"
 DATASET_DESCRIPTION = (
@@ -54,6 +57,21 @@ def case_examples() -> list[dict[str, Any]]:
     return [
         {"inputs": c.inputs(), "outputs": c.outputs(), "metadata": {"case": c.name}} for c in CASES
     ]
+
+
+def case_names() -> list[str]:
+    return [c.name for c in CASES]
+
+
+def case_lookup() -> CaseLookup:
+    return {e["metadata"]["case"]: e for e in case_examples()}.get
+
+
+def _evaluators(models: ModelProvider, judge: bool) -> list[Any]:
+    evaluators: list[Any] = [uses_sql, pulls_splits, states_window]
+    if judge:
+        evaluators.append(make_judge(models(Role.JUDGE)))
+    return evaluators
 
 
 def ensure_dataset(client: Client, *, recreate: bool = False) -> None:
@@ -75,12 +93,32 @@ async def run_eval(
     local: bool = False,
     log: Callable[[str], None] = print,
     eval_db_url: str | None = None,
+    selection: Selection | None = None,
 ) -> tuple[dict[str, float], int]:
     """Returns the pass rate per evaluator key and the number of errored examples. The analyst
     runs on its role's model and the judge on the judge role's. The history in evals/seed.py is
     seeded into the eval database (the test database unless given) and the tables are emptied
     afterwards, pass or fail. `local=True` never talks to LangSmith: no dataset, traces or
-    feedback are sent."""
+    feedback are sent. `selection` narrows the run to some cases, or re-scores a results file
+    instead: no analyst, no database, no LangSmith."""
+    usage = UsageByRole()
+    models = with_usage(models, usage)
+    chosen = selection.cases if selection is not None else None
+    if selection is not None and selection.rescore is not None:
+        current: dict[str, Any] = (
+            {"judge_model": resolve(settings, Role.JUDGE).model, "judge_version": JUDGE_VERSION}
+            if judge
+            else {}
+        )
+        return await run_rescore(
+            selection.rescore,
+            evaluators=_evaluators(models, judge),
+            lookup=case_lookup(),
+            cases=chosen,
+            current=current,
+            usage=usage,
+            log=log,
+        )
     url = eval_db_url or settings.test_database_url
     if url == settings.database_url:
         raise AthletesDatabaseRefused(
@@ -88,22 +126,26 @@ async def run_eval(
         )
     if local:
         client = offline_client()
-        data: Any = local_examples(case_examples())
+        data: Any = local_examples(subset_examples(case_examples(), chosen))
         disable_network_sampling()
     else:
         client = Client(api_key=settings.langsmith_api_key)
         ensure_dataset(client, recreate=recreate)
-        data = DATASET_NAME
-    evaluators: list[Any] = [uses_sql, pulls_splits, states_window]
-    if judge:
-        evaluators.append(make_judge(models(Role.JUDGE)))
-    experiment_prefix = (prefix or f"analyst-v{PROMPT_VERSION}") + ("-local" if local else "")
+        data = DATASET_NAME if chosen is None else dataset_subset(client, DATASET_NAME, chosen)
+    evaluators = _evaluators(models, judge)
+    experiment_prefix = (
+        (prefix or f"analyst-v{PROMPT_VERSION}")
+        + ("-subset" if chosen is not None else "")
+        + ("-local" if local else "")
+    )
     metadata: dict[str, Any] = {
         "prompt_version": PROMPT_VERSION,
         **eval_metadata(settings, Role.ANALYST, judge=judge),
     }
     if judge:
         metadata["judge_version"] = JUDGE_VERSION
+    if chosen is not None:
+        metadata["cases"] = chosen
     seed_database(url)
     try:
         verify_readable(url)
@@ -124,16 +166,13 @@ async def run_eval(
             clear_database(url)
         except Exception as exc:
             log(f"could not empty the eval database: {type(exc).__name__}: {exc}")
-    dict_rows = [dict(r) for r in rows]
-    rates = pass_rates(dict_rows)
-    errors = errored(dict_rows)
     experiment = local_experiment_name(experiment_prefix) if local else results.experiment_name
-    log(f"experiment: {experiment}")
-    log(render_pass_rates(rates, scored_counts(dict_rows), len(rows), version=PROMPT_VERSION))
-    if errors:
-        log(f"{errors} errored")
-    failures = failure_lines(dict_rows)
-    if failures:
-        log("failed checks:\n" + "\n".join(failures))
-    log(f"results: {record_rows(dict_rows, experiment, metadata=metadata)}")
-    return rates, errors
+    return finish_run(
+        [dict(r) for r in rows],
+        experiment,
+        version=PROMPT_VERSION,
+        metadata=metadata,
+        usage=usage,
+        log=log,
+        total=len(CASES) if chosen is not None else None,
+    )
