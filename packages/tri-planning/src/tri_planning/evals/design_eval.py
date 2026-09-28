@@ -84,7 +84,11 @@ def build_examples(today: date) -> list[dict[str, Any]]:
                         "target": target.model_dump(mode="json"),
                         "thresholds": THRESHOLDS,
                     },
-                    "metadata": {"goal_type": goal.goal_type, "phase": phase},
+                    "metadata": {
+                        "goal_type": goal.goal_type,
+                        "phase": phase,
+                        "case": f"{goal.goal_type}-{phase}",
+                    },
                 }
             )
     return examples

@@ -15,17 +15,20 @@ from langsmith import Client, aevaluate, tracing_context
 
 from tri_core.config import readonly_url
 from tri_core.db.repo import Conn
+from tri_core.eval_select import (
+    CaseLookup,
+    Selection,
+    dataset_subset,
+    run_rescore,
+    subset_examples,
+)
+from tri_core.eval_usage import UsageByRole, with_usage
 from tri_core.evals import (
     disable_network_sampling,
-    errored,
-    failure_lines,
+    finish_run,
     local_examples,
     local_experiment_name,
     offline_client,
-    pass_rates,
-    record_rows,
-    render_pass_rates,
-    scored_counts,
 )
 from tri_core.llm import ModelProvider, Role, eval_metadata
 from tri_planning.config import PlanningSettings
@@ -39,6 +42,14 @@ DATASET_DESCRIPTION = "Target weeks for the tri-planning design prompt"
 
 def case_examples(today: date) -> list[dict[str, Any]]:
     return [{**e, "outputs": {}} for e in build_examples(today)]
+
+
+def case_names() -> list[str]:
+    return [e["metadata"]["case"] for e in case_examples(date.today())]
+
+
+def case_lookup() -> CaseLookup:
+    return {e["metadata"]["case"]: e for e in case_examples(date.today())}.get
 
 
 def ensure_dataset(client: Client, *, recreate: bool = False) -> None:
@@ -62,17 +73,35 @@ async def run_eval(
     recreate: bool = False,
     local: bool = False,
     log: Callable[[str], None] = print,
+    selection: Selection | None = None,
 ) -> dict[str, float]:
     """The pass rate per evaluator key. Weeks are designed on the planning_design role.
-    `local=True` never talks to LangSmith: no dataset, traces or feedback are sent."""
+    `local=True` never talks to LangSmith: no dataset, traces or feedback are sent.
+    `selection` narrows the run to some weeks, or re-scores a results file instead (no design
+    calls, no LangSmith)."""
+    usage = UsageByRole()
+    models = with_usage(models, usage)
+    chosen = selection.cases if selection is not None else None
+    if selection is not None and selection.rescore is not None:
+        rates, _ = await run_rescore(
+            selection.rescore,
+            evaluators=[validator_pass],
+            lookup=case_lookup(),
+            cases=chosen,
+            current={},
+            usage=usage,
+            log=log,
+        )
+        return rates
+    examples = case_examples(date.today())
     if local:
         client = offline_client()
-        data: Any = local_examples(case_examples(date.today()))
+        data: Any = local_examples(subset_examples(examples, chosen))
         disable_network_sampling()
     else:
         client = Client(api_key=settings.langsmith_api_key)
         ensure_dataset(client, recreate=recreate)
-        data = DATASET_NAME
+        data = DATASET_NAME if chosen is None else dataset_subset(client, DATASET_NAME, chosen)
     # design_week reads design_model; model is only the dataclass's required field.
     designer = models(Role.PLANNING_DESIGN)
     deps = GraphDeps(
@@ -81,32 +110,37 @@ async def run_eval(
         readonly_db_url=readonly_url(settings),
         design_model=designer,
     )
-    experiment_prefix = (prefix or f"design-v{PROMPT_VERSION}") + ("-local" if local else "")
+    experiment_prefix = (
+        (prefix or f"design-v{PROMPT_VERSION}")
+        + ("-subset" if chosen is not None else "")
+        + ("-local" if local else "")
+    )
+    metadata: dict[str, Any] = {
+        "prompt_version": PROMPT_VERSION,
+        **eval_metadata(settings, Role.PLANNING_DESIGN, judge=False),
+    }
+    if chosen is not None:
+        metadata["cases"] = chosen
     with tracing_context(enabled="local", client=client) if local else nullcontext():
         results = await aevaluate(
             design_target(deps),
             data=data,
             evaluators=[validator_pass],
             experiment_prefix=experiment_prefix,
-            metadata={
-                "prompt_version": PROMPT_VERSION,
-                **eval_metadata(settings, Role.PLANNING_DESIGN, judge=False),
-            },
+            metadata=metadata,
             client=client,
             upload_results=not local,
             max_concurrency=2,
         )
     rows: list[Any] = [row async for row in results]
-    dict_rows = [dict(r) for r in rows]
-    rates = pass_rates(dict_rows)
-    errors = errored(dict_rows)
     experiment = local_experiment_name(experiment_prefix) if local else results.experiment_name
-    log(f"experiment: {experiment}")
-    log(render_pass_rates(rates, scored_counts(dict_rows), len(rows), version=PROMPT_VERSION))
-    if errors:
-        log(f"{errors} errored")
-    failures = failure_lines(dict_rows)
-    if failures:
-        log("failed checks:\n" + "\n".join(failures))
-    log(f"results: {record_rows(dict_rows, experiment)}")
+    rates, _ = finish_run(
+        [dict(r) for r in rows],
+        experiment,
+        version=PROMPT_VERSION,
+        metadata=metadata,
+        usage=usage,
+        log=log,
+        total=len(examples) if chosen is not None else None,
+    )
     return rates

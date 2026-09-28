@@ -9,12 +9,14 @@ import tempfile
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import date, timedelta
+from pathlib import Path
 from typing import Any
 
 import typer
 from dotenv import load_dotenv
 from rich.console import Console
 
+from tri_core.eval_select import CASES_HELP, FAILED_FROM_HELP, RESCORE_HELP
 from tri_planning.config import get_planning_settings
 
 app = typer.Typer(help="Triathlon training planning agent", no_args_is_help=True)
@@ -255,18 +257,54 @@ def eval_cmd(
         help="Run without LangSmith: no dataset, traces or feedback are sent; results go to "
         ".evals/ only",
     ),
+    cases: str | None = typer.Option(None, "--cases", help=CASES_HELP),
+    failed_from: Path | None = typer.Option(None, "--failed-from", help=FAILED_FROM_HELP),
+    rescore: Path | None = typer.Option(None, "--rescore", help=RESCORE_HELP),
 ) -> None:
     """Design one week per example in the LangSmith dataset and print the validator pass rate
     (exit 1 when it is below 100%)."""
-    raise typer.Exit(code=asyncio.run(_eval(prefix=prefix, recreate=recreate, local=local)))
+    raise typer.Exit(
+        code=asyncio.run(
+            _eval(
+                prefix=prefix,
+                recreate=recreate,
+                local=local,
+                cases=cases,
+                failed_from=failed_from,
+                rescore=rescore,
+            )
+        )
+    )
 
 
-async def _eval(*, prefix: str | None, recreate: bool, local: bool | None) -> int:
+async def _eval(
+    *,
+    prefix: str | None,
+    recreate: bool,
+    local: bool | None,
+    cases: str | None = None,
+    failed_from: Path | None = None,
+    rescore: Path | None = None,
+) -> int:
+    from tri_core.eval_select import EvalArgsError, cli_selection
     from tri_core.evals import local_default
     from tri_core.llm import make_model
-    from tri_planning.evals.run import run_eval
+    from tri_planning.evals.run import case_names, run_eval
 
     settings = get_planning_settings()
+    chosen = cli_selection(
+        cases=cases,
+        failed_from=failed_from,
+        rescore=rescore,
+        known=case_names(),
+        recreate=recreate,
+        out=lambda m: _out(m + "\n"),
+        err=lambda m: console.print(m, style="red", markup=False),
+    )
+    if isinstance(chosen, int):
+        return chosen
+    if chosen.rescore is not None:
+        local = True
     local = local_default() if local is None else local
     if not local and not settings.langsmith_api_key:
         console.print("LANGSMITH_API_KEY is not set in .env", style="red")
@@ -274,14 +312,19 @@ async def _eval(*, prefix: str | None, recreate: bool, local: bool | None) -> in
     if not settings.anthropic_api_key:
         console.print("ANTHROPIC_API_KEY is not set in .env", style="red")
         return 2
-    rates = await run_eval(
-        settings,
-        lambda role: make_model(settings, role),
-        prefix=prefix,
-        recreate=recreate,
-        local=local,
-        log=lambda m: _out(m + "\n"),
-    )
+    try:
+        rates = await run_eval(
+            settings,
+            lambda role: make_model(settings, role),
+            prefix=prefix,
+            recreate=recreate,
+            local=local,
+            log=lambda m: _out(m + "\n"),
+            selection=chosen,
+        )
+    except EvalArgsError as exc:
+        console.print(str(exc), style="red", markup=False)
+        return 2
     return 0 if rates and all(r == 1.0 for r in rates.values()) else 1
 
 
