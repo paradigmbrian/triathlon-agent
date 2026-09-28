@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 520" width="1000" height="520" role="img" aria-labelledby="we-title">
+<title id="we-title">tri-wellness: ingest graph, streamed lab report and read-only wellness chat</title>
+<style>
+svg { --bg:#F8FAF9; --ink:#16201E; --muted:#5A6A66; --rule:#C3CECB; --sys:#EDF2F0; --acc:#0E6B66; --tint:#DAEAE7; --accline:#8DBDB7; --w:#B4470F; --wtint:#F6E4D8; --sans:-apple-system,"Segoe UI","Public Sans",Helvetica,Arial,sans-serif; --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace; }
+@media (prefers-color-scheme: dark) { svg { --bg:#151D1C; --ink:#E2EAE8; --muted:#93A39F; --rule:#2C3836; --sys:#1C2725; --acc:#5BBDB4; --tint:#15302E; --accline:#2F6660; --w:#EE8C4E; --wtint:#3A2518; } }
+.bg { fill:var(--bg); }
+.bx { fill:var(--bg); stroke:var(--rule); stroke-width:1; }
+.bl { fill:var(--tint); stroke:var(--accline); stroke-width:1; fill-opacity:.55; }
+.ba { fill:var(--tint); stroke:var(--acc); stroke-width:1.4; }
+.bs { fill:var(--bg); stroke:var(--acc); stroke-width:1.4; }
+.bw { fill:var(--wtint); stroke:var(--w); stroke-width:1.4; }
+.bs2 { fill:var(--sys); stroke:var(--muted); stroke-width:1; stroke-dasharray:4 3; }
+.ln { fill:none; stroke:var(--ink); stroke-width:1.4; }
+.la { fill:none; stroke:var(--acc); stroke-width:1.4; }
+.lw { fill:none; stroke:var(--w); stroke-width:1.6; }
+.dash { stroke-dasharray:5 4; }
+.ah { fill:var(--ink); } .ah-c { fill:var(--acc); } .ah-w { fill:var(--w); }
+.dot { fill:var(--ink); } .ring { fill:none; stroke:var(--ink); stroke-width:1.4; }
+.t { font:600 13px var(--sans); fill:var(--ink); }
+.s { font:600 12px var(--sans); fill:var(--ink); }
+.ss { font:500 11px var(--sans); fill:var(--ink); }
+.m { font:400 11px var(--mono); fill:var(--muted); }
+.mi { font:400 11px var(--mono); fill:var(--ink); }
+.m10 { font:400 10px var(--mono); fill:var(--muted); }
+.ma { font:500 11px var(--mono); fill:var(--acc); }
+.ma10 { font:500 10px var(--mono); fill:var(--acc); }
+.mw { font:500 10.5px var(--mono); fill:var(--w); }
+.lab { font:600 10.5px var(--mono); letter-spacing:.08em; fill:var(--muted); }
+</style>
+<defs><marker id="we-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah"/></marker><marker id="we-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah-c"/></marker><marker id="we-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah-w"/></marker></defs>
+<rect class="bg" x="0" y="0" width="1000" height="520"/>
+<text class="lab" x="20" y="34">INGEST · tri-wellness ingest FILE</text>
+<rect class="bs2" x="20" y="60" width="120" height="60" rx="3"/>
+<text class="s" x="80.0" y="86.0" text-anchor="middle">lab file</text>
+<text class="m10" x="80.0" y="102.0" text-anchor="middle">PDF · CSV · TSV</text>
+<path class="ln" d="M140 90 H187" marker-end="url(#we-a)"/>
+<rect class="bs" x="190" y="60" width="150" height="60" rx="3"/>
+<text class="s" x="265.0" y="79.0" text-anchor="middle">extract</text>
+<text class="m10" x="265.0" y="95.0" text-anchor="middle">parse_export first</text>
+<text class="m10" x="265.0" y="109.0" text-anchor="middle">else LAB_EXTRACT</text>
+<path class="ln" d="M340 90 H387" marker-end="url(#we-a)"/>
+<text class="m10" x="363" y="84" text-anchor="middle">rows</text>
+<rect class="bx" x="390" y="60" width="140" height="60" rx="3"/>
+<text class="s" x="460.0" y="79.0" text-anchor="middle">normalize</text>
+<text class="m10" x="460.0" y="95.0" text-anchor="middle">aliases · units</text>
+<text class="m10" x="460.0" y="109.0" text-anchor="middle">bounds · unmapped</text>
+<path class="ln" d="M530 90 H577" marker-end="url(#we-a)"/>
+<rect class="bw" x="580" y="60" width="140" height="60" rx="3"/>
+<text class="s" x="650.0" y="79.0" text-anchor="middle">review</text>
+<text class="m10" x="650.0" y="95.0" text-anchor="middle">interrupt()</text>
+<text class="m10" x="650.0" y="109.0" text-anchor="middle">edit loops back</text>
+<path class="ln" d="M620 60 V44 H680 V57" marker-end="url(#we-a)"/>
+<text class="m10" x="650" y="39" text-anchor="middle">edit</text>
+<path class="lw" d="M720 90 H767" marker-end="url(#we-w)"/>
+<text class="mw" x="744" y="84" text-anchor="middle">approve</text>
+<rect class="bx" x="770" y="60" width="120" height="60" rx="3"/>
+<text class="s" x="830.0" y="86.0" text-anchor="middle">store</text>
+<text class="m10" x="830.0" y="102.0" text-anchor="middle">one transaction</text>
+<text class="m10" x="830" y="138" text-anchor="middle">→ lab_panels · lab_results</text>
+<path class="ln" d="M265 120 V151" marker-end="url(#we-a)"/>
+<circle class="ring" cx="265" cy="162" r="8"/><circle class="dot" cx="265" cy="162" r="3.5"/>
+<text class="m10" x="273" y="142">no rows or date</text>
+<path class="ln" d="M650 120 V151" marker-end="url(#we-a)"/>
+<circle class="ring" cx="650" cy="162" r="8"/><circle class="dot" cx="650" cy="162" r="3.5"/>
+<text class="m10" x="658" y="142">reject</text>
+<rect class="bx" x="390" y="200" width="140" height="50" rx="3"/>
+<text class="s" x="460.0" y="221.0" text-anchor="middle">registry</text>
+<text class="m10" x="460.0" y="237.0" text-anchor="middle">markers.yaml · by sex</text>
+<path class="ln" d="M460 200 V123" marker-end="url(#we-a)"/>
+<text class="m10" x="468" y="170">aliases, ranges</text>
+<text class="lab" x="20" y="284">REPORT · tri-wellness report</text>
+<rect class="bs2" x="20" y="300" width="170" height="60" rx="3"/>
+<text class="s" x="105.0" y="319.0" text-anchor="middle">Postgres reads</text>
+<text class="m10" x="105.0" y="335.0" text-anchor="middle">panel · previous values</text>
+<text class="m10" x="105.0" y="349.0" text-anchor="middle">training context 72 h</text>
+<path class="ln" d="M190 330 H387" marker-end="url(#we-a)"/>
+<text class="m10" x="288" y="324" text-anchor="middle">results + context</text>
+<path class="ln" d="M460 250 V297" marker-end="url(#we-a)"/>
+<rect class="bx" x="390" y="300" width="140" height="60" rx="3"/>
+<text class="s" x="460.0" y="319.0" text-anchor="middle">evaluate</text>
+<text class="m10" x="460.0" y="335.0" text-anchor="middle">code · findings</text>
+<text class="m10" x="460.0" y="349.0" text-anchor="middle">active confounders</text>
+<path class="ln" d="M530 330 H577" marker-end="url(#we-a)"/>
+<rect class="bx" x="580" y="300" width="140" height="60" rx="3"/>
+<text class="s" x="650.0" y="319.0" text-anchor="middle">prompt v2</text>
+<text class="m10" x="650.0" y="335.0" text-anchor="middle">render_report_prompt</text>
+<text class="m10" x="650.0" y="349.0" text-anchor="middle">+ prior Priorities</text>
+<path class="ln" d="M720 330 H767" marker-end="url(#we-a)"/>
+<rect class="bs" x="770" y="300" width="120" height="60" rx="3"/>
+<text class="s" x="830.0" y="319.0" text-anchor="middle">write</text>
+<text class="m10" x="830.0" y="335.0" text-anchor="middle">LAB_REPORT</text>
+<text class="m10" x="830.0" y="349.0" text-anchor="middle">streaming()</text>
+<text class="m10" x="830" y="378" text-anchor="middle">→ lab_reports + disclaimer</text>
+<text class="lab" x="20" y="414">CHAT · tri-wellness chat, and the coach&#x27;s ask_wellness</text>
+<rect class="bx" x="20" y="430" width="170" height="60" rx="3"/>
+<text class="s" x="105.0" y="456.0" text-anchor="middle">chat REPL</text>
+<text class="m10" x="105.0" y="472.0" text-anchor="middle">or coach ask_wellness</text>
+<path class="ln" d="M190 460 H247" marker-end="url(#we-a)"/>
+<rect class="ba" x="250" y="430" width="200" height="60" rx="3"/>
+<text class="s" x="350.0" y="456.0" text-anchor="middle">wellness chat agent</text>
+<text class="m10" x="350.0" y="472.0" text-anchor="middle">WELLNESS_CHAT · static prompt</text>
+<path class="la" d="M450 460 H507" marker-end="url(#we-c)"/>
+<text class="ma10" x="478" y="454" text-anchor="middle">tools</text>
+<rect class="bs" x="510" y="430" width="470" height="60" rx="3"/>
+<text class="s" x="522" y="449.0">read-only tools</text>
+<text class="mi" x="522" y="465.0">query_training_db (tri_reader)</text>
+<text class="mi" x="522" y="479.0">get_panel_findings · get_marker_spec · get_marker_history</text>
+</svg>

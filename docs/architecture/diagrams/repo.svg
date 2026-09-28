@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 745" width="1000" height="745" role="img" aria-labelledby="rp-title">
+<title id="rp-title">The whole repo: hosts, tri-web, tri-coach, four domain packages, tri-core and the outside systems</title>
+<style>
+svg { --bg:#F8FAF9; --ink:#16201E; --muted:#5A6A66; --rule:#C3CECB; --sys:#EDF2F0; --acc:#0E6B66; --tint:#DAEAE7; --accline:#8DBDB7; --w:#B4470F; --wtint:#F6E4D8; --sans:-apple-system,"Segoe UI","Public Sans",Helvetica,Arial,sans-serif; --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace; }
+@media (prefers-color-scheme: dark) { svg { --bg:#151D1C; --ink:#E2EAE8; --muted:#93A39F; --rule:#2C3836; --sys:#1C2725; --acc:#5BBDB4; --tint:#15302E; --accline:#2F6660; --w:#EE8C4E; --wtint:#3A2518; } }
+.bg { fill:var(--bg); }
+.bx { fill:var(--bg); stroke:var(--rule); stroke-width:1; }
+.bl { fill:var(--tint); stroke:var(--accline); stroke-width:1; fill-opacity:.55; }
+.ba { fill:var(--tint); stroke:var(--acc); stroke-width:1.4; }
+.bs { fill:var(--bg); stroke:var(--acc); stroke-width:1.4; }
+.bw { fill:var(--wtint); stroke:var(--w); stroke-width:1.4; }
+.bs2 { fill:var(--sys); stroke:var(--muted); stroke-width:1; stroke-dasharray:4 3; }
+.ln { fill:none; stroke:var(--ink); stroke-width:1.4; }
+.la { fill:none; stroke:var(--acc); stroke-width:1.4; }
+.lw { fill:none; stroke:var(--w); stroke-width:1.6; }
+.dash { stroke-dasharray:5 4; }
+.ah { fill:var(--ink); } .ah-c { fill:var(--acc); } .ah-w { fill:var(--w); }
+.dot { fill:var(--ink); } .ring { fill:none; stroke:var(--ink); stroke-width:1.4; }
+.t { font:600 13px var(--sans); fill:var(--ink); }
+.s { font:600 12px var(--sans); fill:var(--ink); }
+.ss { font:500 11px var(--sans); fill:var(--ink); }
+.m { font:400 11px var(--mono); fill:var(--muted); }
+.mi { font:400 11px var(--mono); fill:var(--ink); }
+.m10 { font:400 10px var(--mono); fill:var(--muted); }
+.ma { font:500 11px var(--mono); fill:var(--acc); }
+.ma10 { font:500 10px var(--mono); fill:var(--acc); }
+.mw { font:500 10.5px var(--mono); fill:var(--w); }
+.lab { font:600 10.5px var(--mono); letter-spacing:.08em; fill:var(--muted); }
+</style>
+<defs><marker id="rp-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah"/></marker><marker id="rp-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah-c"/></marker><marker id="rp-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah-w"/></marker></defs>
+<rect class="bg" x="0" y="0" width="1000" height="745"/>
+<text class="lab" x="114" y="58" text-anchor="end">HOSTS</text>
+<text class="lab" x="114" y="158" text-anchor="end">WEB</text>
+<text class="lab" x="114" y="270" text-anchor="end">ORCHESTRATOR</text>
+<text class="lab" x="114" y="400" text-anchor="end">DOMAIN</text>
+<text class="lab" x="114" y="415" text-anchor="end">PACKAGES</text>
+<text class="lab" x="114" y="545" text-anchor="end">FOUNDATION</text>
+<text class="lab" x="114" y="690" text-anchor="end">SYSTEMS</text>
+<rect class="bx" x="130" y="24" width="270" height="60" rx="3"/>
+<text class="t" x="265.0" y="50.0" text-anchor="middle">Package CLIs</text>
+<text class="m" x="265.0" y="66.0" text-anchor="middle">tri · tri-coach · tri-planning · …</text>
+<rect class="bx" x="420" y="24" width="260" height="60" rx="3"/>
+<text class="t" x="550.0" y="50.0" text-anchor="middle">Browser</text>
+<text class="m" x="550.0" y="66.0" text-anchor="middle">React SPA · web/</text>
+<rect class="bx" x="700" y="24" width="280" height="60" rx="3"/>
+<text class="t" x="840.0" y="50.0" text-anchor="middle">Eval runners</text>
+<text class="m" x="840.0" y="66.0" text-anchor="middle">&lt;pkg&gt; eval → .evals/*.jsonl</text>
+<path class="ln" d="M550 84 V121" marker-end="url(#rp-a)"/>
+<text class="mi" x="560" y="107">HTTP + SSE · loopback</text>
+<rect class="bx" x="420" y="124" width="260" height="60" rx="3"/>
+<text class="t" x="550.0" y="150.0" text-anchor="middle">tri-web</text>
+<text class="m" x="550.0" y="166.0" text-anchor="middle">FastAPI · one runtime lock</text>
+<path class="ln" d="M550 184 V229" marker-end="url(#rp-a)"/>
+<text class="mi" x="560" y="212">open_runtime</text>
+<path class="ln" d="M265 84 V229" marker-end="url(#rp-a)"/>
+<text class="mi" x="275" y="160">tri-coach chat · check-in</text>
+<rect class="bl" x="130" y="232" width="850" height="68" rx="4"/>
+<text class="t" x="150" y="259">tri-coach</text>
+<text class="m" x="150" y="281">coach StateGraph · consults · review → apply, the only writer</text>
+<text class="ma" x="960" y="259" text-anchor="end">thread &quot;coach&quot; · Postgres checkpoints</text>
+<path class="la" d="M230 300 V349" marker-end="url(#rp-c)"/>
+<text class="ma" x="238" y="330">embedded graph</text>
+<path class="la" d="M447 300 V349" marker-end="url(#rp-c)"/>
+<text class="ma" x="455" y="330">embedded graph</text>
+<path class="la" d="M664 300 V349" marker-end="url(#rp-c)"/>
+<text class="ma" x="672" y="330">ask_analyst</text>
+<path class="la" d="M880 300 V349" marker-end="url(#rp-c)"/>
+<text class="ma" x="888" y="330">ask_wellness</text>
+<rect class="bx" x="130" y="352" width="200" height="88" rx="3"/>
+<text class="t" x="230.0" y="385.0" text-anchor="middle">tri-planning</text>
+<text class="m10" x="230.0" y="401.0" text-anchor="middle">intake, targets, design, adjust</text>
+<text class="m10" x="230.0" y="415.0" text-anchor="middle">validate.week guardrail</text>
+<path class="ln" d="M230 440 V489" marker-end="url(#rp-a)"/>
+<rect class="bx" x="347" y="352" width="200" height="88" rx="3"/>
+<text class="t" x="447.0" y="385.0" text-anchor="middle">tri-nutrition</text>
+<text class="m10" x="447.0" y="401.0" text-anchor="middle">intake, check-in, targets, fuel</text>
+<text class="m10" x="447.0" y="415.0" text-anchor="middle">energy and fuel bounds</text>
+<path class="ln" d="M447 440 V489" marker-end="url(#rp-a)"/>
+<rect class="bx" x="564" y="352" width="200" height="88" rx="3"/>
+<text class="t" x="664.0" y="385.0" text-anchor="middle">tri-analyze</text>
+<text class="m10" x="664.0" y="401.0" text-anchor="middle">analyst agent · prompt v3</text>
+<text class="m10" x="664.0" y="415.0" text-anchor="middle">SQL + live reads only</text>
+<path class="ln" d="M664 440 V489" marker-end="url(#rp-a)"/>
+<rect class="bx" x="780" y="352" width="200" height="88" rx="3"/>
+<text class="t" x="880.0" y="385.0" text-anchor="middle">tri-wellness</text>
+<text class="m10" x="880.0" y="401.0" text-anchor="middle">lab ingest · report · chat</text>
+<text class="m10" x="880.0" y="415.0" text-anchor="middle">markers.yaml registry</text>
+<path class="ln" d="M880 440 V489" marker-end="url(#rp-a)"/>
+<text class="mi" x="238" y="470">imports</text>
+<rect class="bl" x="130" y="492" width="850" height="98" rx="4"/>
+<text class="t" x="150" y="517">tri-core</text>
+<text class="m" x="960" y="517" text-anchor="end">every package imports it · tri sync · tri migrate</text>
+<rect class="bx" x="150" y="530" width="128" height="46" rx="3"/>
+<text class="mi" x="214.0" y="549.0" text-anchor="middle">harness</text>
+<text class="m10" x="214.0" y="565.0" text-anchor="middle">agents · turns</text>
+<rect class="bx" x="288" y="530" width="128" height="46" rx="3"/>
+<text class="mi" x="352.0" y="549.0" text-anchor="middle">llm</text>
+<text class="m10" x="352.0" y="565.0" text-anchor="middle">10 roles · fallback</text>
+<rect class="bx" x="426" y="530" width="128" height="46" rx="3"/>
+<text class="mi" x="490.0" y="549.0" text-anchor="middle">db</text>
+<text class="m10" x="490.0" y="565.0" text-anchor="middle">sql_tool · writes</text>
+<rect class="bx" x="564" y="530" width="128" height="46" rx="3"/>
+<text class="mi" x="628.0" y="549.0" text-anchor="middle">mcp</text>
+<text class="m10" x="628.0" y="565.0" text-anchor="middle">ToolsCaller</text>
+<rect class="bx" x="702" y="530" width="128" height="46" rx="3"/>
+<text class="mi" x="766.0" y="549.0" text-anchor="middle">sync</text>
+<text class="m10" x="766.0" y="565.0" text-anchor="middle">TP + Garmin → tables</text>
+<rect class="bx" x="840" y="530" width="128" height="46" rx="3"/>
+<text class="mi" x="904.0" y="549.0" text-anchor="middle">evals</text>
+<text class="m10" x="904.0" y="565.0" text-anchor="middle">finish_run · cost</text>
+<path class="ln" d="M205 590 V639" marker-end="url(#rp-a)"/>
+<text class="mi" x="213" y="620">llm</text>
+<rect class="bs2" x="130" y="642" width="150" height="88" rx="3"/>
+<text class="t" x="205.0" y="675.0" text-anchor="middle">Anthropic API</text>
+<text class="m" x="205.0" y="691.0" text-anchor="middle">ChatAnthropic</text>
+<text class="m10" x="205.0" y="705.0" text-anchor="middle">opus-5 · sonnet-5</text>
+<path class="ln" d="M405 590 V639" marker-end="url(#rp-a)"/>
+<text class="mi" x="413" y="620">db · sync</text>
+<rect class="bs2" x="290" y="642" width="230" height="88" rx="3"/>
+<text class="t" x="405.0" y="668.0" text-anchor="middle">Postgres</text>
+<text class="m" x="405.0" y="684.0" text-anchor="middle">writer: DATABASE_URL</text>
+<text class="m" x="405.0" y="698.0" text-anchor="middle">reader: tri_reader</text>
+<text class="m10" x="405.0" y="712.0" text-anchor="middle">16 tables · checkpoints · Store</text>
+<path class="ln" d="M605 590 V639" marker-end="url(#rp-a)"/>
+<text class="mi" x="613" y="620">mcp</text>
+<rect class="bs2" x="530" y="642" width="150" height="88" rx="3"/>
+<text class="t" x="605.0" y="675.0" text-anchor="middle">Garmin MCP</text>
+<text class="m" x="605.0" y="691.0" text-anchor="middle">uvx · stdio</text>
+<text class="m10" x="605.0" y="705.0" text-anchor="middle">garmin_mcp</text>
+<path class="ln" d="M765 590 V639" marker-end="url(#rp-a)"/>
+<text class="mi" x="773" y="620">mcp</text>
+<rect class="bs2" x="690" y="642" width="150" height="88" rx="3"/>
+<text class="t" x="765.0" y="675.0" text-anchor="middle">TrainingPeaks MCP</text>
+<text class="m" x="765.0" y="691.0" text-anchor="middle">uvx · stdio</text>
+<text class="m10" x="765.0" y="705.0" text-anchor="middle">tp-mcp</text>
+<path class="ln" d="M915 590 V639" marker-end="url(#rp-a)"/>
+<text class="mi" x="923" y="620">evals</text>
+<rect class="bs2" x="850" y="642" width="130" height="88" rx="3"/>
+<text class="t" x="915.0" y="675.0" text-anchor="middle">LangSmith</text>
+<text class="m" x="915.0" y="691.0" text-anchor="middle">traces · datasets</text>
+<text class="m10" x="915.0" y="705.0" text-anchor="middle">--local skips it</text>
+</svg>

@@ -5,6 +5,9 @@ the TrainingPeaks calendar after approval, and adjusts the plan as training unfo
 Design: `docs/superpowers/specs/2026-09-07-tri-planning-design.md`. Plans:
 `docs/superpowers/plans/2026-09-07-tri-planning-0*.md`.
 
+Architecture: [`docs/architecture/tri-planning.md`](../../docs/architecture/tri-planning.md) has the current
+diagram; the [architecture index](../../docs/architecture/README.md) shows how it fits the whole repo.
+
 ## The graph
 
 `build_graph(deps, checkpointer, *, embedded=False)` compiles a LangGraph `StateGraph` over

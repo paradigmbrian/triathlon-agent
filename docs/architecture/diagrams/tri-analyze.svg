@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 460" width="1000" height="460" role="img" aria-labelledby="an-title">
+<title id="an-title">tri-analyze: three hosts run one read-only analyst agent with SQL and live Garmin and TrainingPeaks reads</title>
+<style>
+svg { --bg:#F8FAF9; --ink:#16201E; --muted:#5A6A66; --rule:#C3CECB; --sys:#EDF2F0; --acc:#0E6B66; --tint:#DAEAE7; --accline:#8DBDB7; --w:#B4470F; --wtint:#F6E4D8; --sans:-apple-system,"Segoe UI","Public Sans",Helvetica,Arial,sans-serif; --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace; }
+@media (prefers-color-scheme: dark) { svg { --bg:#151D1C; --ink:#E2EAE8; --muted:#93A39F; --rule:#2C3836; --sys:#1C2725; --acc:#5BBDB4; --tint:#15302E; --accline:#2F6660; --w:#EE8C4E; --wtint:#3A2518; } }
+.bg { fill:var(--bg); }
+.bx { fill:var(--bg); stroke:var(--rule); stroke-width:1; }
+.bl { fill:var(--tint); stroke:var(--accline); stroke-width:1; fill-opacity:.55; }
+.ba { fill:var(--tint); stroke:var(--acc); stroke-width:1.4; }
+.bs { fill:var(--bg); stroke:var(--acc); stroke-width:1.4; }
+.bw { fill:var(--wtint); stroke:var(--w); stroke-width:1.4; }
+.bs2 { fill:var(--sys); stroke:var(--muted); stroke-width:1; stroke-dasharray:4 3; }
+.ln { fill:none; stroke:var(--ink); stroke-width:1.4; }
+.la { fill:none; stroke:var(--acc); stroke-width:1.4; }
+.lw { fill:none; stroke:var(--w); stroke-width:1.6; }
+.dash { stroke-dasharray:5 4; }
+.ah { fill:var(--ink); } .ah-c { fill:var(--acc); } .ah-w { fill:var(--w); }
+.dot { fill:var(--ink); } .ring { fill:none; stroke:var(--ink); stroke-width:1.4; }
+.t { font:600 13px var(--sans); fill:var(--ink); }
+.s { font:600 12px var(--sans); fill:var(--ink); }
+.ss { font:500 11px var(--sans); fill:var(--ink); }
+.m { font:400 11px var(--mono); fill:var(--muted); }
+.mi { font:400 11px var(--mono); fill:var(--ink); }
+.m10 { font:400 10px var(--mono); fill:var(--muted); }
+.ma { font:500 11px var(--mono); fill:var(--acc); }
+.ma10 { font:500 10px var(--mono); fill:var(--acc); }
+.mw { font:500 10.5px var(--mono); fill:var(--w); }
+.lab { font:600 10.5px var(--mono); letter-spacing:.08em; fill:var(--muted); }
+</style>
+<defs><marker id="an-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah"/></marker><marker id="an-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah-c"/></marker><marker id="an-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah-w"/></marker></defs>
+<rect class="bg" x="0" y="0" width="1000" height="460"/>
+<text class="lab" x="20" y="28">HOSTS</text>
+<rect class="bx" x="20" y="40" width="200" height="62" rx="3"/>
+<text class="s" x="120.0" y="67.0" text-anchor="middle">tri-analyze chat</text>
+<text class="m10" x="120.0" y="83.0" text-anchor="middle">REPL · thread analyze</text>
+<path class="ln" d="M220 71 H277" marker-end="url(#an-a)"/>
+<rect class="bx" x="20" y="122" width="200" height="62" rx="3"/>
+<text class="s" x="120.0" y="149.0" text-anchor="middle">coach · ask_analyst</text>
+<text class="m10" x="120.0" y="165.0" text-anchor="middle">throwaway thread · limit 40</text>
+<path class="ln" d="M220 153 H277" marker-end="url(#an-a)"/>
+<rect class="bx" x="20" y="204" width="200" height="62" rx="3"/>
+<text class="s" x="120.0" y="231.0" text-anchor="middle">eval target</text>
+<text class="m10" x="120.0" y="247.0" text-anchor="middle">12 cases · seeded eval-db</text>
+<path class="ln" d="M220 235 H277" marker-end="url(#an-a)"/>
+<rect class="bl" x="280" y="40" width="360" height="226" rx="4"/>
+<text class="t" x="296" y="64">analyst agent</text>
+<text class="ma10" x="624" y="64" text-anchor="end">build_agent → build_chat_agent</text>
+<rect class="ba" x="296" y="80" width="160" height="44" rx="3"/>
+<text class="s" x="376.0" y="98.0" text-anchor="middle">model · ANALYST</text>
+<text class="m10" x="376.0" y="114.0" text-anchor="middle">opus-5 · medium effort</text>
+<text class="m10" x="476" y="90">middleware, in order</text>
+<rect class="bx" x="476" y="96" width="148" height="18" rx="9"/>
+<text class="ss" x="550" y="109" text-anchor="middle">1 · analyst_prompt v3</text>
+<rect class="bx" x="476" y="118" width="148" height="18" rx="9"/>
+<text class="ss" x="550" y="131" text-anchor="middle">2 · claude_fallback</text>
+<rect class="bx" x="476" y="140" width="148" height="18" rx="9"/>
+<text class="ss" x="550" y="153" text-anchor="middle">3 · prompt caching</text>
+<rect class="bx" x="296" y="140" width="160" height="112" rx="3"/>
+<text class="s" x="308" y="171.0">context, each turn</text>
+<text class="m10" x="308" y="187.0">today + weekday</text>
+<text class="m10" x="308" y="201.0">Monday week starts</text>
+<text class="m10" x="308" y="215.0">thresholds · zones</text>
+<text class="m10" x="308" y="229.0">7 d load · ±7 d workouts</text>
+<path class="ln" d="M456 150 H466 V105 H473" marker-end="url(#an-a)"/>
+<text class="m10" x="476" y="190">load_athlete_context</text>
+<text class="m10" x="476" y="205">athlete_profile ·</text>
+<text class="m10" x="476" y="220">daily_metrics · workouts</text>
+<text class="lab" x="700" y="28">TOOLS · READ-ONLY</text>
+<rect class="bs" x="700" y="40" width="280" height="80" rx="3"/>
+<text class="s" x="712" y="62.0">query_training_db</text>
+<text class="m10" x="712" y="78.0">runs as tri_reader</text>
+<text class="m10" x="712" y="92.0">one SELECT · read-only txn</text>
+<text class="m10" x="712" y="106.0">5 s · 200 rows · 8,000 chars</text>
+<rect class="bs" x="700" y="136" width="280" height="130" rx="3"/>
+<text class="s" x="716" y="158">live reads (allowlist)</text>
+<text class="mi" x="716" y="180">get_activity</text>
+<text class="mi" x="716" y="196">get_activity_splits</text>
+<text class="mi" x="716" y="212">get_training_readiness</text>
+<text class="mi" x="716" y="228">get_hrv_data</text>
+<text class="m10" x="964" y="180" text-anchor="end">Garmin</text>
+<text class="mi" x="716" y="252">tp_get_workout</text>
+<text class="m10" x="964" y="252" text-anchor="end">TrainingPeaks</text>
+<path class="la" d="M640 80 H697" marker-end="url(#an-c)"/>
+<text class="ma10" x="668" y="74" text-anchor="middle">SQL</text>
+<path class="la" d="M640 200 H697" marker-end="url(#an-c)"/>
+<text class="ma10" x="668" y="194" text-anchor="middle">MCP</text>
+<rect class="bl" x="20" y="300" width="960" height="150" rx="4"/>
+<text class="lab" x="36" y="324">EVAL · tri-analyze eval --eval-db URL</text>
+<rect class="bx" x="36" y="340" width="168" height="66" rx="3"/>
+<text class="s" x="120.0" y="362.0" text-anchor="middle">seed</text>
+<text class="m10" x="120.0" y="378.0" text-anchor="middle">history from 2026-06-01</text>
+<text class="m10" x="120.0" y="392.0" text-anchor="middle">4 tables, ids tagged eval</text>
+<path class="ln" d="M204 373 H221" marker-end="url(#an-a)"/>
+<rect class="bw" x="224" y="340" width="168" height="66" rx="3"/>
+<text class="s" x="308.0" y="362.0" text-anchor="middle">guard</text>
+<text class="m10" x="308.0" y="378.0" text-anchor="middle">refuses the athlete DB</text>
+<text class="m10" x="308.0" y="392.0" text-anchor="middle">and rows it didn&#x27;t write</text>
+<path class="ln" d="M392 373 H409" marker-end="url(#an-a)"/>
+<rect class="bx" x="412" y="340" width="168" height="66" rx="3"/>
+<text class="s" x="496.0" y="369.0" text-anchor="middle">verify_readable</text>
+<text class="m10" x="496.0" y="385.0" text-anchor="middle">tri_reader sees the seed</text>
+<path class="ln" d="M580 373 H597" marker-end="url(#an-a)"/>
+<rect class="bs" x="600" y="340" width="168" height="66" rx="3"/>
+<text class="s" x="684.0" y="362.0" text-anchor="middle">run 12 cases</text>
+<text class="m10" x="684.0" y="378.0" text-anchor="middle">real SQL on the seed</text>
+<text class="m10" x="684.0" y="392.0" text-anchor="middle">stubbed live tools</text>
+<path class="ln" d="M768 373 H785" marker-end="url(#an-a)"/>
+<rect class="bs" x="788" y="340" width="168" height="66" rx="3"/>
+<text class="s" x="872.0" y="362.0" text-anchor="middle">score</text>
+<text class="m10" x="872.0" y="378.0" text-anchor="middle">3 code checks</text>
+<text class="m10" x="872.0" y="392.0" text-anchor="middle">judge v2: grounded</text>
+<text class="m10" x="36" y="432">The seed is truncated in finally. Rows land in .evals/analyst-v3-*.jsonl. feedback_quality is judged on session cases only.</text>
+</svg>

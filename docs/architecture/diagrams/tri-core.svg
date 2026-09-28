@@ -1,0 +1,156 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" width="1000" height="600" role="img" aria-labelledby="co-title">
+<title id="co-title">tri-core: six modules every package builds on</title>
+<style>
+svg { --bg:#F8FAF9; --ink:#16201E; --muted:#5A6A66; --rule:#C3CECB; --sys:#EDF2F0; --acc:#0E6B66; --tint:#DAEAE7; --accline:#8DBDB7; --w:#B4470F; --wtint:#F6E4D8; --sans:-apple-system,"Segoe UI","Public Sans",Helvetica,Arial,sans-serif; --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace; }
+@media (prefers-color-scheme: dark) { svg { --bg:#151D1C; --ink:#E2EAE8; --muted:#93A39F; --rule:#2C3836; --sys:#1C2725; --acc:#5BBDB4; --tint:#15302E; --accline:#2F6660; --w:#EE8C4E; --wtint:#3A2518; } }
+.bg { fill:var(--bg); }
+.bx { fill:var(--bg); stroke:var(--rule); stroke-width:1; }
+.bl { fill:var(--tint); stroke:var(--accline); stroke-width:1; fill-opacity:.55; }
+.ba { fill:var(--tint); stroke:var(--acc); stroke-width:1.4; }
+.bs { fill:var(--bg); stroke:var(--acc); stroke-width:1.4; }
+.bw { fill:var(--wtint); stroke:var(--w); stroke-width:1.4; }
+.bs2 { fill:var(--sys); stroke:var(--muted); stroke-width:1; stroke-dasharray:4 3; }
+.ln { fill:none; stroke:var(--ink); stroke-width:1.4; }
+.la { fill:none; stroke:var(--acc); stroke-width:1.4; }
+.lw { fill:none; stroke:var(--w); stroke-width:1.6; }
+.dash { stroke-dasharray:5 4; }
+.ah { fill:var(--ink); } .ah-c { fill:var(--acc); } .ah-w { fill:var(--w); }
+.dot { fill:var(--ink); } .ring { fill:none; stroke:var(--ink); stroke-width:1.4; }
+.t { font:600 13px var(--sans); fill:var(--ink); }
+.s { font:600 12px var(--sans); fill:var(--ink); }
+.ss { font:500 11px var(--sans); fill:var(--ink); }
+.m { font:400 11px var(--mono); fill:var(--muted); }
+.mi { font:400 11px var(--mono); fill:var(--ink); }
+.m10 { font:400 10px var(--mono); fill:var(--muted); }
+.ma { font:500 11px var(--mono); fill:var(--acc); }
+.ma10 { font:500 10px var(--mono); fill:var(--acc); }
+.mw { font:500 10.5px var(--mono); fill:var(--w); }
+.lab { font:600 10.5px var(--mono); letter-spacing:.08em; fill:var(--muted); }
+</style>
+<defs><marker id="co-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah"/></marker><marker id="co-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah-c"/></marker><marker id="co-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah-w"/></marker></defs>
+<rect class="bg" x="0" y="0" width="1000" height="600"/>
+<rect class="bx" x="20" y="20" width="310" height="262" rx="4"/>
+<text class="t" x="36" y="46">harness</text>
+<text class="ma10" x="314" y="46" text-anchor="end">harness/</text>
+<rect class="bx" x="345" y="20" width="310" height="262" rx="4"/>
+<text class="t" x="361" y="46">llm</text>
+<text class="ma10" x="639" y="46" text-anchor="end">llm.py</text>
+<rect class="bx" x="670" y="20" width="310" height="262" rx="4"/>
+<text class="t" x="686" y="46">db</text>
+<text class="ma10" x="964" y="46" text-anchor="end">db/</text>
+<rect class="bx" x="20" y="300" width="310" height="262" rx="4"/>
+<text class="t" x="36" y="326">mcp</text>
+<text class="ma10" x="314" y="326" text-anchor="end">mcp/</text>
+<rect class="bx" x="345" y="300" width="310" height="262" rx="4"/>
+<text class="t" x="361" y="326">sync</text>
+<text class="ma10" x="639" y="326" text-anchor="end">sync/ · tri sync</text>
+<rect class="bx" x="670" y="300" width="310" height="262" rx="4"/>
+<text class="t" x="686" y="326">evals</text>
+<text class="ma10" x="964" y="326" text-anchor="end">evals · eval_select · eval_usage</text>
+<text class="mi" x="36" y="72">agents</text>
+<text class="m10" x="36" y="88">make_subagent · build_chat_agent</text>
+<text class="m10" x="36" y="104">middleware, in order:</text>
+<rect class="bx" x="36" y="112" width="56" height="22" rx="11"/>
+<text class="ss" x="64.0" y="127" text-anchor="middle">caller&#x27;s</text>
+<path class="ln" d="M92 123 H103" marker-end="url(#co-a)"/>
+<rect class="bs" x="106" y="112" width="116" height="22" rx="11"/>
+<text class="ss" x="164.0" y="127" text-anchor="middle">claude_fallback</text>
+<path class="ln" d="M222 123 H233" marker-end="url(#co-a)"/>
+<rect class="bx" x="236" y="112" width="84" height="22" rx="11"/>
+<text class="ss" x="278.0" y="127" text-anchor="middle">caching</text>
+<text class="mi" x="36" y="162">agent_tool</text>
+<text class="m10" x="36" y="177">an agent as a one-question tool</text>
+<text class="mi" x="36" y="194">handoff</text>
+<text class="m10" x="36" y="209">Command.PARENT with a valid history</text>
+<text class="mi" x="36" y="226">persistence</text>
+<text class="m10" x="36" y="241">Postgres saver + Store, readiness</text>
+<text class="mi" x="36" y="258">turns · messages</text>
+<text class="m10" x="36" y="273">one stream loop for REPLs and web</text>
+<rect class="bx" x="361" y="62" width="40" height="22" rx="11"/>
+<text class="ss" x="381.0" y="77" text-anchor="middle">env</text>
+<path class="ln" d="M401 73 H410" marker-end="url(#co-a)"/>
+<rect class="bx" x="413" y="62" width="76" height="22" rx="11"/>
+<text class="ss" x="451.0" y="77" text-anchor="middle">DEFAULTS</text>
+<path class="ln" d="M489 73 H498" marker-end="url(#co-a)"/>
+<rect class="bs" x="501" y="62" width="62" height="22" rx="11"/>
+<text class="ss" x="532.0" y="77" text-anchor="middle">resolve</text>
+<path class="ln" d="M563 73 H572" marker-end="url(#co-a)"/>
+<rect class="bx" x="575" y="62" width="70" height="22" rx="11"/>
+<text class="ss" x="610.0" y="77" text-anchor="middle">ModelSpec</text>
+<text class="m10" x="361" y="108">TRI_MODEL_&lt;ROLE&gt; &gt; TRI_MODEL &gt; default</text>
+<text class="lab" x="361" y="132">FALLBACK · RETRYABLE ERRORS ONLY</text>
+<rect class="bx" x="361" y="140" width="70" height="22" rx="11"/>
+<text class="ss" x="396.0" y="155" text-anchor="middle">opus-5</text>
+<path class="lw" d="M431 151 H442" marker-end="url(#co-w)"/>
+<rect class="bx" x="445" y="140" width="80" height="22" rx="11"/>
+<text class="ss" x="485.0" y="155" text-anchor="middle">opus-4-8</text>
+<path class="lw" d="M525 151 H536" marker-end="url(#co-w)"/>
+<rect class="bx" x="539" y="140" width="80" height="22" rx="11"/>
+<text class="ss" x="579.0" y="155" text-anchor="middle">sonnet-5</text>
+<text class="m10" x="361" y="182">first two that differ from the primary</text>
+<text class="mi" x="361" y="206">carriers</text>
+<text class="m10" x="361" y="221">claude_fallback · structured() · streaming()</text>
+<text class="m10" x="361" y="246">analyst: opus-5, medium · fuel: sonnet-5</text>
+<text class="m10" x="361" y="261">every other role: opus-5 · labs 32k tokens</text>
+<text class="lab" x="686" y="72">WRITE · writes.recorded_write</text>
+<rect class="bw" x="686" y="80" width="66" height="22" rx="11"/>
+<text class="ss" x="719.0" y="95" text-anchor="middle">pending</text>
+<path class="lw" d="M752 91 H763" marker-end="url(#co-w)"/>
+<rect class="bw" x="766" y="80" width="76" height="22" rx="11"/>
+<text class="ss" x="804.0" y="95" text-anchor="middle">MCP call</text>
+<path class="lw" d="M842 91 H853" marker-end="url(#co-w)"/>
+<rect class="bw" x="856" y="80" width="66" height="22" rx="11"/>
+<text class="ss" x="889.0" y="95" text-anchor="middle">applied</text>
+<text class="m10" x="686" y="120">definitive rejection → failed</text>
+<text class="m10" x="686" y="134">anything else stays pending: OutcomeUnknown</text>
+<text class="lab" x="686" y="162">READ · sql_tool</text>
+<text class="mi" x="686" y="178">query_training_db as tri_reader</text>
+<text class="m10" x="686" y="193">one SELECT / WITH · read-only txn</text>
+<text class="m10" x="686" y="207">5 s timeout · 200 rows · 8,000 chars</text>
+<text class="lab" x="686" y="234">MIGRATE · tri migrate</text>
+<text class="m10" x="686" y="250">001–010 → schema_migrations (sha256)</text>
+<text class="m10" x="686" y="264">+ LangGraph checkpoint and store tables</text>
+<text class="mi" x="36" y="352">garmin_spec · trainingpeaks_spec</text>
+<text class="m10" x="36" y="368">uvx from git at a pinned ref</text>
+<text class="m10" x="36" y="383">child_env: PATH, HOME, TMPDIR, LANG only</text>
+<text class="lab" x="36" y="412">THREE WAYS IN</text>
+<text class="mi" x="36" y="432">McpToolClient</text>
+<text class="m10" x="170" y="432">sync · call_json</text>
+<text class="mi" x="36" y="452">open_live_servers</text>
+<text class="m10" x="170" y="452">agents · allowlist filter</text>
+<text class="mi" x="36" y="472">ToolsCaller</text>
+<text class="m10" x="170" y="472">apply&#x27;s writes</text>
+<text class="m10" x="36" y="506">one session per server per process</text>
+<text class="m10" x="36" y="521">a server that fails to start is skipped</text>
+<text class="m10" x="36" y="536">the servers never see API keys or DB URLs</text>
+<rect class="bx" x="361" y="342" width="70" height="22" rx="11"/>
+<text class="ss" x="396.0" y="357" text-anchor="middle">tri sync</text>
+<path class="ln" d="M431 353 H442" marker-end="url(#co-a)"/>
+<rect class="bx" x="445" y="342" width="76" height="22" rx="11"/>
+<text class="ss" x="483.0" y="357" text-anchor="middle">run_sync</text>
+<text class="mi" x="361" y="388">TrainingPeaks</text>
+<text class="m10" x="465" y="388">365 d back · 28 d ahead</text>
+<text class="m10" x="361" y="404">→ athlete_profile · workouts · daily_metrics</text>
+<text class="mi" x="361" y="430">Garmin</text>
+<text class="m10" x="465" y="430">60 d back</text>
+<text class="m10" x="361" y="446">→ daily_metrics · garmin_activities</text>
+<text class="m10" x="361" y="461">→ match_activities → linked to workouts</text>
+<text class="m10" x="361" y="490">sync_state watermark, 3-day overlap</text>
+<text class="m10" x="361" y="505">one source failing keeps the other</text>
+<text class="m10" x="361" y="534">also run by /sync, check-in, web jobs</text>
+<rect class="bx" x="686" y="342" width="60" height="22" rx="11"/>
+<text class="ss" x="716.0" y="357" text-anchor="middle">--cases</text>
+<rect class="bx" x="752" y="342" width="96" height="22" rx="11"/>
+<text class="ss" x="800.0" y="357" text-anchor="middle">--failed-from</text>
+<rect class="bx" x="854" y="342" width="76" height="22" rx="11"/>
+<text class="ss" x="892.0" y="357" text-anchor="middle">--rescore</text>
+<text class="mi" x="686" y="388">package evals/run.py</text>
+<text class="m10" x="686" y="403">target on its role · judge on JUDGE</text>
+<text class="mi" x="686" y="427">finish_run</text>
+<text class="m10" x="686" y="442">pass rates · failed checks · usage · cost</text>
+<text class="mi" x="686" y="466">.evals/&lt;experiment&gt;.jsonl</text>
+<text class="m10" x="686" y="481">read back by --failed-from, --rescore</text>
+<text class="m10" x="686" y="506">opus $5 / $25 · sonnet $2 / $10 per MTok</text>
+<text class="m10" x="686" y="521">cache write 1.25× · cache read 0.1×</text>
+<text class="m10" x="686" y="544">--local runs without LangSmith</text>
+</svg>

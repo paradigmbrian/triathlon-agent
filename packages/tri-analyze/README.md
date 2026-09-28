@@ -8,6 +8,9 @@ today. `tri-coach` runs the same agent as its `ask_analyst` tool. Design:
 spec for the agent; sync and the data layer moved to `tri-core`). Plans:
 `docs/superpowers/plans/2026-09-13-tri-analyze-0*.md`.
 
+Architecture: [`docs/architecture/tri-analyze.md`](../../docs/architecture/tri-analyze.md) has the current
+diagram; the [architecture index](../../docs/architecture/README.md) shows how it fits the whole repo.
+
 ## How it works
 
 A LangChain agent is three things: a chat model, a list of tools, and a loop.
