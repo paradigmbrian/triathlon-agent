@@ -1,7 +1,7 @@
 # Eval cost: usage record, rescore, case subsets, cost lines in plans
 
 **Date:** 2026-09-28
-**Status:** Draft
+**Status:** Approved and implemented (plans `2026-09-28-eval-cost.md` and `2026-09-28-eval-cost-followup.md`, merged 2026-09-28; `main` at 3c11c15)
 **Amended:** 2026-09-28, after the first rollout merged (`9f4f048`): 1-hour cache writes are counted and priced apart (§3), and subsets and rescores record `gate: false` (§3.3, §4, §5, §7). Plan: `docs/superpowers/plans/2026-09-28-eval-cost-followup.md`.
 **Purpose:** Make the eval runs between gates cheap, and every run's cost visible. `docs/notes/2026-09-28-anthropic-api-usage-audit.md` found that almost all of September's $20 Anthropic spend was `tri-* eval` runs, at about $1 per full run. Some of those runs re-ran every Opus target only to test a judge change or re-check a few failing cases. Line numbers are `main` @ 8eb8506.
 
