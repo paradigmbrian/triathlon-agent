@@ -12,7 +12,13 @@ from langsmith import Client, aevaluate, tracing_context
 
 from tri_analyze.config import AnalyzeSettings
 from tri_analyze.evals.cases import CASES
-from tri_analyze.evals.evaluators import make_judge, pulls_splits, states_window, uses_sql
+from tri_analyze.evals.evaluators import (
+    JUDGE_VERSION,
+    make_judge,
+    pulls_splits,
+    states_window,
+    uses_sql,
+)
 from tri_analyze.evals.seed import (
     AthletesDatabaseRefused,
     clear_database,
@@ -92,6 +98,12 @@ async def run_eval(
     if judge:
         evaluators.append(make_judge(models(Role.JUDGE)))
     experiment_prefix = (prefix or f"analyst-v{PROMPT_VERSION}") + ("-local" if local else "")
+    metadata: dict[str, Any] = {
+        "prompt_version": PROMPT_VERSION,
+        **eval_metadata(settings, Role.ANALYST, judge=judge),
+    }
+    if judge:
+        metadata["judge_version"] = JUDGE_VERSION
     seed_database(url)
     try:
         verify_readable(url)
@@ -101,10 +113,7 @@ async def run_eval(
                 data=data,
                 evaluators=evaluators,
                 experiment_prefix=experiment_prefix,
-                metadata={
-                    "prompt_version": PROMPT_VERSION,
-                    **eval_metadata(settings, Role.ANALYST, judge=judge),
-                },
+                metadata=metadata,
                 client=client,
                 upload_results=not local,
                 max_concurrency=2,
@@ -126,5 +135,5 @@ async def run_eval(
     failures = failure_lines(dict_rows)
     if failures:
         log("failed checks:\n" + "\n".join(failures))
-    log(f"results: {record_rows(dict_rows, experiment)}")
+    log(f"results: {record_rows(dict_rows, experiment, metadata=metadata)}")
     return rates, errors

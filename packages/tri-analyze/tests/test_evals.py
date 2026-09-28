@@ -24,6 +24,7 @@ from tri_analyze.evals.cases import (
     sql_rows,
 )
 from tri_analyze.evals.evaluators import (
+    JUDGE_VERSION,
     FeedbackJudgement,
     make_judge,
     pulls_splits,
@@ -471,6 +472,7 @@ async def test_run_eval_uses_the_analyst_and_judge_roles(monkeypatch):
         "model": "claude-opus-5",
         "effort": "medium",
         "judge_model": "claude-opus-5",
+        "judge_version": JUDGE_VERSION,
     }
     assert f"(prompt version {PROMPT_VERSION}):" in "\n".join(logged)
 
@@ -481,6 +483,7 @@ async def test_run_eval_without_the_judge_records_no_judge_model(monkeypatch):
     settings = AnalyzeSettings(_env_file=None, langsmith_api_key="ls")
     await analyze_run.run_eval(settings, models, judge=False, log=lambda m: None)
     assert roles == [Role.ANALYST] and "judge_model" not in captured["metadata"]
+    assert "judge_version" not in captured["metadata"]
 
 
 GROUNDED = (
@@ -750,3 +753,36 @@ def test_the_judge_passes_anything_but_the_envelope_through(content):
 def test_other_tools_pass_through_even_when_shaped_like_the_envelope():
     env = sql_rows({"a": 1})
     assert f"get_activity:\n{env}" in _judged(env, name="get_activity")
+
+
+async def test_run_eval_records_the_judge_version_in_the_experiment_and_the_results_file(
+    monkeypatch, tmp_path
+):
+    from types import SimpleNamespace
+
+    monkeypatch.setenv("TRI_EVAL_DIR", str(tmp_path))
+    captured = _stub_langsmith(monkeypatch, analyze_run)
+    row = {
+        "run": SimpleNamespace(outputs={"answer": "ok"}, error=None),
+        "example": SimpleNamespace(id="e1", inputs={}, metadata={"case": "last_z2_ride"}),
+        "evaluation_results": {"results": []},
+    }
+
+    class OneRow(_FakeResults):
+        def __aiter__(self):
+            async def rows():
+                yield row
+
+            return rows()
+
+    async def fake_aevaluate(target, **kw):
+        captured.update(kw)
+        return OneRow()
+
+    monkeypatch.setattr(analyze_run, "aevaluate", fake_aevaluate)
+    models, _ = _recording_models()
+    settings = AnalyzeSettings(_env_file=None, langsmith_api_key="ls")
+    await analyze_run.run_eval(settings, models, log=lambda m: None)
+    assert captured["metadata"]["judge_version"] == JUDGE_VERSION == "2"
+    line = json.loads((tmp_path / "exp.jsonl").read_text().splitlines()[0])
+    assert line["metadata"] == captured["metadata"]

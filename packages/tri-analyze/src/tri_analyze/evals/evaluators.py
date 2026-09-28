@@ -23,6 +23,10 @@ from tri_analyze.evals.target import athlete_from_inputs, stub_tools
 from tri_analyze.prompts.analyst import WEEKDAYS, calendar_line, render_system_prompt
 from tri_core.llm import structured
 
+# Bump whenever JUDGE_SYSTEM or FeedbackJudgement's descriptions change; recorded in each
+# experiment's metadata and results file, so a pass rate says which judge scored it.
+JUDGE_VERSION = "2"
+
 _MONTH = (
     r"(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?"
     r"|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)"
