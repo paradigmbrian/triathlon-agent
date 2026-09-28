@@ -1,6 +1,7 @@
 """The analyst's eval cases: a question, an athlete context for a fixed today (Wednesday
-2026-09-16, the date the tri-coach eval uses), which tools to bind, canned tool results, and the
-flags the code checks read. Inputs are JSON-safe so they can live in a LangSmith dataset."""
+2026-09-16, the date the tri-coach eval uses), which tools to bind, canned results for the live
+tools (the SQL runs against evals/seed.py's history), and the flags the code checks read. Inputs
+are JSON-safe so they can live in a LangSmith dataset."""
 
 from __future__ import annotations
 
@@ -320,21 +321,6 @@ BRICK_SPLITS = [
         "avg_hr": 163,
     },
 ]
-WEEKLY_TSS = [
-    {"week_start": "2026-07-20", "tss": 388},
-    {"week_start": "2026-07-27", "tss": 412},
-    {"week_start": "2026-08-03", "tss": 445},
-    {"week_start": "2026-08-10", "tss": 290},
-    {"week_start": "2026-08-17", "tss": 430},
-    {"week_start": "2026-08-24", "tss": 462},
-    {"week_start": "2026-08-31", "tss": 470},
-    {"week_start": "2026-09-07", "tss": 397},
-]
-RUN_VOLUME = [
-    {"month": "2026-06", "sessions": 12, "distance_m": 118400, "duration_sec": 38160},
-    {"month": "2026-07", "sessions": 14, "distance_m": 141900, "duration_sec": 45600},
-    {"month": "2026-08", "sessions": 15, "distance_m": 156200, "duration_sec": 49800},
-]
 SLEEP_HRV = [
     {"metric_date": f"2026-09-{d:02d}", "sleep_score": s, "hrv_overnight_avg": h}
     for d, s, h in [
@@ -386,7 +372,6 @@ CASES: list[EvalCase] = [
         athlete=athlete(),
         kind="session",
         tool_results={
-            "query_training_db": [sql_rows(Z2_RIDE)],
             "get_activity": [
                 rows(
                     {
@@ -406,10 +391,7 @@ CASES: list[EvalCase] = [
         question="How did yesterday's interval run go? Look at the reps.",
         athlete=athlete(),
         kind="session",
-        tool_results={
-            "query_training_db": [sql_rows(INTERVAL_RUN)],
-            "get_activity_splits": [rows(*INTERVAL_SPLITS)],
-        },
+        tool_results={"get_activity_splits": [rows(*INTERVAL_SPLITS)]},
         requires_splits=True,
     ),
     EvalCase(
@@ -417,31 +399,25 @@ CASES: list[EvalCase] = [
         question="What happened with Saturday's swim?",
         athlete=athlete(),
         kind="session",
-        tool_results={"query_training_db": [sql_rows(MISSED_SWIM)]},
     ),
     EvalCase(
         name="threshold_rpe9",
         question="Feedback on last Wednesday's threshold ride please. I felt awful.",
         athlete=athlete(),
         kind="session",
-        tool_results={"query_training_db": [sql_rows(THRESHOLD_RIDE)]},
     ),
     EvalCase(
         name="brick_sunday",
         question="How did Sunday's brick go?",
         athlete=athlete(),
         kind="session",
-        tool_results={
-            "query_training_db": [sql_rows(BRICK)],
-            "get_activity_splits": [rows(*BRICK_SPLITS)],
-        },
+        tool_results={"get_activity_splits": [rows(*BRICK_SPLITS)]},
     ),
     EvalCase(
         name="weekly_tss_8w",
         question="Show my weekly TSS for the last 8 weeks.",
         athlete=athlete(),
         kind="trend",
-        tool_results={"query_training_db": [sql_rows(*WEEKLY_TSS)]},
         expects_window=True,
     ),
     EvalCase(
@@ -449,7 +425,6 @@ CASES: list[EvalCase] = [
         question="How has my run volume changed month over month?",
         athlete=athlete(),
         kind="trend",
-        tool_results={"query_training_db": [sql_rows(*RUN_VOLUME)]},
         expects_window=True,
     ),
     EvalCase(
@@ -457,7 +432,6 @@ CASES: list[EvalCase] = [
         question="Is my sleep affecting my HRV?",
         athlete=athlete(),
         kind="trend",
-        tool_results={"query_training_db": [sql_rows(*SLEEP_HRV)]},
         expects_window=True,
     ),
     EvalCase(
@@ -484,7 +458,6 @@ CASES: list[EvalCase] = [
         athlete=athlete(),
         kind="session",
         live=False,
-        tool_results={"query_training_db": [sql_rows(INTERVAL_RUN)]},
         requires_splits=True,
     ),
     EvalCase(

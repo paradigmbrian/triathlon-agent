@@ -180,3 +180,9 @@ def test_the_reader_role_refuses_a_write_even_in_a_read_write_transaction(reader
         conn.execute("set transaction read write")
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             conn.execute("insert into sync_state values ('x', current_date, now(), 'ok', null)")
+
+
+def test_the_schema_examples_write_today_as_a_literal():
+    examples = SCHEMA_DOC.split("Examples:")[1]
+    assert "current_date" not in examples and ":today" in examples
+    assert "date 'YYYY-MM-DD'" in SCHEMA_DOC and "database server's day" in SCHEMA_DOC

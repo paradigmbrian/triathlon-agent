@@ -1,6 +1,6 @@
 """The function under evaluation: the real analyst agent over stub tools that answer from the
-case's canned results. No database, no MCP servers. Exceptions propagate so LangSmith records
-the example as errored."""
+case's canned results. The SQL tool runs against the seeded eval database when a URL is given;
+the live tools stay canned. Exceptions propagate so LangSmith records the example as errored."""
 
 from __future__ import annotations
 
@@ -73,9 +73,12 @@ class Canned:
         return queue[i]
 
 
-def stub_tools(inputs: dict[str, Any]) -> list[BaseTool]:
+def stub_tools(inputs: dict[str, Any], sql_tool: BaseTool | None = None) -> list[BaseTool]:
     """query_training_db (real description), the five live tools when `live`, then each name in
-    `extra_tools`. Same names, argument names and order as the real binding."""
+    `extra_tools`. Same names, argument names and order as the real binding.
+
+    sql_tool: the real query tool on the eval database; without it a canned stub answers
+    (tests)."""
     canned = Canned(inputs.get("tool_results") or {})
 
     async def query_training_db(sql: str) -> str:
@@ -121,7 +124,11 @@ def stub_tools(inputs: dict[str, Any]) -> list[BaseTool]:
         t.description = description
         return t
 
-    tools = [make(query_training_db, "query_training_db", SQL_DESCRIPTION)]
+    tools = [
+        sql_tool
+        if sql_tool is not None
+        else make(query_training_db, "query_training_db", SQL_DESCRIPTION)
+    ]
     if inputs.get("live"):
         tools += [
             make(live_fns[n], n, LIVE_DESCRIPTIONS[n]) for n in [*GARMIN_LIVE_TOOLS, *TP_LIVE_TOOLS]
@@ -130,8 +137,11 @@ def stub_tools(inputs: dict[str, Any]) -> list[BaseTool]:
     return tools
 
 
-async def run_case(model: BaseChatModel, inputs: dict[str, Any]) -> dict[str, Any]:
-    agent = build_agent(model, stub_tools(inputs))
+async def run_case(
+    model: BaseChatModel, inputs: dict[str, Any], sql_url: str | None = None
+) -> dict[str, Any]:
+    sql_tool = make_query_tool(sql_url) if sql_url else None
+    agent = build_agent(model, stub_tools(inputs, sql_tool=sql_tool))
     out = await agent.ainvoke(
         {"messages": [HumanMessage(str(inputs["question"]))]},
         {
@@ -168,8 +178,10 @@ async def run_case(model: BaseChatModel, inputs: dict[str, Any]) -> dict[str, An
     return {"calls": calls, "answer": answer, "tool_results": tool_results}
 
 
-def make_target(model: BaseChatModel) -> Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]:
+def make_target(
+    model: BaseChatModel, sql_url: str | None = None
+) -> Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]:
     async def target(inputs: dict[str, Any]) -> dict[str, Any]:
-        return await run_case(model, inputs)
+        return await run_case(model, inputs, sql_url)
 
     return target

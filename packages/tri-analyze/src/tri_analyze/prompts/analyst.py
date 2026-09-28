@@ -10,7 +10,7 @@ from typing import Any
 from tri_analyze.repo import AthleteContext
 
 # Bump whenever the prompt text changes; names the eval experiment analyst-v<N>.
-PROMPT_VERSION = "1"
+PROMPT_VERSION = "2"
 
 TOOL_GUIDE: dict[str, str] = {
     "query_training_db": (
@@ -46,7 +46,9 @@ How to give feedback on a completed session:
 
 For trend questions: compute with SQL (group by week, averages, sums), state the date window
 you used, and say when data is missing rather than guessing. Distances are metres, durations
-seconds, paces derive from those. Today is the reference for "this week" and "yesterday"."""
+seconds, paces derive from those. Today is the reference for "this week" and "yesterday"; in
+SQL write it as a literal (date 'YYYY-MM-DD'), never use current_date. When you derive a
+number, show the arithmetic in a few words."""
 
 
 def _pace(sec: Any, unit: str) -> str:

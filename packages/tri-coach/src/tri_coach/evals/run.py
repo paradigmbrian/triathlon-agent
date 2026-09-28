@@ -18,8 +18,8 @@ from tri_coach.evals.evaluators import (
 from tri_coach.evals.target import make_target
 from tri_coach.prompts.coach import PROMPT_VERSION
 from tri_core.config import Settings
+from tri_core.evals import errored, pass_rates, render_pass_rates, scored_counts
 from tri_core.llm import ModelProvider, Role, eval_metadata
-from tri_nutrition.evals.run import pass_rates
 
 DATASET_NAME = "tri_coach_routing"
 DATASET_DESCRIPTION = (
@@ -41,12 +41,6 @@ def ensure_dataset(client: Client, *, recreate: bool = False) -> None:
         return
     client.create_dataset(DATASET_NAME, description=DATASET_DESCRIPTION)
     client.create_examples(dataset_name=DATASET_NAME, examples=case_examples())
-
-
-def render_pass_rates(rates: dict[str, float], n: int) -> str:
-    lines = [f"pass rate over {n} examples (prompt version {PROMPT_VERSION}):"]
-    lines += [f"  {key:26} {rate:.0%}" for key, rate in sorted(rates.items())]
-    return "\n".join(lines)
 
 
 async def run_eval(
@@ -76,7 +70,11 @@ async def run_eval(
         max_concurrency=2,
     )
     rows: list[Any] = [row async for row in results]
-    rates = pass_rates([dict(r) for r in rows])
+    dict_rows = [dict(r) for r in rows]
+    rates = pass_rates(dict_rows)
+    errors = errored(dict_rows)
     log(f"experiment: {results.experiment_name}")
-    log(render_pass_rates(rates, len(rows)))
+    log(render_pass_rates(rates, scored_counts(dict_rows), len(rows), version=PROMPT_VERSION))
+    if errors:
+        log(f"{errors} errored")
     return rates

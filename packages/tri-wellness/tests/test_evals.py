@@ -10,7 +10,7 @@ from tri_wellness.evals.evaluators import (
     has_required_sections,
     names_active_confounders,
 )
-from tri_wellness.evals.run import DATASET_NAME, case_examples, pass_rates, render_pass_rates
+from tri_wellness.evals.run import DATASET_NAME, case_examples
 from tri_wellness.evals.target import make_target, parse_inputs
 from tri_wellness.labs.evaluate import evaluate
 from tri_wellness.prompts.report import DISCLAIMER, PROMPT_VERSION
@@ -91,29 +91,6 @@ def test_sections_evaluator_requires_changes_only_with_a_previous_panel():
     assert DISCLAIMER.split(";")[0] in REPORT_OK
 
 
-def test_pass_rates_and_rendering():
-    class R:
-        def __init__(self, key, score):
-            self.key, self.score = key, score
-
-    rows = [
-        {
-            "evaluation_results": {
-                "results": [R("cites_functional_ranges", 1), R("has_required_sections", 0)]
-            }
-        },
-        {
-            "evaluation_results": {
-                "results": [R("cites_functional_ranges", 1), R("has_required_sections", 1)]
-            }
-        },
-    ]
-    rates = pass_rates(rows)
-    assert rates == {"cites_functional_ranges": 1.0, "has_required_sections": 0.5}
-    text = render_pass_rates(rates, 2)
-    assert "2 examples" in text and "has_required_sections" in text and "50%" in text
-
-
 class _FakeClient:
     def __init__(self, **kw):
         pass
@@ -160,9 +137,11 @@ async def test_run_eval_uses_the_lab_report_role_and_no_judge(monkeypatch):
     captured = _stub_langsmith(monkeypatch, wellness_run)
     models, roles = _recording_models()
     settings = WellnessSettings(_env_file=None, tri_athlete_sex="male", langsmith_api_key="ls")
-    assert await wellness_run.run_eval(settings, models, log=lambda m: None) == {}
+    logged: list[str] = []
+    assert await wellness_run.run_eval(settings, models, log=logged.append) == {}
     assert roles == [Role.LAB_REPORT]
     meta = captured["metadata"]
     assert meta["prompt_version"] == PROMPT_VERSION and "ranges_version" in meta
     assert meta["model"] == "claude-opus-5" and meta["effort"] is None
     assert "judge_model" not in meta
+    assert f"(prompt version {PROMPT_VERSION}):" in "\n".join(logged)

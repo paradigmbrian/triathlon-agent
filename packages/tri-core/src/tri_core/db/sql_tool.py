@@ -19,6 +19,9 @@ from psycopg.rows import tuple_row
 SCHEMA_DOC = """\
 Tables (Postgres). All dates are the athlete's local calendar day.
 
+In the examples, :today stands for today's date from your context, written as a literal
+(date 'YYYY-MM-DD'); current_date is the database server's day and can differ from the athlete's.
+
 athlete_profile (single row): ftp_watts, run_threshold_pace_sec_per_km, swim_css_sec_per_100m,
   lthr_bpm, max_hr_bpm, hr_zones jsonb, power_zones jsonb, pace_zones jsonb, weight_kg.
 
@@ -62,26 +65,26 @@ plan_changes: plan_id, thread_id, operation, tp_workout_id, workout_date, payloa
 Examples:
   -- yesterday's completed sessions
   select workout_date, sport, title, actual_duration_sec, actual_tss, avg_hr, garmin_activity_id
-  from workouts where completed and deleted_at is null and workout_date = current_date - 1;
+  from workouts where completed and deleted_at is null and workout_date = :today - 1;
   -- planned vs actual this week
   select workout_date, sport, title, planned_tss, actual_tss, planned_duration_sec,
          actual_duration_sec
-  from workouts where deleted_at is null and workout_date >= date_trunc('week', current_date)
+  from workouts where deleted_at is null and workout_date >= date_trunc('week', :today)
   order by 1;
   -- weekly run volume for the last 12 weeks
   select date_trunc('week', workout_date)::date as wk, round(sum(actual_distance_m)/1000, 1) as km,
          sum(actual_duration_sec)/3600.0 as hours
   from workouts where sport='run' and completed and deleted_at is null
-    and workout_date >= current_date - 84
+    and workout_date >= :today - 84
   group by 1 order by 1;
   -- both legs of yesterday's brick
   select a.start_time_local, a.sport, a.duration_sec, a.id
   from garmin_activities a join workouts w on w.tp_workout_id = a.tp_workout_id
-  where w.sport = 'brick' and w.deleted_at is null and w.workout_date = current_date - 1
+  where w.sport = 'brick' and w.deleted_at is null and w.workout_date = :today - 1
   order by 1;
   -- load and recovery, last 14 days
   select metric_date, tss_day, ctl, atl, tsb, sleep_score, hrv_overnight_avg, training_readiness
-  from daily_metrics where metric_date >= current_date - 14 order by 1;
+  from daily_metrics where metric_date >= :today - 14 order by 1;
   -- the active plan's week targets
   select week_start, phase, target_tss from plan_weeks order by 1;
 """

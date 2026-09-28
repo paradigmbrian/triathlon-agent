@@ -25,6 +25,8 @@ from tri_planning.testing import GOAL_ARGS, MONDAY
 Route = Literal["none", "analyst", "wellness", "planning", "nutrition", "both"]
 ROUTES: tuple[Route, ...] = ("none", "analyst", "wellness", "planning", "nutrition", "both")
 
+EVAL_MAX_CONSULTS = 2
+
 TODAY = MONDAY + timedelta(days=2)
 
 FERRITIN_LOW = LabSummary(
@@ -117,6 +119,7 @@ def case_context(
         recent_days=days,
         labs_enabled=labs is not None,
         labs=labs,
+        consults_left={"planning": EVAL_MAX_CONSULTS, "nutrition": EVAL_MAX_CONSULTS},
     )
     return render_context(ctx)
 

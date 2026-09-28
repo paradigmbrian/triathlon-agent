@@ -2,8 +2,8 @@
 
 import json
 from datetime import date
-from types import SimpleNamespace
 
+import psycopg
 import pytest
 from langchain_core.messages import AIMessage
 
@@ -13,11 +13,14 @@ from tri_analyze.config import AnalyzeSettings
 from tri_analyze.evals.cases import (
     CASES,
     EXTRA_TOOLS,
+    INTERVAL_RUN,
     KINDS,
     SQL_ENVELOPE_EMPTY,
+    THRESHOLD_RIDE,
     TODAY,
     EvalCase,
     jsonable,
+    sql_rows,
 )
 from tri_analyze.evals.evaluators import (
     FeedbackJudgement,
@@ -27,14 +30,7 @@ from tri_analyze.evals.evaluators import (
     states_window,
     uses_sql,
 )
-from tri_analyze.evals.run import (
-    DATASET_NAME,
-    case_examples,
-    ensure_dataset,
-    errored,
-    pass_rates,
-    render_pass_rates,
-)
+from tri_analyze.evals.run import DATASET_NAME, case_examples, ensure_dataset
 from tri_analyze.evals.target import Canned, athlete_from_inputs, make_target, stub_tools
 from tri_analyze.prompts.analyst import FEEDBACK_RULES, PROMPT_VERSION
 from tri_analyze.repo import AthleteContext
@@ -146,7 +142,13 @@ def test_canned_serves_in_order_repeats_the_last_and_defaults_to_empty():
 
 
 async def test_stubs_answer_from_the_case():
-    c = case("run_intervals")
+    base = case("run_intervals")
+    c = EvalCase(
+        **{
+            **base.__dict__,
+            "tool_results": {**base.tool_results, "query_training_db": [sql_rows(INTERVAL_RUN)]},
+        }
+    )
     stubs = {t.name: t for t in stub_tools(c.inputs())}
     assert (
         await stubs["query_training_db"].ainvoke({"sql": "select 1"})
@@ -166,7 +168,13 @@ async def test_query_training_db_stub_defaults_to_the_empty_envelope():
 
 
 async def test_target_returns_the_calls_and_the_final_answer():
-    c = case("run_intervals")
+    base = case("run_intervals")
+    c = EvalCase(
+        **{
+            **base.__dict__,
+            "tool_results": {**base.tool_results, "query_training_db": [sql_rows(INTERVAL_RUN)]},
+        }
+    )
     model = ScriptedChatModel(
         script=[
             tool_call(
@@ -286,7 +294,13 @@ def verdict(**over) -> dict:
 
 
 def test_judge_prompt_carries_the_rendered_system_prompt_question_results_and_answer():
-    c = case("threshold_rpe9")
+    base = case("threshold_rpe9")
+    c = EvalCase(
+        **{
+            **base.__dict__,
+            "tool_results": {**base.tool_results, "query_training_db": [sql_rows(THRESHOLD_RIDE)]},
+        }
+    )
     served = c.tool_results["query_training_db"][0]
     text = render_judge_prompt(
         c.inputs(),
@@ -398,38 +412,6 @@ def test_dataset_examples_are_created_once_and_recreated_on_request():
     assert client.deleted == 1 and client.created == [DATASET_NAME, DATASET_NAME]
 
 
-def test_pass_rates_skip_none_and_rendering_names_the_prompt_version():
-    def R(key, score):
-        return SimpleNamespace(key=key, score=score)
-
-    rows = [
-        {
-            "evaluation_results": {
-                "results": [R("uses_sql", 1), R("pulls_splits", None), R("grounded", 0)]
-            }
-        },
-        {
-            "evaluation_results": {
-                "results": [R("uses_sql", 0), R("pulls_splits", 1), R("grounded", 1)]
-            }
-        },
-    ]
-    rates = pass_rates(rows)
-    assert rates == {"uses_sql": 0.5, "pulls_splits": 1.0, "grounded": 0.5}
-    text = render_pass_rates(rates, 2)
-    assert text.startswith("pass rate over 2 examples (prompt version 1):")
-    assert "uses_sql" in text and "50%" in text and "100%" in text
-
-
-def test_errored_counts_rows_whose_run_carries_an_error():
-    rows = [
-        {"run": SimpleNamespace(error=None)},
-        {"run": SimpleNamespace(error="IndexError: list index out of range")},
-        {"run": SimpleNamespace(error="")},
-    ]
-    assert errored(rows) == 1 and errored([]) == 0
-
-
 class _FakeClient:
     def __init__(self, **kw):
         pass
@@ -450,7 +432,7 @@ class _FakeResults:
 
 
 def _stub_langsmith(monkeypatch, run_module) -> dict:
-    captured: dict = {}
+    captured: dict = {"seeded": [], "cleared": [], "verified": []}
 
     async def fake_aevaluate(target, **kw):
         captured.update(kw)
@@ -458,6 +440,9 @@ def _stub_langsmith(monkeypatch, run_module) -> dict:
 
     monkeypatch.setattr(run_module, "Client", _FakeClient)
     monkeypatch.setattr(run_module, "aevaluate", fake_aevaluate)
+    monkeypatch.setattr(run_module, "seed_database", captured["seeded"].append)
+    monkeypatch.setattr(run_module, "clear_database", captured["cleared"].append)
+    monkeypatch.setattr(run_module, "verify_readable", captured["verified"].append)
     return captured
 
 
@@ -476,7 +461,8 @@ async def test_run_eval_uses_the_analyst_and_judge_roles(monkeypatch):
     captured = _stub_langsmith(monkeypatch, analyze_run)
     models, roles = _recording_models()
     settings = AnalyzeSettings(_env_file=None, langsmith_api_key="ls")
-    assert await analyze_run.run_eval(settings, models, log=lambda m: None) == ({}, 0)
+    logged: list[str] = []
+    assert await analyze_run.run_eval(settings, models, log=logged.append) == ({}, 0)
     assert sorted(roles) == sorted([Role.ANALYST, Role.JUDGE])
     assert captured["metadata"] == {
         "prompt_version": PROMPT_VERSION,
@@ -484,6 +470,7 @@ async def test_run_eval_uses_the_analyst_and_judge_roles(monkeypatch):
         "effort": "medium",
         "judge_model": "claude-opus-5",
     }
+    assert f"(prompt version {PROMPT_VERSION}):" in "\n".join(logged)
 
 
 async def test_run_eval_without_the_judge_records_no_judge_model(monkeypatch):
@@ -492,3 +479,110 @@ async def test_run_eval_without_the_judge_records_no_judge_model(monkeypatch):
     settings = AnalyzeSettings(_env_file=None, langsmith_api_key="ls")
     await analyze_run.run_eval(settings, models, judge=False, log=lambda m: None)
     assert roles == [Role.ANALYST] and "judge_model" not in captured["metadata"]
+
+
+def test_grounded_accepts_arithmetic_the_answer_shows():
+    field = FeedbackJudgement.model_fields["grounded"].description or ""
+    assert "derived from them by a unit conversion or arithmetic the answer shows" in field
+    assert "800 m in 200 s gives 4:10/km" in field
+    from tri_analyze.evals.evaluators import JUDGE_SYSTEM
+
+    assert "list each in problems" in JUDGE_SYSTEM and "arithmetic" in JUDGE_SYSTEM
+
+
+def test_no_case_cans_sql_any_more():
+    assert all("query_training_db" not in c.tool_results for c in CASES)
+
+
+async def test_the_target_binds_the_given_sql_tool():
+    seen: list[str] = []
+
+    async def query_training_db(sql: str) -> str:
+        seen.append(sql)
+        return SQL_ENVELOPE_EMPTY
+
+    from langchain_core.tools import StructuredTool
+
+    real = StructuredTool.from_function(
+        coroutine=query_training_db, name="query_training_db", description="the real tool"
+    )
+    tools = stub_tools(case("trend_no_data").inputs(), sql_tool=real)
+    assert tools[0] is real
+
+
+async def test_run_eval_seeds_the_test_database_and_clears_it_after(monkeypatch):
+    captured = _stub_langsmith(monkeypatch, analyze_run)
+    models, _ = _recording_models()
+    settings = AnalyzeSettings(_env_file=None, langsmith_api_key="ls")
+    await analyze_run.run_eval(settings, models, judge=False, log=lambda m: None)
+    assert captured["seeded"] == [settings.test_database_url]
+    assert captured["cleared"] == [settings.test_database_url]
+    assert captured["verified"] == [settings.test_database_url]
+
+
+async def test_run_eval_clears_even_when_the_run_fails(monkeypatch):
+    captured = _stub_langsmith(monkeypatch, analyze_run)
+
+    async def boom(target, **kw):
+        raise RuntimeError("langsmith down")
+
+    monkeypatch.setattr(analyze_run, "aevaluate", boom)
+    models, _ = _recording_models()
+    settings = AnalyzeSettings(_env_file=None, langsmith_api_key="ls")
+    with pytest.raises(RuntimeError):
+        await analyze_run.run_eval(settings, models, judge=False, log=lambda m: None)
+    assert captured["cleared"] == [settings.test_database_url]
+
+
+async def test_run_eval_logs_but_does_not_raise_when_clearing_fails(monkeypatch):
+    _stub_langsmith(monkeypatch, analyze_run)
+
+    def boom(url):
+        raise psycopg.OperationalError("connection reset")
+
+    monkeypatch.setattr(analyze_run, "clear_database", boom)
+    models, _ = _recording_models()
+    settings = AnalyzeSettings(_env_file=None, langsmith_api_key="ls")
+    logged: list[str] = []
+    rates, errors = await analyze_run.run_eval(settings, models, judge=False, log=logged.append)
+    assert (rates, errors) == ({}, 0)
+    assert any(
+        "could not empty the eval database: OperationalError: connection reset" in line
+        for line in logged
+    )
+
+
+async def test_run_eval_refuses_the_athletes_database(monkeypatch):
+    captured = _stub_langsmith(monkeypatch, analyze_run)
+    models, _ = _recording_models()
+    settings = AnalyzeSettings(_env_file=None, langsmith_api_key="ls")
+    with pytest.raises(ValueError, match="athlete's database"):
+        await analyze_run.run_eval(
+            settings, models, log=lambda m: None, eval_db_url=settings.database_url
+        )
+    assert captured["seeded"] == []
+
+
+@pytest.mark.db
+async def test_the_target_runs_real_sql_against_the_seeded_history():
+    from tri_analyze.evals import seed
+    from tri_core.config import Settings, reader_url
+
+    url = Settings().test_database_url
+    try:
+        seed.seed_database(url)
+    except psycopg.OperationalError as exc:
+        pytest.skip(f"test database unreachable: {exc}")
+    try:
+        sql = "select title, actual_tss from workouts where workout_date = date '2026-09-14'"
+        model = ScriptedChatModel(
+            script=[
+                tool_call("query_training_db", {"sql": sql}, "c1"),
+                AIMessage(content="The Z2 ride scored 58 TSS."),
+            ]
+        )
+        out = await make_target(model, reader_url(url))(case("last_z2_ride").inputs())
+        assert '"Z2 ride"' in out["tool_results"][0]["content"]
+        assert "58" in out["tool_results"][0]["content"]
+    finally:
+        seed.clear_database(url)
