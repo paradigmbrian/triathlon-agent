@@ -6,6 +6,9 @@ from tri_analyze.prompts.analyst import (
     NO_LIVE_TOOLS,
     PROMPT_VERSION,
     TOOL_GUIDE,
+    WEEKDAYS,
+    calendar_line,
+    dated,
     render_system_prompt,
 )
 from tri_analyze.testing import athlete_context
@@ -141,3 +144,19 @@ def test_render_is_deterministic_and_pure():
 def test_the_rules_ask_for_shown_arithmetic_and_a_literal_today():
     assert "show the arithmetic" in FEEDBACK_RULES
     assert "never use current_date" in FEEDBACK_RULES
+
+
+def test_dated_names_the_weekday_in_fixed_english():
+    assert dated(date(2026, 9, 12)) == "2026-09-12 (Sat)"
+    assert dated(date(2026, 9, 16)) == "2026-09-16 (Wed)"
+    assert WEEKDAYS[date(2026, 9, 16).weekday()] == "Wednesday"
+
+
+def test_calendar_line_lists_six_mondays_from_four_weeks_back_to_next_week():
+    expected = (
+        "Weeks start Monday: 2026-08-17, 2026-08-24, 2026-08-31, 2026-09-07, 2026-09-14, "
+        "2026-09-21."
+    )
+    assert calendar_line(date(2026, 9, 16)) == expected
+    assert calendar_line(date(2026, 9, 14)) == expected  # today is a Monday
+    assert calendar_line(date(2026, 9, 20)) == expected  # today is a Sunday

@@ -4,7 +4,7 @@ prompt cache matches on."""
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from tri_analyze.repo import AthleteContext
@@ -62,6 +62,22 @@ def _num(v: Any, nd: int = 1) -> str:
     if v is None:
         return "-"
     return f"{float(v):.{nd}f}" if nd else str(int(round(float(v))))
+
+
+WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+
+
+def dated(d: date) -> str:
+    """`2026-09-12 (Sat)`. Weekday names are fixed English, not the locale's."""
+    return f"{d.isoformat()} ({WEEKDAYS[d.weekday()][:3]})"
+
+
+def calendar_line(today: date) -> str:
+    """The Mondays of the six weeks from four weeks back to next week. The analyst's today line
+    and the judge's calendar line both end with it, so both name weeks the same way."""
+    monday = today - timedelta(days=today.weekday())
+    mondays = [monday + timedelta(weeks=n) for n in range(-4, 2)]
+    return "Weeks start Monday: " + ", ".join(m.isoformat() for m in mondays) + "."
 
 
 def _profile_block(p: dict[str, Any] | None) -> str:
