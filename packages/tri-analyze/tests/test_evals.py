@@ -786,3 +786,15 @@ async def test_run_eval_records_the_judge_version_in_the_experiment_and_the_resu
     assert captured["metadata"]["judge_version"] == JUDGE_VERSION == "2"
     line = json.loads((tmp_path / "exp.jsonl").read_text().splitlines()[0])
     assert line["metadata"] == captured["metadata"]
+
+
+def test_a_multi_line_text_value_keeps_its_row_on_one_line():
+    served = sql_rows(
+        {"workout_date": "2026-09-14", "description": "WU 15'\nMS 3x10'\r\nCD", "tss": 85}
+    )
+    text = _judged(served)
+    assert (
+        "query_training_db:\n"
+        "- workout_date: 2026-09-14; description: \"WU 15'\\nMS 3x10'\\r\\nCD\"; tss: 85\n"
+        "row_count: 1; truncated: false"
+    ) in text

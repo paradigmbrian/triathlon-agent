@@ -171,7 +171,10 @@ encouragement. Judge the answer's text literally; return a FeedbackJudgement."""
 
 
 def _value(v: Any) -> str:
-    return v if isinstance(v, str) else json.dumps(v, default=str, ensure_ascii=False)
+    """A cell as text; a string with a line break is quoted so its row stays on one line."""
+    if isinstance(v, str) and "\n" not in v and "\r" not in v:
+        return v
+    return json.dumps(v, default=str, ensure_ascii=False)
 
 
 def _sql_lines(content: str) -> str:
