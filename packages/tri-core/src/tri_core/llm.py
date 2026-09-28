@@ -181,6 +181,7 @@ def fallbacks_of(model: BaseChatModel) -> list[ChatAnthropic]:
                 api_key=model.anthropic_api_key,
                 effort=effort,
                 metadata={"tri_role": role, "tri_fallback_from": model.model},
+                callbacks=model.callbacks,
             )
         )
     return out

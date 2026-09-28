@@ -145,6 +145,16 @@ def test_fallbacks_of_builds_each_model_with_its_own_profile_and_effort():
     assert all((f.metadata or {})["tri_role"] == "coach" for f in fbs)
 
 
+def test_fallbacks_carry_the_primary_callbacks():
+    from langchain_core.callbacks import BaseCallbackHandler
+
+    primary = make_model(settings(), Role.COACH)
+    handler = BaseCallbackHandler()
+    primary.callbacks = [handler]
+    fbs = fallbacks_of(primary)
+    assert fbs and all(f.callbacks == [handler] for f in fbs)
+
+
 def test_fallbacks_keep_the_primary_effort_when_listed_and_drop_it_for_haiku():
     s = settings(
         tri_effort_analyst="medium", tri_model_fallbacks="claude-sonnet-5,claude-haiku-4-5"
