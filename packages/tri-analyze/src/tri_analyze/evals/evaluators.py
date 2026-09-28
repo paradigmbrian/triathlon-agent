@@ -110,9 +110,11 @@ AsyncEvaluator = Callable[
 class FeedbackJudgement(BaseModel):
     grounded: bool = Field(
         description=(
-            "every number in the answer appears in the context or the tool results, or is "
-            "derived from them by a unit conversion or arithmetic the answer shows (for example "
-            "800 m in 200 s gives 4:10/km); missing data is stated as missing"
+            "every number in the answer appears in the context or the tool results, or can be "
+            "reproduced from them by a unit conversion or arithmetic within the answer's "
+            "rounding; a number that appears nowhere or does not reproduce is ungrounded; a "
+            "prescribed range must come from the athlete's zones or a stated fraction of a "
+            "threshold; missing data is stated as missing"
         )
     )
     covers_rules: bool = Field(
@@ -132,20 +134,31 @@ class FeedbackJudgement(BaseModel):
         description="one or two concrete takeaways for the next similar session"
     )
     no_generic_encouragement: bool = Field(description="no filler praise or generic encouragement")
-    problems: list[str] = Field(description="one line per ungrounded number or missing element")
+    problems: list[str] = Field(
+        description=(
+            "one line per ungrounded number (with the value you get when it does not "
+            "reproduce) or missing element"
+        )
+    )
 
 
 JUDGE_SYSTEM = """\
-You audit one answer a triathlon coach's analyst gave to an athlete. You are given the
-analyst's system prompt (the athlete's context, the bound tools and the feedback rules), the
-athlete's question, the tool results the analyst received, and the analyst's answer.
+You audit one answer a triathlon coach's analyst gave to an athlete. You are given a calendar
+line, the analyst's system prompt (the athlete's context, the bound tools and the feedback
+rules), the athlete's question, the tool results the analyst received, and the analyst's answer.
 
 Grounded: every number in the answer (durations, distances, watts, paces, heart rates, TSS,
-scores, dates) appears in the system prompt's context or in the tool results, or is derived
-from them by a unit conversion or arithmetic the answer shows (for example "800 m in 200 s,
-4:10/km"). A derived number whose arithmetic is not shown, or a number that appears nowhere, is
-ungrounded: list each in problems with what you expected to find. When the tool results are
-empty or lack what the question needs, the answer says so instead of inventing figures.
+scores, dates) appears in the system prompt's context or in the tool results, or can be
+reproduced from them by a unit conversion or arithmetic within the answer's rounding (for
+example 5460 s is 91:00, and 132 of 172 bpm is 77%). Check each derivation yourself; do not flag
+a correct one because its arithmetic is not written out. A prescribed range (power, HR, pace)
+must come from the athlete's zones or a stated fraction of a threshold. List in problems only
+numbers that appear nowhere, numbers that do not reproduce (give the value you get), and
+prescriptions with no zone or threshold behind them. When the tool results are empty or lack
+what the question needs, the answer says so instead of inventing figures.
+
+Dates: the calendar line gives today's weekday and the Monday of each week. Use the calendar
+line to name weekdays; never infer a weekday otherwise.
 
 Feedback quality applies to a session review: the five feedback rules are covered, the
 athlete's own comments, feeling and RPE are used when the tool results carry them, there are

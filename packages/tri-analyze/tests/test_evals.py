@@ -483,13 +483,31 @@ async def test_run_eval_without_the_judge_records_no_judge_model(monkeypatch):
     assert roles == [Role.ANALYST] and "judge_model" not in captured["metadata"]
 
 
-def test_grounded_accepts_arithmetic_the_answer_shows():
-    field = FeedbackJudgement.model_fields["grounded"].description or ""
-    assert "derived from them by a unit conversion or arithmetic the answer shows" in field
-    assert "800 m in 200 s gives 4:10/km" in field
+GROUNDED = (
+    "every number in the answer appears in the context or the tool results, or can be "
+    "reproduced from them by a unit conversion or arithmetic within the answer's rounding; a "
+    "number that appears nowhere or does not reproduce is ungrounded; a prescribed range must "
+    "come from the athlete's zones or a stated fraction of a threshold; missing data is stated "
+    "as missing"
+)
+
+
+def test_grounded_accepts_derivations_the_judge_can_reproduce():
     from tri_analyze.evals.evaluators import JUDGE_SYSTEM
 
-    assert "list each in problems" in JUDGE_SYSTEM and "arithmetic" in JUDGE_SYSTEM
+    assert FeedbackJudgement.model_fields["grounded"].description == GROUNDED
+    flat = " ".join(JUDGE_SYSTEM.split())
+    for sentence in (
+        "can be reproduced from them by a unit conversion or arithmetic within the answer's "
+        "rounding",
+        "Check each derivation yourself; do not flag a correct one because its arithmetic is "
+        "not written out.",
+        "must come from the athlete's zones or a stated fraction of a threshold",
+        "numbers that do not reproduce (give the value you get)",
+        "Use the calendar line to name weekdays; never infer a weekday otherwise.",
+    ):
+        assert sentence in flat, sentence
+    assert "arithmetic the answer shows" not in flat
 
 
 def test_no_case_cans_sql_any_more():
