@@ -140,7 +140,7 @@ def test_render_feedback_rules_present_and_version_is_1():
     assert FEEDBACK_RULES in text
     for phrase in ("planned vs", "zones", "CTL/ATL/TSB", "takeaway", "SQL"):
         assert phrase.lower() in text.lower(), phrase
-    assert PROMPT_VERSION == "2"
+    assert PROMPT_VERSION == "3"
 
 
 def test_render_is_deterministic_and_pure():
@@ -150,8 +150,23 @@ def test_render_is_deterministic_and_pure():
     assert first == render_system_prompt(athlete_context(), list(STANDALONE))
 
 
-def test_the_rules_ask_for_shown_arithmetic_and_a_literal_today():
-    assert "show the arithmetic" in FEEDBACK_RULES
+RULE_SENTENCES = (
+    "Prescriptions: every prescribed range (power, HR, pace) names a zone from the context, or "
+    'states a fraction of a threshold together with the result, for example "56-75% of FTP '
+    '250 W, 140-188 W". No other ranges.',
+    "No invented numbers: no invented thresholds, baselines or cutoffs. A baseline is computed "
+    "in SQL over a window you state (for example a 28-day mean HRV), or not given.",
+    "SQL for arithmetic: counts, sums, averages, ratios and percentages come from SQL, not "
+    "mental arithmetic. Quote the query's numbers.",
+    "Weekdays: name a weekday only as the context shows it, or from SQL (to_char(d, 'Dy')).",
+)
+
+
+def test_the_rules_drop_shown_arithmetic_and_keep_a_literal_today():
+    flat = " ".join(FEEDBACK_RULES.split())
+    for sentence in RULE_SENTENCES:
+        assert sentence in flat, sentence
+    assert "show the arithmetic" not in FEEDBACK_RULES
     assert "never use current_date" in FEEDBACK_RULES
 
 

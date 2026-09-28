@@ -11,7 +11,7 @@ from typing import Any
 from tri_analyze.repo import AthleteContext
 
 # Bump whenever the prompt text changes; names the eval experiment analyst-v<N>.
-PROMPT_VERSION = "2"
+PROMPT_VERSION = "3"
 
 TOOL_GUIDE: dict[str, str] = {
     "query_training_db": (
@@ -48,8 +48,17 @@ How to give feedback on a completed session:
 For trend questions: compute with SQL (group by week, averages, sums), state the date window
 you used, and say when data is missing rather than guessing. Distances are metres, durations
 seconds, paces derive from those. Today is the reference for "this week" and "yesterday"; in
-SQL write it as a literal (date 'YYYY-MM-DD'), never use current_date. When you derive a
-number, show the arithmetic in a few words."""
+SQL write it as a literal (date 'YYYY-MM-DD'), never use current_date.
+
+Numbers:
+- Prescriptions: every prescribed range (power, HR, pace) names a zone from the context, or
+  states a fraction of a threshold together with the result, for example "56-75% of FTP 250 W,
+  140-188 W". No other ranges.
+- No invented numbers: no invented thresholds, baselines or cutoffs. A baseline is computed in
+  SQL over a window you state (for example a 28-day mean HRV), or not given.
+- SQL for arithmetic: counts, sums, averages, ratios and percentages come from SQL, not mental
+  arithmetic. Quote the query's numbers.
+- Weekdays: name a weekday only as the context shows it, or from SQL (to_char(d, 'Dy'))."""
 
 
 def _pace(sec: Any, unit: str) -> str:
