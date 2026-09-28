@@ -22,6 +22,13 @@ def _restore_environ():
     os.environ.update(saved)
 
 
+@pytest.fixture(autouse=True)
+def _eval_results_in_tmp(tmp_path, monkeypatch):
+    """run_eval writes each run's results to $TRI_EVAL_DIR; keep the suite's runs out of the
+    repo's .evals/."""
+    monkeypatch.setenv("TRI_EVAL_DIR", str(tmp_path / "evals"))
+
+
 def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption(
         "--live", action="store_true", default=False, help="run tests that hit real MCP servers"

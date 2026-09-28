@@ -21,7 +21,14 @@ from tri_analyze.evals.seed import (
 from tri_analyze.evals.target import make_target
 from tri_analyze.prompts.analyst import PROMPT_VERSION
 from tri_core.config import reader_url
-from tri_core.evals import errored, pass_rates, render_pass_rates, scored_counts
+from tri_core.evals import (
+    errored,
+    failure_lines,
+    pass_rates,
+    record_rows,
+    render_pass_rates,
+    scored_counts,
+)
 from tri_core.llm import ModelProvider, Role, eval_metadata
 
 DATASET_NAME = "tri_analyze_feedback"
@@ -99,4 +106,8 @@ async def run_eval(
     log(render_pass_rates(rates, scored_counts(dict_rows), len(rows), version=PROMPT_VERSION))
     if errors:
         log(f"{errors} errored")
+    failures = failure_lines(dict_rows)
+    if failures:
+        log("failed checks:\n" + "\n".join(failures))
+    log(f"results: {record_rows(dict_rows, results.experiment_name)}")
     return rates, errors
