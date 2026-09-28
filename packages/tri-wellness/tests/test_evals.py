@@ -1,4 +1,5 @@
 from langchain_core.messages import AIMessage
+from langsmith.schemas import Example
 
 import tri_wellness.evals.run as wellness_run
 from tri_core.llm import Role
@@ -145,3 +146,25 @@ async def test_run_eval_uses_the_lab_report_role_and_no_judge(monkeypatch):
     assert meta["model"] == "claude-opus-5" and meta["effort"] is None
     assert "judge_model" not in meta
     assert f"(prompt version {PROMPT_VERSION}):" in "\n".join(logged)
+
+
+async def test_run_eval_local_skips_the_dataset_and_uses_local_examples(monkeypatch):
+    captured: dict = {}
+
+    async def fake_aevaluate(target, **kw):
+        captured.update(kw)
+        return _FakeResults()
+
+    def raising_client(*a, **kw):
+        raise AssertionError("Client must not be constructed in local mode")
+
+    monkeypatch.setattr(wellness_run, "Client", raising_client)
+    monkeypatch.setattr(wellness_run, "aevaluate", fake_aevaluate)
+    models, _ = _recording_models()
+    settings = WellnessSettings(_env_file=None, tri_athlete_sex="male", langsmith_api_key=None)
+    await wellness_run.run_eval(settings, models, local=True, log=lambda m: None)
+    assert captured["client"] is None
+    assert captured["upload_results"] is False
+    assert isinstance(captured["data"], list) and len(captured["data"]) == len(CASES)
+    assert all(isinstance(e, Example) for e in captured["data"])
+    assert captured["experiment_prefix"].endswith("-local")

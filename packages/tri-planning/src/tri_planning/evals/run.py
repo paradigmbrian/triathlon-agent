@@ -7,17 +7,19 @@ versions."""
 from __future__ import annotations
 
 from collections.abc import Callable
-from contextlib import AbstractContextManager
+from contextlib import AbstractContextManager, nullcontext
 from datetime import date
 from typing import Any
 
-from langsmith import Client, aevaluate
+from langsmith import Client, aevaluate, tracing_context
 
 from tri_core.config import readonly_url
 from tri_core.db.repo import Conn
 from tri_core.evals import (
+    disable_network_sampling,
     errored,
     failure_lines,
+    local_examples,
     pass_rates,
     record_rows,
     render_pass_rates,
@@ -56,11 +58,19 @@ async def run_eval(
     *,
     prefix: str | None = None,
     recreate: bool = False,
+    local: bool = False,
     log: Callable[[str], None] = print,
 ) -> dict[str, float]:
-    """The pass rate per evaluator key. Weeks are designed on the planning_design role."""
-    client = Client(api_key=settings.langsmith_api_key)
-    ensure_dataset(client, recreate=recreate)
+    """The pass rate per evaluator key. Weeks are designed on the planning_design role.
+    `local=True` never talks to LangSmith: no dataset, traces or feedback are sent."""
+    if local:
+        client: Client | None = None
+        data: Any = local_examples(case_examples(date.today()))
+        disable_network_sampling()
+    else:
+        client = Client(api_key=settings.langsmith_api_key)
+        ensure_dataset(client, recreate=recreate)
+        data = DATASET_NAME
     # design_week reads design_model; model is only the dataclass's required field.
     designer = models(Role.PLANNING_DESIGN)
     deps = GraphDeps(
@@ -69,18 +79,21 @@ async def run_eval(
         readonly_db_url=readonly_url(settings),
         design_model=designer,
     )
-    results = await aevaluate(
-        design_target(deps),
-        data=DATASET_NAME,
-        evaluators=[validator_pass],
-        experiment_prefix=prefix or f"design-v{PROMPT_VERSION}",
-        metadata={
-            "prompt_version": PROMPT_VERSION,
-            **eval_metadata(settings, Role.PLANNING_DESIGN, judge=False),
-        },
-        client=client,
-        max_concurrency=2,
-    )
+    experiment_prefix = (prefix or f"design-v{PROMPT_VERSION}") + ("-local" if local else "")
+    with tracing_context(enabled="local") if local else nullcontext():
+        results = await aevaluate(
+            design_target(deps),
+            data=data,
+            evaluators=[validator_pass],
+            experiment_prefix=experiment_prefix,
+            metadata={
+                "prompt_version": PROMPT_VERSION,
+                **eval_metadata(settings, Role.PLANNING_DESIGN, judge=False),
+            },
+            client=client,
+            upload_results=not local,
+            max_concurrency=2,
+        )
     rows: list[Any] = [row async for row in results]
     dict_rows = [dict(r) for r in rows]
     rates = pass_rates(dict_rows)

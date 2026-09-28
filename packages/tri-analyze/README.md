@@ -156,6 +156,9 @@ the seeded rows in the test database until the next eval run replaces them. Garm
 TrainingPeaks tools stay canned. The judge accepts a derived number when the answer shows the
 arithmetic. Needs Postgres, `LANGSMITH_API_KEY` and `ANTHROPIC_API_KEY`.
 
+`--local` (or `TRI_EVAL_LOCAL=true`) runs the same eval without LangSmith: no dataset, traces or
+feedback are sent, `LANGSMITH_API_KEY` is not required, and results still go to `.evals/` only.
+
 Today is fixed at 2026-09-16.
 
 Evaluators (a check that does not apply scores nothing):

@@ -7,11 +7,56 @@ from __future__ import annotations
 
 import json
 import os
+import uuid
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from langsmith.schemas import Example
+
 KEY_WIDTH = 26
+
+LOCAL_DATASET_ID = uuid.UUID(int=0)
+
+
+def local_default() -> bool:
+    """`TRI_EVAL_LOCAL`, read fresh (not cached) so a test or a caller can flip it: true for
+    1/true/yes, case-insensitive, else false."""
+    return (os.environ.get("TRI_EVAL_LOCAL") or "").strip().lower() in {"1", "true", "yes"}
+
+
+def disable_network_sampling() -> None:
+    """Belt-and-braces for local mode: `aevaluate()` traces each example's target call through a
+    hard-coded `tracing_context(enabled=True)` inside langsmith itself (`_aforward` /
+    `_ensure_async_traceable` in `langsmith.evaluation._arunner`), which overrides `client=None`,
+    `upload_results=False` and an outer `tracing_context(enabled="local")` alike -- without this,
+    every example's run is still queued for a real POST to LangSmith (confirmed by tracing a real
+    `aevaluate()` call: two runs were queued and, at process exit, a real "multipart ingest"
+    request reached api.smith.langchain.com and failed with 401). A tracing sample rate of 0 makes
+    `Client._filter_for_sampling` drop every run before it is ever queued, so nothing is sent.
+    Must run before the first LangSmith `Client` of the process is built (`aevaluate`'s internal
+    `client=None` resolves to a process-wide cached client whose sample rate is fixed at
+    construction); `get_env_var`'s cache is cleared so a value read earlier in this process can't
+    shadow it."""
+    os.environ.setdefault("LANGSMITH_TRACING_SAMPLING_RATE", "0")
+    from langsmith import utils as ls_utils
+
+    ls_utils.get_env_var.cache_clear()  # type: ignore[attr-defined]  # lru_cache on an overload
+
+
+def local_examples(examples: list[dict[str, Any]]) -> list[Example]:
+    """One in-memory `Example` per dict (as built by a package's `case_examples`), all under
+    `LOCAL_DATASET_ID`, for an `aevaluate()` run that never talks to LangSmith."""
+    return [
+        Example(
+            id=uuid.uuid4(),
+            dataset_id=LOCAL_DATASET_ID,
+            inputs=e.get("inputs") or {},
+            outputs=e.get("outputs") or {},
+            metadata=e.get("metadata") or {},
+        )
+        for e in examples
+    ]
 
 
 def _scores(rows: list[dict[str, Any]]) -> dict[str, list[float]]:

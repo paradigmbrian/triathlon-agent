@@ -1,9 +1,19 @@
 import json
+import uuid
 from types import SimpleNamespace
 
+import pytest
+import requests
+from langsmith import aevaluate, tracing_context
+from langsmith.schemas import Example
+
 from tri_core.evals import (
+    LOCAL_DATASET_ID,
+    disable_network_sampling,
     errored,
     failure_lines,
+    local_default,
+    local_examples,
     pass_rates,
     record_rows,
     render_pass_rates,
@@ -109,3 +119,81 @@ def test_record_rows_writes_one_json_line_per_example(tmp_path):
 def test_the_directory_defaults_to_the_environment(tmp_path, monkeypatch):
     monkeypatch.setenv("TRI_EVAL_DIR", str(tmp_path / "evals"))
     assert record_rows([], "e").parent == tmp_path / "evals"
+
+
+def test_local_examples_builds_examples_from_inputs_outputs_and_metadata():
+    examples = local_examples(
+        [
+            {"inputs": {"q": 1}, "outputs": {"a": 2}, "metadata": {"case": "x"}},
+            {"inputs": {"q": 2}},
+        ]
+    )
+    assert len(examples) == 2
+    assert all(isinstance(e, Example) for e in examples)
+    assert all(e.dataset_id == LOCAL_DATASET_ID for e in examples)
+    assert uuid.UUID(int=0) == LOCAL_DATASET_ID
+    assert len({e.id for e in examples}) == 2  # each example gets its own id
+    assert examples[0].inputs == {"q": 1}
+    assert examples[0].outputs == {"a": 2}
+    assert examples[0].metadata == {"case": "x"}
+    assert examples[1].outputs == {} and examples[1].metadata == {}
+
+
+def test_local_default_is_false_when_unset(monkeypatch):
+    monkeypatch.delenv("TRI_EVAL_LOCAL", raising=False)
+    assert local_default() is False
+
+
+@pytest.mark.parametrize("value", ["1", "true", "True", "TRUE", "yes", "Yes", "YES"])
+def test_local_default_is_true_for_truthy_values(monkeypatch, value):
+    monkeypatch.setenv("TRI_EVAL_LOCAL", value)
+    assert local_default() is True
+
+
+@pytest.mark.parametrize("value", ["0", "false", "False", "no", "", "banana"])
+def test_local_default_is_false_for_other_values(monkeypatch, value):
+    monkeypatch.setenv("TRI_EVAL_LOCAL", value)
+    assert local_default() is False
+
+
+async def test_aevaluate_in_local_mode_makes_no_network_call(monkeypatch):
+    """A real aevaluate() over local Examples, upload_results=False, client=None, inside
+    tracing_context(enabled="local"): it must complete and score both rows without ever
+    calling requests.Session.request (the transport every LangSmith Client call goes through).
+
+    Plain client=None/upload_results=False/tracing_context(enabled="local") is not enough: each
+    example's target run is still traced through langsmith's own hard-coded
+    tracing_context(enabled=True) (see disable_network_sampling's docstring) and queued for a
+    real POST unless disable_network_sampling() -- the same call run_eval makes in local mode --
+    also runs first."""
+    disable_network_sampling()
+
+    def refuse(self, *a, **kw):
+        raise AssertionError(f"unexpected network call: {a[:2]}")
+
+    monkeypatch.setattr(requests.Session, "request", refuse)
+
+    async def target(inputs: dict) -> dict:
+        return {"answer": inputs["n"] * 2}
+
+    def doubled(run, example) -> dict:
+        return {
+            "key": "doubled",
+            "score": 1 if run.outputs["answer"] == example.inputs["n"] * 2 else 0,
+        }
+
+    data = local_examples([{"inputs": {"n": 1}}, {"inputs": {"n": 2}}])
+    with tracing_context(enabled="local"):
+        results = await aevaluate(
+            target,
+            data=data,
+            evaluators=[doubled],
+            client=None,
+            upload_results=False,
+            experiment_prefix="local-mode-no-network-test",
+        )
+        rows = [row async for row in results]
+    assert len(rows) == 2
+    for row in rows:
+        scores = [r.score for r in row["evaluation_results"]["results"]]
+        assert scores == [1]

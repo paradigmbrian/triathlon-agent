@@ -2,7 +2,9 @@ from datetime import date
 
 from typer.testing import CliRunner
 
+from tri_wellness import cli
 from tri_wellness.cli import app, make_editor
+from tri_wellness.config import WellnessSettings
 from tri_wellness.labs.models import LabResult, RawResult, Unmapped
 from tri_wellness.ranges.registry import MARKERS_PATH, load_registry
 from tri_wellness.repl import review_to_yaml
@@ -132,3 +134,42 @@ def test_help_lists_report_and_chat():
 def test_help_lists_eval():
     result = runner.invoke(app, ["--help"])
     assert "eval" in result.output
+
+
+def test_eval_local_needs_no_langsmith_key_and_passes_local_through(monkeypatch):
+    monkeypatch.setattr(
+        cli,
+        "get_wellness_settings",
+        lambda: WellnessSettings(
+            _env_file=None, tri_athlete_sex="male", anthropic_api_key="k", langsmith_api_key=None
+        ),
+    )
+    seen: list[dict] = []
+
+    async def run_eval(settings, model, **kw):
+        seen.append(kw)
+        return {"has_required_sections": 1.0}
+
+    monkeypatch.setattr("tri_wellness.evals.run.run_eval", run_eval)
+    result = runner.invoke(app, ["eval", "--local"])
+    assert result.exit_code == 0 and seen[-1]["local"] is True
+
+
+def test_tri_eval_local_env_makes_it_local_without_the_flag(monkeypatch):
+    monkeypatch.setenv("TRI_EVAL_LOCAL", "yes")
+    monkeypatch.setattr(
+        cli,
+        "get_wellness_settings",
+        lambda: WellnessSettings(
+            _env_file=None, tri_athlete_sex="male", anthropic_api_key="k", langsmith_api_key=None
+        ),
+    )
+    seen: list[dict] = []
+
+    async def run_eval(settings, model, **kw):
+        seen.append(kw)
+        return {"has_required_sections": 1.0}
+
+    monkeypatch.setattr("tri_wellness.evals.run.run_eval", run_eval)
+    result = runner.invoke(app, ["eval"])
+    assert result.exit_code == 0 and seen[-1]["local"] is True

@@ -85,7 +85,9 @@ run: not run yet (no panel provided).
 - `tri-wellness eval`: runs the report prompt over the LangSmith dataset
   `tri_wellness_reports` (four findings sets in `evals/cases.py`) with three code evaluators:
   every non-optimal marker cites its functional range, the ten-section structure is present,
-  active confounders are named. Latest run: not run yet.
+  active confounders are named. Latest run: not run yet. `--local` (or `TRI_EVAL_LOCAL=true`)
+  skips LangSmith entirely: no dataset, traces or feedback are sent, and results still go to
+  `.evals/` only.
 
 Prompt versions: `prompts/report.py` `PROMPT_VERSION` names the experiment; bump it whenever
 `REPORT_SYSTEM` or `REPORT_RULES` changes.

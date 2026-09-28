@@ -117,6 +117,51 @@ def test_eval_exits_2_without_anthropic_key(monkeypatch):
     assert result.exit_code == 2 and "ANTHROPIC_API_KEY" in result.output
 
 
+def test_eval_local_needs_no_langsmith_key_and_passes_local_through(monkeypatch):
+    monkeypatch.setattr(
+        cli,
+        "get_analyze_settings",
+        lambda: AnalyzeSettings(_env_file=None, anthropic_api_key="k", langsmith_api_key=None),
+    )
+    seen: list[dict] = []
+
+    async def run_eval(settings, model, **kw):
+        seen.append(kw)
+        return {"uses_sql": 1.0}, 0
+
+    monkeypatch.setattr("tri_analyze.evals.run.run_eval", run_eval)
+    result = runner.invoke(app, ["eval", "--local"])
+    assert result.exit_code == 0 and seen[-1]["local"] is True
+
+
+def test_tri_eval_local_env_makes_it_local_without_the_flag(monkeypatch):
+    monkeypatch.setenv("TRI_EVAL_LOCAL", "true")
+    monkeypatch.setattr(
+        cli,
+        "get_analyze_settings",
+        lambda: AnalyzeSettings(_env_file=None, anthropic_api_key="k", langsmith_api_key=None),
+    )
+    seen: list[dict] = []
+
+    async def run_eval(settings, model, **kw):
+        seen.append(kw)
+        return {"uses_sql": 1.0}, 0
+
+    monkeypatch.setattr("tri_analyze.evals.run.run_eval", run_eval)
+    result = runner.invoke(app, ["eval"])
+    assert result.exit_code == 0 and seen[-1]["local"] is True
+
+
+def test_no_local_env_or_flag_still_needs_the_langsmith_key(monkeypatch):
+    monkeypatch.setattr(
+        cli,
+        "get_analyze_settings",
+        lambda: AnalyzeSettings(_env_file=None, anthropic_api_key="k", langsmith_api_key=None),
+    )
+    result = runner.invoke(app, ["eval", "--no-local"])
+    assert result.exit_code == 2 and "LANGSMITH_API_KEY" in result.output
+
+
 def test_eval_exit_code_follows_rates_and_errors(monkeypatch):
     monkeypatch.setattr(
         cli,
