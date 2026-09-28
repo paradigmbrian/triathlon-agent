@@ -313,7 +313,7 @@ def test_judge_prompt_carries_the_rendered_system_prompt_question_results_and_an
             "tool_results": [{"name": "query_training_db", "content": served}],
         },
     )
-    assert "Today is 2026-09-16." in text and FEEDBACK_RULES in text
+    assert "Today is 2026-09-16 (Wed)." in text and FEEDBACK_RULES in text
     assert "Tools bound this session: query_training_db, get_activity, get_activity_splits" in text
     assert c.question in text
     assert "Legs were dead from the start" in text  # served, not merely canned

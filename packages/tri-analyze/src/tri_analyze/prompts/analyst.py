@@ -99,7 +99,7 @@ def _days_block(days: list[dict[str, Any]]) -> str:
     lines = ["Recent load and recovery (last 7 days):"]
     for d in days:
         lines.append(
-            f"- {d['metric_date']}: TSS {_num(d.get('tss_day'), 0)}, CTL {_num(d.get('ctl'))}, "
+            f"- {dated(d['metric_date'])}: TSS {_num(d.get('tss_day'), 0)}, CTL {_num(d.get('ctl'))}, "
             f"ATL {_num(d.get('atl'))}, TSB {_num(d.get('tsb'))}, "
             f"sleep {_num(d.get('sleep_score'), 0)}, HRV {_num(d.get('hrv_overnight_avg'), 0)}, "
             f"readiness {_num(d.get('training_readiness'), 0)}"
@@ -119,7 +119,7 @@ def _workouts_block(ws: list[dict[str, Any]], today: date) -> str:
         else:
             marker = "missed"
         lines.append(
-            f"- {w['workout_date']} {w['sport']}: {w.get('title') or '(untitled)'} "
+            f"- {dated(w['workout_date'])} {w['sport']}: {w.get('title') or '(untitled)'} "
             f"[{marker}] {_num(w.get('planned_tss'), 0)} -> {_num(w.get('actual_tss'), 0)}"
         )
     return "\n".join(lines)
@@ -145,7 +145,7 @@ def render_system_prompt(ctx: AthleteContext, tool_names: list[str]) -> str:
             "training using the query_training_db tool (Postgres, read-only) and the other "
             "tools listed below. Be specific and quantitative. Use the athlete's thresholds to "
             "interpret intensity.",
-            f"Today is {ctx.today.isoformat()}.",
+            f"Today is {dated(ctx.today)}. {calendar_line(ctx.today)}",
             _profile_block(ctx.profile),
             _days_block(ctx.recent_days),
             _workouts_block(ctx.recent_workouts, ctx.today),

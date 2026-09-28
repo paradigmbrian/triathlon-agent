@@ -19,11 +19,15 @@ COACH_EXTRAS = ["read_body_composition", "read_intake_vs_targets"]
 
 def test_render_includes_profile_load_and_tools():
     text = render_system_prompt(athlete_context(), ["query_training_db", "get_activity_splits"])
-    assert "Today is 2026-09-06." in text
+    assert (
+        "Today is 2026-09-06 (Sun). Weeks start Monday: 2026-08-03, 2026-08-10, 2026-08-17, "
+        "2026-08-24, 2026-08-31, 2026-09-07."
+    ) in text
+    assert "- 2026-09-05 (Sat): TSS 55, CTL 15.2" in text
     assert "FTP 230 W" in text and "4:30/km" in text and "1:44/100m" in text
     assert "LTHR 180 bpm, max HR 182 bpm" in text
     assert "CTL 15.2" in text and "TSB -7.3" in text and "readiness 51" in text
-    assert "2026-09-05 bike: Z2 ride [done] 60 -> 55" in text
+    assert "2026-09-05 (Sat) bike: Z2 ride [done] 60 -> 55" in text
     assert "Tools bound this session: query_training_db, get_activity_splits." in text
 
 
@@ -63,10 +67,10 @@ def test_render_marks_done_planned_and_missed():
         },
     ]
     text = render_system_prompt(athlete_context(recent_workouts=workouts), [])
-    assert "2026-09-04 swim: Drills [missed] 30 -> -" in text
-    assert "2026-09-05 bike: Z2 ride [done] 60 -> 55" in text
-    assert "2026-09-06 run: (untitled) [planned] 40 -> -" in text  # today counts as planned
-    assert "2026-09-08 run: Tempo [planned] 70 -> -" in text
+    assert "2026-09-04 (Fri) swim: Drills [missed] 30 -> -" in text
+    assert "2026-09-05 (Sat) bike: Z2 ride [done] 60 -> 55" in text
+    assert "2026-09-06 (Sun) run: (untitled) [planned] 40 -> -" in text  # today counts as planned
+    assert "2026-09-08 (Tue) run: Tempo [planned] 70 -> -" in text
 
 
 def test_render_without_profile_or_data_hints_tri_sync():
