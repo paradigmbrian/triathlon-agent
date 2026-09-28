@@ -14,6 +14,7 @@ from tri_core.evals import (
     disable_network_sampling,
     errored,
     failure_lines,
+    finish_run,
     local_default,
     local_examples,
     local_experiment_name,
@@ -23,6 +24,7 @@ from tri_core.evals import (
     render_pass_rates,
     scored_counts,
 )
+from tri_core.eval_usage import TokenCounts, UsageByRole
 from tri_core.testing import ScriptedChatModel
 
 
@@ -240,3 +242,44 @@ def test_a_local_experiment_name_keeps_the_prefix():
     a, b = local_experiment_name("analyst-v2-local"), local_experiment_name("analyst-v2-local")
     assert a.startswith("analyst-v2-local-") and len(a) == len("analyst-v2-local-") + 8
     assert a != b
+
+
+def test_render_marks_a_subset_with_the_full_count():
+    text = render_pass_rates({"a": 1.0}, {"a": (3, 3)}, 3, version="2", total=12)
+    assert text.splitlines()[0] == "pass rate over 3 of 12 examples (subset) (prompt version 2):"
+
+
+def test_record_rows_writes_reference_outputs_and_usage_when_there_are_some(tmp_path):
+    row = _row("z2", [])
+    row["example"].outputs = {"requires_sql": True}
+    path = record_rows([row], "x", directory=tmp_path, usage={"roles": {}, "total_cost": 0.0})
+    line = json.loads(path.read_text())
+    assert line["reference_outputs"] == {"requires_sql": True}
+    assert line["usage"] == {"roles": {}, "total_cost": 0.0}
+
+
+def test_finish_run_logs_in_order_and_the_results_path_last(tmp_path, monkeypatch):
+    monkeypatch.setenv("TRI_EVAL_DIR", str(tmp_path))
+    failed = _row("z2", [SimpleNamespace(key="grounded", score=0, comment="no")])
+    usage = UsageByRole()
+    usage.add("judge", "claude-opus-5", TokenCounts(input=96_000, output=8_000))
+    logged: list[str] = []
+    rates, errors = finish_run(
+        [failed, _row("run", [], error="boom")],
+        "exp",
+        version="3",
+        metadata={"prompt_version": "3"},
+        usage=usage,
+        log=logged.append,
+        total=12,
+    )
+    assert rates == {"grounded": 0.0} and errors == 1
+    assert logged[0] == "experiment: exp"
+    assert logged[1].startswith("pass rate over 2 of 12 examples (subset) (prompt version 3):")
+    assert logged[2] == "1 errored"
+    assert logged[3] == "failed checks:\n  grounded  z2: no"
+    assert logged[4] == "usage: judge 96k in / 8.0k out $0.68 · total $0.68"
+    assert logged[5] == f"results: {tmp_path / 'exp.jsonl'}"
+    line = json.loads((tmp_path / "exp.jsonl").read_text().splitlines()[0])
+    assert line["metadata"] == {"prompt_version": "3"}
+    assert line["usage"]["total_cost"] == 0.68
