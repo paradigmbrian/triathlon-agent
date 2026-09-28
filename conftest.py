@@ -27,6 +27,9 @@ def _eval_results_in_tmp(tmp_path, monkeypatch):
     """run_eval writes each run's results to $TRI_EVAL_DIR; keep the suite's runs out of the
     repo's .evals/."""
     monkeypatch.setenv("TRI_EVAL_DIR", str(tmp_path / "evals"))
+    # A developer's .env may set TRI_EVAL_LOCAL=true; load_dotenv never overrides a set
+    # variable, so this keeps every eval test on the LangSmith path unless it opts in.
+    monkeypatch.setenv("TRI_EVAL_LOCAL", "false")
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
