@@ -145,7 +145,7 @@ passed/scored count, for example:
 
 ```
 pass rate over 12 examples (prompt version 4):
-  brief_quality                67% (8/12)
+  brief_quality               67% (8/12)
 ```
 
 ## Sessions

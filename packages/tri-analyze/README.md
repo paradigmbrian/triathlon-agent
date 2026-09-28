@@ -175,7 +175,7 @@ passed/scored count, for example:
 
 ```
 pass rate over 12 examples (prompt version 2):
-  grounded                     67% (8/12)
+  grounded                    67% (8/12)
 ```
 
 Latest run: `analyst-v1-77fb7f3b` on 2026-09-13, before the result-envelope, window-pattern
