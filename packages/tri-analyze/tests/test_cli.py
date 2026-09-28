@@ -143,6 +143,7 @@ def test_eval_exit_code_follows_rates_and_errors(monkeypatch):
     assert runner.invoke(app, ["eval"]).exit_code == 1
     stub({}, 0)
     assert runner.invoke(app, ["eval"]).exit_code == 1
+    assert seen[-1]["prefix"] is None and seen[-1]["recreate"] is False
 
 
 def test_eval_refuses_the_athletes_database(monkeypatch):
@@ -167,4 +168,3 @@ def test_eval_passes_the_eval_database_through(monkeypatch):
     monkeypatch.setattr("tri_analyze.evals.run.run_eval", run_eval)
     result = runner.invoke(app, ["eval", "--eval-db", "postgresql://u:p@h:1/evaldb"])
     assert result.exit_code == 0 and seen[-1]["eval_db_url"] == "postgresql://u:p@h:1/evaldb"
-    assert seen[-1]["prefix"] is None and seen[-1]["recreate"] is False
