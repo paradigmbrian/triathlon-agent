@@ -266,7 +266,7 @@ async def test_ask_analyst_passes_the_context_and_the_analyst_sees_its_prompt(no
     assert await ask.ainvoke({"question": "how was the week?"}) == "Nothing synced yet."
     system = analyst.received[0][0]
     assert isinstance(system, SystemMessage)
-    assert "Today is 2026-09-14." in system.content
+    assert "Today is 2026-09-14 (Mon)." in system.content
     assert "FTP 230 W" in system.content
     assert "4:30/km" in system.content
     assert "Tools bound this session: query_training_db." in system.content

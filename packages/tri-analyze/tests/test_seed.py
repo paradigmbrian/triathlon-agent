@@ -8,7 +8,9 @@ import psycopg
 import pytest
 
 from tri_analyze.evals import seed
-from tri_analyze.evals.cases import TODAY, WEEK_DAYS
+from tri_analyze.evals.cases import PROFILE, TODAY, WEEK_DAYS, athlete
+from tri_analyze.prompts.analyst import _zones_block, render_system_prompt
+from tri_analyze.repo import load_athlete_context
 from tri_core.config import Settings, reader_url
 from tri_core.db.connection import connect
 from tri_core.db.sql_tool import run_readonly_query
@@ -201,3 +203,35 @@ def test_clearing_locks_the_tables_before_the_guard_reads_them(monkeypatch):
     assert lock < guard < truncate
     assert all(t in conn.sql[lock] for t in seed.SEEDED_TABLES)
     assert conn.sql[lock].endswith("in access exclusive mode")
+
+
+def test_the_eval_profile_carries_zones_built_from_its_thresholds():
+    block = _zones_block(PROFILE)
+    assert block.splitlines() == [
+        "Athlete zones (from TrainingPeaks):",
+        "- Bike power: Z1 Active Recovery 0-137 W, Z2 Endurance 138-187 W, Z3 Tempo 188-225 W, "
+        "Z4 Threshold 226-262 W, Z5 VO2 Max 263-300 W, Z6 Anaerobic 301+ W",
+        "- Run HR: Z1 Recovery 0-146 bpm, Z2 Aerobic 147-153 bpm, Z3 Tempo 154-161 bpm, "
+        "Z4 SubThreshold 162-172 bpm, Z5A SuperThreshold 173-177 bpm, "
+        "Z5B Aerobic Capacity 178+ bpm",
+        "- Run pace: Z1 slower than 5:29/km, Z2 5:29-4:51/km, Z3 4:51-4:30/km, "
+        "Z4 4:30-4:15/km, Z5 4:15-4:07/km, Z6 faster than 4:07/km",
+        "- Swim pace: Z1 slower than 1:55/100m, Z2 1:55-1:50/100m, Z3 1:50-1:45/100m, "
+        "Z4 1:45-1:35/100m, Z5 faster than 1:35/100m",
+    ]
+    assert "Z2 Endurance 138-187 W" in render_system_prompt(athlete(), ["query_training_db"])
+
+
+@pytest.mark.db
+def test_the_seeded_profile_has_the_eval_profiles_zones():
+    url = _url()
+    try:
+        seed.seed_database(url)
+        with connect(url) as conn:
+            profile = load_athlete_context(conn, TODAY).profile
+        assert profile is not None
+        for key in ("hr_zones", "power_zones", "pace_zones"):
+            assert profile[key] == PROFILE[key], key
+        assert _zones_block(profile) == _zones_block(PROFILE)
+    finally:
+        seed.clear_database(url)

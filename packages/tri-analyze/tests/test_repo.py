@@ -1,4 +1,6 @@
+import json
 from datetime import date
+from pathlib import Path
 
 import pytest
 
@@ -133,3 +135,34 @@ def test_context_skips_deleted_workouts(db):
     repo.mark_missing_deleted(db, TODAY, TODAY, {"keep"})
     ctx = load_athlete_context(db, TODAY)
     assert [w["title"] for w in ctx.recent_workouts] == ["ride keep"]
+
+
+@pytest.mark.db
+def test_load_athlete_context_reads_the_zone_groups(db):
+    settings = json.loads(
+        (
+            Path(__file__).resolve().parents[2]
+            / "tri-core/tests/fixtures/mcp/tp_get_athlete_settings.json"
+        ).read_text()
+    )["result"]["settings"]
+    repo.upsert_athlete_profile(
+        db,
+        AthleteProfileRow(
+            tp_athlete_id="1",
+            ftp_watts=230,
+            run_threshold_pace_sec_per_km=270,
+            swim_css_sec_per_100m=104,
+            lthr_bpm=180,
+            max_hr_bpm=182,
+            hr_zones=settings["heartRateZones"],
+            power_zones=settings["powerZones"],
+            pace_zones=settings["speedZones"],
+            weight_kg=70.5,
+            raw={},
+        ),
+    )
+    profile = load_athlete_context(db, TODAY).profile
+    assert profile is not None
+    assert profile["hr_zones"] == settings["heartRateZones"]
+    assert profile["power_zones"] == settings["powerZones"]
+    assert profile["pace_zones"] == settings["speedZones"]

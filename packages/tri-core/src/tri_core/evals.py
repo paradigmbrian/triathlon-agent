@@ -143,10 +143,15 @@ def failure_lines(rows: list[dict[str, Any]]) -> list[str]:
 
 
 def record_rows(
-    rows: list[dict[str, Any]], experiment: str, *, directory: Path | None = None
+    rows: list[dict[str, Any]],
+    experiment: str,
+    *,
+    directory: Path | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> Path:
     """Writes `<experiment>.jsonl` under `directory` (default `$TRI_EVAL_DIR`, else `.evals`):
-    one line per example with its case, inputs, outputs, error and evaluator results."""
+    one line per example with its case, inputs, outputs, error and evaluator results, and the
+    experiment's `metadata` when given (so a results file says which prompt and judge scored it)."""
     out_dir = directory or Path(os.environ.get("TRI_EVAL_DIR") or ".evals")
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{experiment}.jsonl"
@@ -164,5 +169,7 @@ def record_rows(
                     for r in results
                 ],
             }
+            if metadata is not None:
+                line["metadata"] = metadata
             fh.write(json.dumps(line, default=str) + "\n")
     return path

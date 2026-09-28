@@ -22,7 +22,8 @@ class AthleteContext:
 def load_athlete_context(conn: Conn, today: date) -> AthleteContext:
     profile = conn.execute(
         "select ftp_watts, run_threshold_pace_sec_per_km, swim_css_sec_per_100m, lthr_bpm, "
-        "max_hr_bpm, weight_kg from athlete_profile where id = 1"
+        "max_hr_bpm, weight_kg, hr_zones, power_zones, pace_zones from athlete_profile "
+        "where id = 1"
     ).fetchone()
     days_rows = conn.execute(
         "select metric_date, tss_day, ctl, atl, tsb, sleep_score, hrv_overnight_avg, "

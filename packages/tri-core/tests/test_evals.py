@@ -121,6 +121,16 @@ def test_record_rows_writes_one_json_line_per_example(tmp_path):
     assert lines[1]["error"] == "IndexError: boom" and lines[1]["results"] == []
 
 
+def test_record_rows_writes_the_experiment_metadata_on_every_line_when_given(tmp_path):
+    path = record_rows(
+        [_row("z2", []), _row("run", [])], "x", directory=tmp_path, metadata={"judge_version": "2"}
+    )
+    lines = [json.loads(line) for line in path.read_text().splitlines()]
+    assert [line["metadata"] for line in lines] == [{"judge_version": "2"}] * 2
+    bare = record_rows([_row("z2", [])], "y", directory=tmp_path)
+    assert "metadata" not in json.loads(bare.read_text())
+
+
 def test_the_directory_defaults_to_the_environment(tmp_path, monkeypatch):
     monkeypatch.setenv("TRI_EVAL_DIR", str(tmp_path / "evals"))
     assert record_rows([], "e").parent == tmp_path / "evals"

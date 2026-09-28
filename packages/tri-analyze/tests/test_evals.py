@@ -24,6 +24,7 @@ from tri_analyze.evals.cases import (
     sql_rows,
 )
 from tri_analyze.evals.evaluators import (
+    JUDGE_VERSION,
     FeedbackJudgement,
     make_judge,
     pulls_splits,
@@ -312,7 +313,7 @@ def test_judge_prompt_carries_the_rendered_system_prompt_question_results_and_an
             "tool_results": [{"name": "query_training_db", "content": served}],
         },
     )
-    assert "Today is 2026-09-16." in text and FEEDBACK_RULES in text
+    assert "Today is 2026-09-16 (Wed)." in text and FEEDBACK_RULES in text
     assert "Tools bound this session: query_training_db, get_activity, get_activity_splits" in text
     assert c.question in text
     assert "Legs were dead from the start" in text  # served, not merely canned
@@ -471,6 +472,7 @@ async def test_run_eval_uses_the_analyst_and_judge_roles(monkeypatch):
         "model": "claude-opus-5",
         "effort": "medium",
         "judge_model": "claude-opus-5",
+        "judge_version": JUDGE_VERSION,
     }
     assert f"(prompt version {PROMPT_VERSION}):" in "\n".join(logged)
 
@@ -481,15 +483,34 @@ async def test_run_eval_without_the_judge_records_no_judge_model(monkeypatch):
     settings = AnalyzeSettings(_env_file=None, langsmith_api_key="ls")
     await analyze_run.run_eval(settings, models, judge=False, log=lambda m: None)
     assert roles == [Role.ANALYST] and "judge_model" not in captured["metadata"]
+    assert "judge_version" not in captured["metadata"]
 
 
-def test_grounded_accepts_arithmetic_the_answer_shows():
-    field = FeedbackJudgement.model_fields["grounded"].description or ""
-    assert "derived from them by a unit conversion or arithmetic the answer shows" in field
-    assert "800 m in 200 s gives 4:10/km" in field
+GROUNDED = (
+    "every number in the answer appears in the context or the tool results, or can be "
+    "reproduced from them by a unit conversion or arithmetic within the answer's rounding; a "
+    "number that appears nowhere or does not reproduce is ungrounded; a prescribed range must "
+    "come from the athlete's zones or a stated fraction of a threshold; missing data is stated "
+    "as missing"
+)
+
+
+def test_grounded_accepts_derivations_the_judge_can_reproduce():
     from tri_analyze.evals.evaluators import JUDGE_SYSTEM
 
-    assert "list each in problems" in JUDGE_SYSTEM and "arithmetic" in JUDGE_SYSTEM
+    assert FeedbackJudgement.model_fields["grounded"].description == GROUNDED
+    flat = " ".join(JUDGE_SYSTEM.split())
+    for sentence in (
+        "can be reproduced from them by a unit conversion or arithmetic within the answer's "
+        "rounding",
+        "Check each derivation yourself; do not flag a correct one because its arithmetic is "
+        "not written out.",
+        "must come from the athlete's zones or a stated fraction of a threshold",
+        "numbers that do not reproduce (give the value you get)",
+        "Use the calendar line to name weekdays; never infer a weekday otherwise.",
+    ):
+        assert sentence in flat, sentence
+    assert "arithmetic the answer shows" not in flat
 
 
 def test_no_case_cans_sql_any_more():
@@ -652,3 +673,128 @@ async def test_run_eval_local_skips_the_dataset_and_uses_local_examples(monkeypa
     [named] = [m for m in logged if m.startswith("experiment: ")]
     assert named.startswith(f"experiment: {captured['experiment_prefix']}-")
     assert f"/{named.removeprefix('experiment: ')}.jsonl" in logged[-1]
+
+
+def _judged(content: str, name: str = "query_training_db") -> str:
+    return render_judge_prompt(
+        case("last_z2_ride").inputs(),
+        {"calls": [], "answer": "ok", "tool_results": [{"name": name, "content": content}]},
+    )
+
+
+# The row the analyst fetched in fresh-decision-92, in its column order: a wide row whose
+# positions the judge misread (power as HR and cadence).
+Z2_ROW = {
+    "workout_date": "2026-09-14",
+    "sport": "bike",
+    "title": "Z2 ride",
+    "actual_duration_sec": 5460,
+    "actual_tss": 58,
+    "actual_if": 0.62,
+    "normalized_power": 160,
+    "avg_power": 155,
+    "avg_hr": 132,
+    "avg_cadence": 88,
+    "feeling": 7,
+    "rpe": 4,
+    "comments": None,
+}
+
+
+def test_the_judge_sees_a_calendar_line_before_the_context():
+    text = render_judge_prompt(case("last_z2_ride").inputs(), {"calls": [], "answer": "ok"})
+    assert text.startswith(
+        "Calendar: today 2026-09-16 is a Wednesday. Weeks start Monday: 2026-08-17, "
+        "2026-08-24, 2026-08-31, 2026-09-07, 2026-09-14, 2026-09-21.\n\nAnalyst system prompt:\n"
+    )
+
+
+def test_the_judge_reads_sql_rows_as_column_value_lines():
+    served = sql_rows(Z2_ROW)
+    text = _judged(served)
+    assert "query_training_db:\n- workout_date: 2026-09-14; sport: bike; title: Z2 ride; " in text
+    assert "normalized_power: 160; avg_power: 155; avg_hr: 132" in text
+    assert "comments: null" in text
+    assert "row_count: 1; truncated: false" in text
+    assert served not in text
+
+
+def test_the_judge_keeps_the_empty_result_and_the_truncation_note():
+    assert "query_training_db:\nrow_count: 0; truncated: false" in _judged(SQL_ENVELOPE_EMPTY)
+    cut = json.dumps(
+        {
+            "columns": ["n", "tags"],
+            "rows": [[1, ["a", "b"]], [2, None]],
+            "row_count": 2,
+            "truncated": True,
+            "note": "result cut at 2 rows",
+        }
+    )
+    assert (
+        '- n: 1; tags: ["a", "b"]\n- n: 2; tags: null\n'
+        "row_count: 2; truncated: true; note: result cut at 2 rows"
+    ) in _judged(cut)
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        '{"error": "sql error: boom"}',
+        "not json",
+        "[1, 2]",
+        '{"columns": ["a", "b"], "rows": [[1]], "row_count": 1, "truncated": false}',
+        '{"columns": ["a"], "rows": "x", "row_count": 1, "truncated": false}',
+    ],
+)
+def test_the_judge_passes_anything_but_the_envelope_through(content):
+    assert f"query_training_db:\n{content}" in _judged(content)
+
+
+def test_other_tools_pass_through_even_when_shaped_like_the_envelope():
+    env = sql_rows({"a": 1})
+    assert f"get_activity:\n{env}" in _judged(env, name="get_activity")
+
+
+async def test_run_eval_records_the_judge_version_in_the_experiment_and_the_results_file(
+    monkeypatch, tmp_path
+):
+    from types import SimpleNamespace
+
+    monkeypatch.setenv("TRI_EVAL_DIR", str(tmp_path))
+    captured = _stub_langsmith(monkeypatch, analyze_run)
+    row = {
+        "run": SimpleNamespace(outputs={"answer": "ok"}, error=None),
+        "example": SimpleNamespace(id="e1", inputs={}, metadata={"case": "last_z2_ride"}),
+        "evaluation_results": {"results": []},
+    }
+
+    class OneRow(_FakeResults):
+        def __aiter__(self):
+            async def rows():
+                yield row
+
+            return rows()
+
+    async def fake_aevaluate(target, **kw):
+        captured.update(kw)
+        return OneRow()
+
+    monkeypatch.setattr(analyze_run, "aevaluate", fake_aevaluate)
+    models, _ = _recording_models()
+    settings = AnalyzeSettings(_env_file=None, langsmith_api_key="ls")
+    await analyze_run.run_eval(settings, models, log=lambda m: None)
+    assert captured["metadata"]["judge_version"] == JUDGE_VERSION == "2"
+    line = json.loads((tmp_path / "exp.jsonl").read_text().splitlines()[0])
+    assert line["metadata"] == captured["metadata"]
+
+
+def test_a_multi_line_text_value_keeps_its_row_on_one_line():
+    served = sql_rows(
+        {"workout_date": "2026-09-14", "description": "WU 15'\nMS 3x10'\r\nCD", "tss": 85}
+    )
+    text = _judged(served)
+    assert (
+        "query_training_db:\n"
+        "- workout_date: 2026-09-14; description: \"WU 15'\\nMS 3x10'\\r\\nCD\"; tss: 85\n"
+        "row_count: 1; truncated: false"
+    ) in text

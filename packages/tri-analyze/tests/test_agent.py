@@ -82,8 +82,8 @@ def test_a_new_context_changes_the_prompt_and_keeps_the_history():
     agent.invoke({"messages": [HumanMessage("one")]}, cfg("t"), context=CTX)
     later = athlete_context(today=date(2026, 9, 7))
     agent.invoke({"messages": [HumanMessage("two")]}, cfg("t"), context=later)
-    assert "Today is 2026-09-06." in model.received[0][0].content
-    assert "Today is 2026-09-07." in model.received[1][0].content
+    assert "Today is 2026-09-06 (Sun)." in model.received[0][0].content
+    assert "Today is 2026-09-07 (Mon)." in model.received[1][0].content
     assert [m.content for m in model.received[1][1:]] == ["one", "a", "two"]
     assert [m.content for m in agent.get_state(cfg("t")).values["messages"]] == [
         "one",

@@ -10,6 +10,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import date
 from typing import Any, Literal
 
+from tri_analyze.evals.zones import hr_zones, pace_zones, power_zones
 from tri_analyze.repo import AthleteContext
 
 TODAY = date(2026, 9, 16)
@@ -24,6 +25,9 @@ PROFILE: dict[str, Any] = {
     "lthr_bpm": 172,
     "max_hr_bpm": 188,
     "weight_kg": 74.0,
+    "hr_zones": hr_zones(172, 188),
+    "power_zones": power_zones(250),
+    "pace_zones": pace_zones(255, 100),
 }
 
 
