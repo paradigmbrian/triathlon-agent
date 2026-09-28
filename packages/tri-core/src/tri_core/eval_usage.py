@@ -5,6 +5,7 @@ the judge's are counted apart even when both run on the same model
 
 from __future__ import annotations
 
+import re
 import threading
 from collections.abc import Mapping
 from dataclasses import dataclass, fields
@@ -75,9 +76,24 @@ def counts_from(usage: Mapping[str, Any]) -> TokenCounts:
     )
 
 
+# What the API may wrap around a priced id: a provider prefix (`us.anthropic.`) before it, and a
+# snapshot date (`-20261001`, `@20261001`) or provider version (`-v1:0`) after it.
+_MODEL_ID = re.compile(r"^(?:[\w.]+\.)?(claude-[a-z0-9-]+?)(?:[-@]\d{8})?(?:-v\d+(?::\d+)?)?$")
+
+
+def price_for(model: str) -> Price | None:
+    """The price of `model`, by exact id or by the priced id inside a dated or provider-prefixed
+    one (the response's model id is priced, not the requested one). A different model that only
+    starts with a priced id (`claude-opus-5-5`) has no price."""
+    if model in PRICES:
+        return PRICES[model]
+    match = _MODEL_ID.match(model)
+    return PRICES.get(match.group(1)) if match else None
+
+
 def cost(model: str, counts: TokenCounts) -> float | None:
     """Estimated US$ for `counts` on `model`; None when the model has no price."""
-    price = PRICES.get(model)
+    price = price_for(model)
     if price is None:
         return None
     return (

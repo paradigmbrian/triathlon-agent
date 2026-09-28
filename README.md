@@ -124,8 +124,8 @@ TRI_MODEL_JUDGE=claude-sonnet-5 uv run tri-analyze eval --rescore .evals/<file>.
 
 The same flags work on every package's `eval`. A subset's experiment name ends in `-subset`, and
 its header reads `N of M examples (subset)`; it is never a gate. `--rescore` with `--failed-from`
-on the same file re-judges only the failures. Plans estimate a run from the latest `.evals/`
-file's `usage.total_cost` (see `CLAUDE.md`).
+on the same file re-judges only the failures. Plans estimate a full run from the latest full
+run's `.evals/` file (no `-subset` or `-rescore` in its name), `usage.total_cost` (see `CLAUDE.md`).
 
 ### First conversation
 

@@ -155,3 +155,14 @@ def test_the_record_names_the_models_and_sums_the_counts():
         "cost": 3.65,
     }
     assert record["total_cost"] == 3.65
+
+
+def test_a_dated_or_provider_prefixed_model_id_is_priced_as_its_base_model():
+    counts = TokenCounts(input=1_000_000, output=100_000)
+    base = cost("claude-opus-5", counts)
+    assert cost("claude-opus-5-20261001", counts) == base
+    assert cost("claude-opus-5@20261001", counts) == base
+    assert cost("anthropic.claude-opus-5", counts) == base
+    assert cost("us.anthropic.claude-opus-5-v1:0", counts) == base
+    # a different model that merely starts with a priced id is not that model
+    assert cost("claude-opus-5-5", counts) is None
