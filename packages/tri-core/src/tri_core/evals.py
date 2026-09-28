@@ -12,6 +12,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from langsmith import Client
 from langsmith.schemas import Example
 
 KEY_WIDTH = 26
@@ -38,10 +39,27 @@ def disable_network_sampling() -> None:
     `client=None` resolves to a process-wide cached client whose sample rate is fixed at
     construction); `get_env_var`'s cache is cleared so a value read earlier in this process can't
     shadow it."""
-    os.environ.setdefault("LANGSMITH_TRACING_SAMPLING_RATE", "0")
+    os.environ["LANGSMITH_TRACING_SAMPLING_RATE"] = "0"
     from langsmith import utils as ls_utils
 
     ls_utils.get_env_var.cache_clear()  # type: ignore[attr-defined]  # lru_cache on an overload
+
+
+# A closed local port: if anything in local mode still tried to send, it would fail on this
+# machine instead of reaching LangSmith.
+OFFLINE_API_URL = "http://127.0.0.1:9"
+
+
+def offline_client() -> Client:
+    """The LangSmith client a local run hands to `aevaluate`: no background batch thread (which
+    fetches `/info` on start), no `/info` lookup, every run sampled out, and a local URL."""
+    return Client(
+        api_url=OFFLINE_API_URL,
+        api_key="offline",
+        auto_batch_tracing=False,
+        info={},
+        tracing_sampling_rate=0.0,
+    )
 
 
 def local_examples(examples: list[dict[str, Any]]) -> list[Example]:

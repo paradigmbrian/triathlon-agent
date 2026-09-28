@@ -36,6 +36,7 @@ from tri_analyze.evals.target import Canned, athlete_from_inputs, make_target, s
 from tri_analyze.prompts.analyst import FEEDBACK_RULES, PROMPT_VERSION
 from tri_analyze.repo import AthleteContext
 from tri_core.db.sql_tool import make_query_tool
+from tri_core.evals import OFFLINE_API_URL
 from tri_core.llm import Role
 from tri_core.testing import ScriptedChatModel, tool_call
 
@@ -642,7 +643,7 @@ async def test_run_eval_local_skips_the_dataset_and_uses_local_examples(monkeypa
     settings = AnalyzeSettings(_env_file=None, langsmith_api_key=None)
     logged: list[str] = []
     await analyze_run.run_eval(settings, models, judge=False, local=True, log=logged.append)
-    assert captured["client"] is None
+    assert captured["client"].api_url == OFFLINE_API_URL
     assert captured["upload_results"] is False
     assert isinstance(captured["data"], list) and len(captured["data"]) == len(CASES)
     assert all(isinstance(e, Example) for e in captured["data"])

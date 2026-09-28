@@ -2,6 +2,7 @@ from langchain_core.messages import AIMessage
 from langsmith.schemas import Example
 
 import tri_wellness.evals.run as wellness_run
+from tri_core.evals import OFFLINE_API_URL
 from tri_core.llm import Role
 from tri_core.testing import ScriptedChatModel
 from tri_wellness.config import WellnessSettings
@@ -163,7 +164,7 @@ async def test_run_eval_local_skips_the_dataset_and_uses_local_examples(monkeypa
     models, _ = _recording_models()
     settings = WellnessSettings(_env_file=None, tri_athlete_sex="male", langsmith_api_key=None)
     await wellness_run.run_eval(settings, models, local=True, log=lambda m: None)
-    assert captured["client"] is None
+    assert captured["client"].api_url == OFFLINE_API_URL
     assert captured["upload_results"] is False
     assert isinstance(captured["data"], list) and len(captured["data"]) == len(CASES)
     assert all(isinstance(e, Example) for e in captured["data"])

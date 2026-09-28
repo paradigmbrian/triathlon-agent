@@ -17,6 +17,7 @@ dependencies = [
     "langchain-anthropic==1.7.1",             # tri_core.harness.agents
     "langgraph-checkpoint-postgres>=3.1,<4",  # tri_core.harness.persistence
     "anthropic>=1.4,<2",                      # tri_core.harness.turns
+    "langsmith>=0.12,<1",                     # tri_core.evals (local eval runs)
     "pytest>=8.3",             # only for tri_core.testing.fixtures
 ]
 

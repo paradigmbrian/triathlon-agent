@@ -21,6 +21,7 @@ from tri_coach.evals.target import classify, make_target, stub_tools
 from tri_coach.prompts.coach import CHECKIN_REQUEST, PROMPT_VERSION
 from tri_coach.tools.analyst import make_analyst_tool
 from tri_coach.tools.wellness import make_wellness_tool
+from tri_core.evals import OFFLINE_API_URL
 from tri_core.harness.agents import one_tool_call_at_a_time
 from tri_core.llm import Role
 from tri_core.testing import ScriptedChatModel, tool_call
@@ -354,7 +355,7 @@ async def test_run_eval_local_skips_the_dataset_and_uses_local_examples(monkeypa
     models, _ = _recording_models()
     settings = CoachSettings(_env_file=None, langsmith_api_key=None)
     await coach_run.run_eval(settings, models, judge=False, local=True, log=lambda m: None)
-    assert captured["client"] is None
+    assert captured["client"].api_url == OFFLINE_API_URL
     assert captured["upload_results"] is False
     assert isinstance(captured["data"], list) and len(captured["data"]) == len(CASES)
     assert all(isinstance(e, Example) for e in captured["data"])

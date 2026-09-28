@@ -14,6 +14,7 @@ from tri_core.evals import (
     errored,
     failure_lines,
     local_examples,
+    offline_client,
     pass_rates,
     record_rows,
     render_pass_rates,
@@ -63,7 +64,7 @@ async def run_eval(
 ) -> dict[str, float]:
     """`local=True` never talks to LangSmith: no dataset, traces or feedback are sent."""
     if local:
-        client: Client | None = None
+        client = offline_client()
         data: Any = local_examples(case_examples())
         disable_network_sampling()
     else:
@@ -72,7 +73,7 @@ async def run_eval(
         data = DATASET_NAME
     registry = load_registry(settings.tri_athlete_sex)
     experiment_prefix = (prefix or f"report-v{PROMPT_VERSION}") + ("-local" if local else "")
-    with tracing_context(enabled="local") if local else nullcontext():
+    with tracing_context(enabled="local", client=client) if local else nullcontext():
         results = await aevaluate(
             make_target(models(Role.LAB_REPORT), registry),
             data=data,

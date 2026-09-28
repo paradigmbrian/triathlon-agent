@@ -1,10 +1,12 @@
 import json
+import os
 import uuid
 from types import SimpleNamespace
 
 import pytest
 import requests
-from langsmith import aevaluate, tracing_context
+from langchain_core.messages import AIMessage
+from langsmith import aevaluate, run_trees, tracing_context
 from langsmith.schemas import Example
 
 from tri_core.evals import (
@@ -14,11 +16,13 @@ from tri_core.evals import (
     failure_lines,
     local_default,
     local_examples,
+    offline_client,
     pass_rates,
     record_rows,
     render_pass_rates,
     scored_counts,
 )
+from tri_core.testing import ScriptedChatModel
 
 
 def R(key, score):
@@ -156,25 +160,30 @@ def test_local_default_is_false_for_other_values(monkeypatch, value):
     assert local_default() is False
 
 
+# langsmith's own: ast.Str inside its evaluator key extraction, and the upload_results beta notice
+@pytest.mark.filterwarnings("ignore:ast.Str is deprecated:DeprecationWarning")
+@pytest.mark.filterwarnings("ignore:'upload_results' parameter is in beta")
 async def test_aevaluate_in_local_mode_makes_no_network_call(monkeypatch):
-    """A real aevaluate() over local Examples, upload_results=False, client=None, inside
-    tracing_context(enabled="local"): it must complete and score both rows without ever
-    calling requests.Session.request (the transport every LangSmith Client call goes through).
-
-    Plain client=None/upload_results=False/tracing_context(enabled="local") is not enough: each
-    example's target run is still traced through langsmith's own hard-coded
-    tracing_context(enabled=True) (see disable_network_sampling's docstring) and queued for a
-    real POST unless disable_network_sampling() -- the same call run_eval makes in local mode --
-    also runs first."""
+    """A real aevaluate() the way run_eval runs it in local mode (the offline client, in-memory
+    Examples, upload_results=False, a local tracing context), with a target that makes a real
+    LangChain model call so LangChain's own tracer is exercised too. Every request attempt is
+    recorded (not raised: LangSmith swallows errors from its background thread); the offline
+    client is flushed before asserting none, and langsmith's process-wide client must never
+    have been created."""
     disable_network_sampling()
+    monkeypatch.setattr(run_trees, "_CLIENT", None)
+    attempted: list[tuple] = []
 
     def refuse(self, *a, **kw):
+        attempted.append(a[:2])
         raise AssertionError(f"unexpected network call: {a[:2]}")
 
     monkeypatch.setattr(requests.Session, "request", refuse)
+    model = ScriptedChatModel(script=[AIMessage(content="2"), AIMessage(content="4")])
 
     async def target(inputs: dict) -> dict:
-        return {"answer": inputs["n"] * 2}
+        reply = await model.ainvoke(f"double {inputs['n']}")
+        return {"answer": int(str(reply.content))}
 
     def doubled(run, example) -> dict:
         return {
@@ -182,18 +191,35 @@ async def test_aevaluate_in_local_mode_makes_no_network_call(monkeypatch):
             "score": 1 if run.outputs["answer"] == example.inputs["n"] * 2 else 0,
         }
 
+    client = offline_client()
     data = local_examples([{"inputs": {"n": 1}}, {"inputs": {"n": 2}}])
-    with tracing_context(enabled="local"):
+    with tracing_context(enabled="local", client=client):
         results = await aevaluate(
             target,
             data=data,
             evaluators=[doubled],
-            client=None,
+            client=client,
             upload_results=False,
             experiment_prefix="local-mode-no-network-test",
+            max_concurrency=0,
         )
         rows = [row async for row in results]
+    client.flush(timeout=5)
+    assert attempted == []
+    # nothing fell back to langsmith's process-wide client (which starts a sender thread)
+    assert run_trees._CLIENT is None
     assert len(rows) == 2
     for row in rows:
         scores = [r.score for r in row["evaluation_results"]["results"]]
         assert scores == [1]
+
+
+def test_the_offline_client_never_points_at_langsmith():
+    client = offline_client()
+    assert "langchain.com" not in client.api_url and client.tracing_queue is None
+
+
+def test_local_mode_overrides_a_sampling_rate_already_set(monkeypatch):
+    monkeypatch.setenv("LANGSMITH_TRACING_SAMPLING_RATE", "1")
+    disable_network_sampling()
+    assert os.environ["LANGSMITH_TRACING_SAMPLING_RATE"] == "0"
