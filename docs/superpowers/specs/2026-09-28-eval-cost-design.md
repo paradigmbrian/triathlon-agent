@@ -10,7 +10,7 @@
 |---|---|---|
 | Goal | Cheaper iteration. Full gate runs keep the same target model, the same judge and every case (chosen 2026-09-28). | The gate is what decides a change, so its signal is not traded for cost. |
 | Levers | Usage and cost record, `--rescore`, case subsets, cost lines in plans (chosen 2026-09-28). | Batches API, a monthly cap and a `--quick` profile are left out (§8). |
-| Shape | Shared helpers in `tri_core.evals`, with thin wiring in each package's `evals/run.py` and `cli.py` (chosen 2026-09-28). | Follows how local results and `--local` landed. Merging the five runners is a refactor that isn't needed for this. |
+| Shape | Shared helpers in `tri_core` (`eval_usage.py` for usage and prices, `eval_select.py` for case selection and rescore, plus a shared run tail in `evals.py`), with thin wiring in each package's `evals/run.py` and `cli.py` (chosen 2026-09-28). | Follows how local results and `--local` landed. Merging the five runners is a refactor that isn't needed for this. |
 | Unknown model price | Print the tokens and show the cost as `?`. Never fail the run (chosen 2026-09-28). | A new fallback model must not break an eval. |
 | Asking before runs | Claude asks before **every** eval run, including rescores and subsets (chosen 2026-09-28). | The audit found a run Claude started from a handoff note. The rule is simplest when it has no exceptions. |
 
@@ -28,24 +28,24 @@
 
 ### 3.1 Collector
 
-- `tri_core.evals.UsageByRole` is a LangChain `BaseCallbackHandler`. `on_chat_model_start` maps `run_id` to the `tri_role` from the callback's metadata (`"?"` when absent), and `on_llm_end` adds that response's `usage_metadata` under the role and the response's model name. Four counts are summed: input, output, cache read and cache write (from `input_token_details`). A response with no usage adds nothing. A lock guards the sums, as in the langchain-core handler.
-- `with_usage(models: ModelProvider, usage: UsageByRole) -> ModelProvider` wraps a provider so every model it returns has `usage` in its `callbacks`. Each `run_eval` wraps its `models` argument once, before building the target and the judge. `fallbacks_of` copies the primary's `callbacks` onto the fallbacks it builds, so a fallback's tokens are counted under the same role.
+- `tri_core.eval_usage.UsageByRole` collects the sums, and hands out one LangChain callback handler per role (`usage.handler(role)`). Each handler's `on_llm_end` adds every response's `usage_metadata` under its role and the response's model name. The role comes from which handler fired, not from model metadata, so fakes in tests are counted too. Four counts are summed: uncached input, output, cache read and cache write. langchain-anthropic's `input_tokens` already includes cache reads and writes, and cache writes arrive either as `cache_creation` or split into `ephemeral_5m_input_tokens` / `ephemeral_1h_input_tokens`, so the uncached count is the total minus both. A response with no usage adds nothing. A lock guards the sums.
+- `with_usage(models: ModelProvider, usage: UsageByRole) -> ModelProvider` wraps a provider so every model it returns has the handler for the role it was asked for in its `callbacks`. Each `run_eval` wraps its `models` argument once, before building the target and the judge. A model object handed out for two roles reports under the last one (`make_model` builds a new model per call). `fallbacks_of` copies the primary's `callbacks` onto the fallbacks it builds, so a fallback's tokens are counted under the same role.
 
 ### 3.2 Pricing
 
-- `tri_core.evals.PRICES: dict[str, Price]` has entries for `claude-opus-5`, `claude-sonnet-5` and each model in the registry's fallback chains. A `Price` is input and output $ per MTok. Cache writes are costed at 1.25× the input rate and cache reads at 0.1×.
+- `tri_core.eval_usage.PRICES: dict[str, Price]` has entries for `claude-opus-5`, `claude-opus-4-8` (the fallback chain), `claude-sonnet-5` and `claude-haiku-4-5`. A `Price` is input and output $ per MTok. Cache writes are costed at 1.25× the input rate and cache reads at 0.1×.
 - `cost(model, counts) -> float | None` returns `None` for a model missing from `PRICES`.
 
 ### 3.3 Output
 
 - After the pass rates, each run logs one line: `usage: analyst 412k in / 38k out (cache read 290k) $2.41 · judge 96k in / 9k out $0.71 · total $3.12`. Roles come in first-use order. A role with an unknown model shows `$?`, and so does the total. A run with no model calls (a rescore with no judge) logs `usage: no model calls`.
-- `record_rows` writes the same figures into each line's `metadata.usage`: per role, the model, the four counts and the cost (or `null`). All five runners now pass `metadata`: `prompt_version` where the package has one, plus `eval_metadata(...)` and `usage`.
+- `record_rows` writes the same figures into each line's top-level `usage` key: per role, the model, the four counts and the cost (or `null`), plus `total_cost`. `usage` sits beside `metadata`, not inside it, so `metadata` stays equal to what the experiment sent LangSmith. All five runners now pass `metadata`: `prompt_version` where the package has one, plus `eval_metadata(...)`. A shared `tri_core.evals.finish_run` logs the experiment, pass rates, errored count, failed checks and usage, then writes the file and logs its path last.
 
 ## 4. `--rescore <results.jsonl>`
 
 - **Scope:** all five `eval` commands. Rescore re-runs the package's evaluators (code checks, plus the judge where the package has one) over the file's saved outputs. It makes no target calls, doesn't seed or touch a database, and never talks to LangSmith. It is always local, whatever `--local` or `TRI_EVAL_LOCAL` say.
-- **Shared loop:** `tri_core.evals.rescore(rows, evaluators, *, reference_for, log) -> list[dict]` calls each evaluator on `(inputs, outputs, reference_outputs)` the way `aevaluate` does, awaiting async evaluators, with two rows at a time. It returns rows in the shape `pass_rates`, `failure_lines` and `record_rows` already read.
-- **Reference outputs:** from now on `record_rows` writes `reference_outputs` on every line, and rescore uses the file's value when it's present. For an older file, `reference_for(case)` looks the case up by name in the package's current cases. If the case is gone, the row is skipped and listed as `skipped: <case> (no longer a case)`.
+- **Shared loop:** `tri_core.eval_select.rescore_rows(lines, evaluators, *, lookup, cases, log)` wraps each evaluator with langsmith's `run_evaluator` and calls `aevaluate_run(run, example)` on each line, so arguments are mapped the way `aevaluate` maps them. It awaits async evaluators, with tracing off and awaiting async evaluators, with two rows at a time. It returns rows in the shape `pass_rates`, `failure_lines` and `record_rows` already read.
+- **Reference outputs:** from now on `record_rows` writes `reference_outputs` on every line whose example has outputs (every real `Example`), and rescore uses the file's value when it's present. For an older file, `lookup(case)` returns the case's current example from the package's cases. If the case is gone, the row is skipped and listed as `skipped: <case> (no longer a case)`.
 - **Inputs:** rescore uses the file's inputs, because those produced the saved outputs. When a case's current inputs differ, it logs `<package>: <case> inputs changed since this file` once per case and scores anyway.
 - **Errored rows:** a row with an `error` and no outputs is counted and skipped, and logged as `N errored in the source, not rescored`.
 - **Output:** the experiment is named `<source experiment>-rescore-<8 hex>`, with the source name taken from the file name. Pass rates, failed checks, the usage line (judge only) and a results file follow as usual. The metadata copies the source's `prompt_version`, `model` and `effort`, adds `rescored_from: <path>`, and sets the current `judge_model` and `judge_version`.
@@ -57,7 +57,7 @@
   - `--cases a,b,c` takes case names.
   - `--failed-from <results.jsonl>` takes the cases in that file with any score below 1 or an error.
   - Given together, the case set is their union.
-- **Selection:** `tri_core.evals.select_cases(requested: set[str], known: list[str]) -> list[str]` returns the known names in their original order. It raises `UnknownCases(names)` for requested names that aren't known.
+- **Selection:** `tri_core.eval_select.select_cases(requested: set[str], known: Sequence[str]) -> list[str]` returns the known names in their original order. It raises `EvalArgsError` naming requested names that aren't known. `selection(...)` turns the three CLI options into a `Selection(cases, rescore)`, and raises `NothingToRun` for an empty `--failed-from`. For `--rescore`, the known names are the file's cases.
 - **Errors:**
   - An unknown name exits 2 with `unknown case(s): x, y; cases are: …`.
   - A `--failed-from` file with nothing failed exits 0 with `nothing failed in <file>`, before any model is built.
@@ -67,12 +67,12 @@
   - The experiment prefix gets `-subset`.
   - The metadata records `cases: [...]`.
   - `render_pass_rates` takes an optional `total` and prints `pass rate over 3 of 12 examples (subset)`.
-- **Planning case names:** `build_examples` sets `metadata.case` to `<goal_type>-<phase>`. If two presets share a goal type, the preset's index is added (`<goal_type><i>-<phase>`), so names stay unique; a test asserts they are. A LangSmith subset of planning needs one `--recreate-dataset` run after this lands, so the stored examples carry the name. The planning README says so.
+- **Planning case names:** `build_examples` sets `metadata.case` to `<goal_type>-<phase>`. The four presets have distinct goal types, so all 23 names are unique (checked 2026-09-28), and a test asserts it. A LangSmith subset of planning needs one `--recreate-dataset` run after this lands, so the stored examples carry the name. The planning README says so.
 
 ## 6. Plan cost lines
 
 - **Project `CLAUDE.md`:** a new file at the repo root holding only an "Eval runs" section:
-  - A spec or plan that calls for eval runs lists each one as its command, with the case count and an estimated $. The estimate comes from `metadata.usage` in the latest `.evals/` file for that eval, or is marked "no baseline".
+  - A spec or plan that calls for eval runs lists each one as its command, with the case count and an estimated $. The estimate comes from the `usage.total_cost` in the latest `.evals/` file for that eval, or is marked "no baseline".
   - Pick the cheapest run that answers the question: `--rescore` for a judge-only change, then `--cases` / `--failed-from` while iterating. A full run is only for a gate.
   - Claude asks before starting any `tri-* eval` run and any `pytest --live`, even when a plan, spec or handoff note lists it, and gives the estimate when it asks.
 - **README:** an "Evals and cost" subsection under Run covers `--rescore`, `--cases`, `--failed-from`, the usage line, and `TRI_MODEL_JUDGE=claude-sonnet-5` for cheap iteration runs. That override already works through the role registry, so it needs no new code.
@@ -98,8 +98,8 @@
   - `cost` is exact for known models and `None` for an unknown one.
   - The usage line is rendered for known and unknown prices and for no calls.
   - `select_cases` covers order, an unknown name and the union.
-  - `rescore` covers sync and async evaluators, a reference from the file vs. from `reference_for`, a missing case, an errored row, and the inputs-changed warning.
-  - `record_rows` writes `reference_outputs` and `metadata.usage`.
+  - `rescore_rows` covers sync and async evaluators, a reference from the file vs. from `lookup`, a missing case, an errored row, and the inputs-changed warning.
+  - `record_rows` writes `reference_outputs` and `usage`, and leaves both out when there are none, so existing results-file tests hold.
 - **Each package:**
   - The CLI passes `--rescore`, `--cases` and `--failed-from` to `run_eval`, and exits 2 on bad combinations and unknown names.
   - `run_eval` on stub models logs a usage line and runs only the selected cases under a `-subset` name.
