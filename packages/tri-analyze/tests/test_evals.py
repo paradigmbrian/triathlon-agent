@@ -648,3 +648,7 @@ async def test_run_eval_local_skips_the_dataset_and_uses_local_examples(monkeypa
     assert isinstance(captured["data"], list) and len(captured["data"]) == len(CASES)
     assert all(isinstance(e, Example) for e in captured["data"])
     assert captured["experiment_prefix"].endswith("-local")
+    # langsmith hands back a random name when nothing is uploaded; ours keeps the prefix
+    [named] = [m for m in logged if m.startswith("experiment: ")]
+    assert named.startswith(f"experiment: {captured['experiment_prefix']}-")
+    assert f"/{named.removeprefix('experiment: ')}.jsonl" in logged[-1]

@@ -24,6 +24,7 @@ from tri_core.evals import (
     errored,
     failure_lines,
     local_examples,
+    local_experiment_name,
     offline_client,
     pass_rates,
     record_rows,
@@ -95,12 +96,13 @@ async def run_eval(
     dict_rows = [dict(r) for r in rows]
     rates = pass_rates(dict_rows)
     errors = errored(dict_rows)
-    log(f"experiment: {results.experiment_name}")
+    experiment = local_experiment_name(experiment_prefix) if local else results.experiment_name
+    log(f"experiment: {experiment}")
     log(render_pass_rates(rates, scored_counts(dict_rows), len(rows), version=PROMPT_VERSION))
     if errors:
         log(f"{errors} errored")
     failures = failure_lines(dict_rows)
     if failures:
         log("failed checks:\n" + "\n".join(failures))
-    log(f"results: {record_rows(dict_rows, results.experiment_name)}")
+    log(f"results: {record_rows(dict_rows, experiment)}")
     return rates

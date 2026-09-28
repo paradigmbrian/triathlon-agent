@@ -16,6 +16,7 @@ from tri_core.evals import (
     failure_lines,
     local_default,
     local_examples,
+    local_experiment_name,
     offline_client,
     pass_rates,
     record_rows,
@@ -223,3 +224,9 @@ def test_local_mode_overrides_a_sampling_rate_already_set(monkeypatch):
     monkeypatch.setenv("LANGSMITH_TRACING_SAMPLING_RATE", "1")
     disable_network_sampling()
     assert os.environ["LANGSMITH_TRACING_SAMPLING_RATE"] == "0"
+
+
+def test_a_local_experiment_name_keeps_the_prefix():
+    a, b = local_experiment_name("analyst-v2-local"), local_experiment_name("analyst-v2-local")
+    assert a.startswith("analyst-v2-local-") and len(a) == len("analyst-v2-local-") + 8
+    assert a != b

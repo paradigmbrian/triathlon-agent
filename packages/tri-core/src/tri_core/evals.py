@@ -62,6 +62,12 @@ def offline_client() -> Client:
     )
 
 
+def local_experiment_name(prefix: str) -> str:
+    """The name a local run logs and writes its results file under: with nothing uploaded,
+    `ExperimentResults.experiment_name` is a random name that drops the prefix."""
+    return f"{prefix}-{uuid.uuid4().hex[:8]}"
+
+
 def local_examples(examples: list[dict[str, Any]]) -> list[Example]:
     """One in-memory `Example` per dict (as built by a package's `case_examples`), all under
     `LOCAL_DATASET_ID`, for an `aevaluate()` run that never talks to LangSmith."""
