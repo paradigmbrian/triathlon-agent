@@ -153,6 +153,23 @@ def test_eval_refuses_the_athletes_database(monkeypatch):
     assert result.exit_code == 2 and "athlete's database" in result.output
 
 
+def test_eval_exits_2_when_the_eval_database_is_in_use(monkeypatch):
+    monkeypatch.setattr(
+        cli,
+        "get_analyze_settings",
+        lambda: AnalyzeSettings(_env_file=None, anthropic_api_key="k", langsmith_api_key="ls"),
+    )
+
+    async def run_eval(settings, model, **kw):
+        from tri_analyze.evals.seed import EvalDatabaseInUse
+
+        raise EvalDatabaseInUse("x")
+
+    monkeypatch.setattr("tri_analyze.evals.run.run_eval", run_eval)
+    result = runner.invoke(app, ["eval"])
+    assert result.exit_code == 2 and "eval database" in result.output
+
+
 def test_eval_passes_the_eval_database_through(monkeypatch):
     monkeypatch.setattr(
         cli,

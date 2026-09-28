@@ -12,7 +12,12 @@ from langsmith import Client, aevaluate
 from tri_analyze.config import AnalyzeSettings
 from tri_analyze.evals.cases import CASES
 from tri_analyze.evals.evaluators import make_judge, pulls_splits, states_window, uses_sql
-from tri_analyze.evals.seed import clear_database, seed_database
+from tri_analyze.evals.seed import (
+    AthletesDatabaseRefused,
+    clear_database,
+    seed_database,
+    verify_readable,
+)
 from tri_analyze.evals.target import make_target
 from tri_analyze.prompts.analyst import PROMPT_VERSION
 from tri_core.config import reader_url
@@ -58,7 +63,9 @@ async def run_eval(
     afterwards, pass or fail."""
     url = eval_db_url or settings.test_database_url
     if url == settings.database_url:
-        raise ValueError("refusing to seed the athlete's database; use the test database")
+        raise AthletesDatabaseRefused(
+            "refusing to seed the athlete's database; use the test database"
+        )
     client = Client(api_key=settings.langsmith_api_key)
     ensure_dataset(client, recreate=recreate)
     evaluators: list[Any] = [uses_sql, pulls_splits, states_window]
@@ -66,6 +73,7 @@ async def run_eval(
         evaluators.append(make_judge(models(Role.JUDGE)))
     seed_database(url)
     try:
+        verify_readable(url)
         results = await aevaluate(
             make_target(models(Role.ANALYST), reader_url(url)),
             data=DATASET_NAME,
@@ -80,7 +88,10 @@ async def run_eval(
         )
         rows: list[Any] = [row async for row in results]
     finally:
-        clear_database(url)
+        try:
+            clear_database(url)
+        except Exception as exc:
+            log(f"could not empty the eval database: {type(exc).__name__}: {exc}")
     dict_rows = [dict(r) for r in rows]
     rates = pass_rates(dict_rows)
     errors = errored(dict_rows)

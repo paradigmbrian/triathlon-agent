@@ -98,8 +98,9 @@ uv run tri-analyze eval [--prefix P] [--recreate-dataset] [--eval-db URL]   # th
 
 `--no-live` binds only the database tool. Exit 2 when `ANTHROPIC_API_KEY` is unset or the
 database is unreachable. A failed MCP server is logged and skipped. `eval` exits 2 when
-`LANGSMITH_API_KEY` or `ANTHROPIC_API_KEY` is unset, 1 when any evaluator is below 100% or
-any example errored, else 0.
+`LANGSMITH_API_KEY` or `ANTHROPIC_API_KEY` is unset, or when the eval database is
+unreachable, unreadable, or refused; 1 when any evaluator is below 100% or any example
+errored, else 0.
 
 ## Layout
 
@@ -148,10 +149,12 @@ description.
 The analyst's SQL runs for real: `tri-analyze eval` seeds one synthetic athlete history
 (`evals/seed.py`: a June run block, a triathlon build from July with a recovery week, and the
 cases' own week of 2026-09-07) into the test database, binds the real `query_training_db` as
-`tri_reader`, and empties the tables when it finishes. `--eval-db URL` points it at another
-empty database; it refuses the athlete's database and any database holding rows it did not
-write. Garmin and TrainingPeaks tools stay canned. The judge accepts a derived number when the
-answer shows the arithmetic. Needs Postgres, `LANGSMITH_API_KEY` and `ANTHROPIC_API_KEY`.
+`tri_reader`, and empties the tables when it finishes. `--eval-db URL` points it at an empty
+database with the migrations applied (including 010's tri_reader grants); it refuses the
+athlete's database and any database holding rows it did not write. A run that is killed leaves
+the seeded rows in the test database until the next eval run replaces them. Garmin and
+TrainingPeaks tools stay canned. The judge accepts a derived number when the answer shows the
+arithmetic. Needs Postgres, `LANGSMITH_API_KEY` and `ANTHROPIC_API_KEY`.
 
 Today is fixed at 2026-09-16.
 

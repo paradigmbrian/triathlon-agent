@@ -432,7 +432,7 @@ class _FakeResults:
 
 
 def _stub_langsmith(monkeypatch, run_module) -> dict:
-    captured: dict = {"seeded": [], "cleared": []}
+    captured: dict = {"seeded": [], "cleared": [], "verified": []}
 
     async def fake_aevaluate(target, **kw):
         captured.update(kw)
@@ -442,6 +442,7 @@ def _stub_langsmith(monkeypatch, run_module) -> dict:
     monkeypatch.setattr(run_module, "aevaluate", fake_aevaluate)
     monkeypatch.setattr(run_module, "seed_database", captured["seeded"].append)
     monkeypatch.setattr(run_module, "clear_database", captured["cleared"].append)
+    monkeypatch.setattr(run_module, "verify_readable", captured["verified"].append)
     return captured
 
 
@@ -516,6 +517,7 @@ async def test_run_eval_seeds_the_test_database_and_clears_it_after(monkeypatch)
     await analyze_run.run_eval(settings, models, judge=False, log=lambda m: None)
     assert captured["seeded"] == [settings.test_database_url]
     assert captured["cleared"] == [settings.test_database_url]
+    assert captured["verified"] == [settings.test_database_url]
 
 
 async def test_run_eval_clears_even_when_the_run_fails(monkeypatch):
@@ -530,6 +532,24 @@ async def test_run_eval_clears_even_when_the_run_fails(monkeypatch):
     with pytest.raises(RuntimeError):
         await analyze_run.run_eval(settings, models, judge=False, log=lambda m: None)
     assert captured["cleared"] == [settings.test_database_url]
+
+
+async def test_run_eval_logs_but_does_not_raise_when_clearing_fails(monkeypatch):
+    _stub_langsmith(monkeypatch, analyze_run)
+
+    def boom(url):
+        raise psycopg.OperationalError("connection reset")
+
+    monkeypatch.setattr(analyze_run, "clear_database", boom)
+    models, _ = _recording_models()
+    settings = AnalyzeSettings(_env_file=None, langsmith_api_key="ls")
+    logged: list[str] = []
+    rates, errors = await analyze_run.run_eval(settings, models, judge=False, log=logged.append)
+    assert (rates, errors) == ({}, 0)
+    assert any(
+        "could not empty the eval database: OperationalError: connection reset" in line
+        for line in logged
+    )
 
 
 async def test_run_eval_refuses_the_athletes_database(monkeypatch):

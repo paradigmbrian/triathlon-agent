@@ -24,6 +24,7 @@ from tri_analyze.evals.cases import (
     WEEK_DAYS,
     Z2_RIDE,
 )
+from tri_core.config import reader_url
 from tri_core.db.connection import connect
 from tri_core.db.models import AthleteProfileRow, DailyMetricsRow, GarminActivityRow, WorkoutRow
 from tri_core.db.repo import (
@@ -34,6 +35,7 @@ from tri_core.db.repo import (
     upsert_garmin_activities,
     upsert_workouts,
 )
+from tri_core.db.sql_tool import run_readonly_query
 
 EVAL_ID = "eval"
 SEEDED_TABLES = ("garmin_activities", "workouts", "daily_metrics", "athlete_profile")
@@ -115,6 +117,14 @@ CASE_WEEK_ROWS: list[tuple[str, dict[str, Any]]] = [
 
 class EvalDatabaseInUse(RuntimeError):
     """The eval database holds rows the eval did not write."""
+
+
+class EvalDatabaseUnreadable(RuntimeError):
+    """The tri_reader role could not read back the seeded rows."""
+
+
+class AthletesDatabaseRefused(ValueError):
+    """The eval was asked to seed the athlete's own database."""
 
 
 def workout_row(r: dict[str, Any]) -> WorkoutRow:
@@ -268,15 +278,42 @@ def _activities(rows: list[dict[str, Any]]) -> list[tuple[GarminActivityRow, str
 
 
 def _refuse_foreign_rows(conn: Conn) -> None:
+    prefix = f"{EVAL_ID}-%"
     foreign = conn.execute(
         "select (select count(*) from workouts where tp_workout_id not like %s) "
-        "+ (select count(*) from athlete_profile where tp_athlete_id is distinct from %s) as n",
-        (f"{EVAL_ID}-%", EVAL_ID),
+        "+ (select count(*) from athlete_profile where tp_athlete_id is distinct from %s) "
+        "+ (select count(*) from garmin_activities "
+        "     where tp_workout_id is null or tp_workout_id not like %s) "
+        "+ (case when exists (select 1 from athlete_profile where tp_athlete_id = %s) "
+        "        then 0 else (select count(*) from daily_metrics) end) as n",
+        (prefix, EVAL_ID, prefix, EVAL_ID),
     ).fetchone()
     if foreign and foreign["n"]:
         raise EvalDatabaseInUse(
-            "the eval database holds workouts or a profile the eval did not write; refusing to "
-            "replace them (use the test database, or an empty one with --eval-db)"
+            "the eval database holds workouts, garmin activities, daily metrics, or a profile "
+            "the eval did not write; refusing to replace them (use the test database, or an "
+            "empty one with --eval-db)"
+        )
+
+
+def verify_readable(url: str) -> None:
+    """Raise EvalDatabaseUnreadable unless tri_reader can read back exactly the seeded workouts.
+
+    `run_readonly_query` never raises for SQL problems, so a misconfigured reader (migration
+    010 not applied, wrong grants, wrong password) would otherwise score the eval with no data
+    instead of failing loudly."""
+    expected = len(workouts())
+    result = run_readonly_query(reader_url(url), "select count(*) from workouts")
+    if "error" in result:
+        raise EvalDatabaseUnreadable(
+            "the reader could not read the seeded rows; check migration 010's tri_reader "
+            f"grants/password: {result['error']}"
+        )
+    seen = result["rows"][0][0]
+    if seen != expected:
+        raise EvalDatabaseUnreadable(
+            "the reader could not read the seeded rows; check migration 010's tri_reader "
+            f"grants/password: expected {expected} workouts, the reader saw {seen}"
         )
 
 

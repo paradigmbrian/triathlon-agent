@@ -153,7 +153,11 @@ async def _eval(*, prefix: str | None, recreate: bool, eval_db: str | None) -> i
     import psycopg
 
     from tri_analyze.evals.run import run_eval
-    from tri_analyze.evals.seed import EvalDatabaseInUse
+    from tri_analyze.evals.seed import (
+        AthletesDatabaseRefused,
+        EvalDatabaseInUse,
+        EvalDatabaseUnreadable,
+    )
     from tri_core.llm import make_model
 
     settings = get_analyze_settings()
@@ -175,7 +179,12 @@ async def _eval(*, prefix: str | None, recreate: bool, eval_db: str | None) -> i
             log=lambda m: _out(m + "\n"),
             eval_db_url=eval_db,
         )
-    except (psycopg.OperationalError, EvalDatabaseInUse, ValueError) as exc:
+    except (
+        psycopg.OperationalError,
+        EvalDatabaseInUse,
+        EvalDatabaseUnreadable,
+        AthletesDatabaseRefused,
+    ) as exc:
         console.print(f"eval database: {exc}", style="red")
         return 2
     return 0 if rates and errors == 0 and all(r == 1.0 for r in rates.values()) else 1

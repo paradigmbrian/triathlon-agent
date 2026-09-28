@@ -108,3 +108,50 @@ def test_seeding_refuses_a_database_with_rows_it_did_not_write():
         with connect(url) as conn:
             conn.execute("delete from workouts where tp_workout_id = 'real-1'")
             conn.commit()
+
+
+@pytest.mark.db
+def test_seeding_refuses_a_database_with_a_foreign_garmin_activity():
+    url = _url()
+    with connect(url) as conn:
+        conn.execute(
+            "insert into garmin_activities (id, sport, start_time_local, raw) "
+            "values ('real-activity', 'run', '2026-09-01 07:00', '{}')"
+        )
+        conn.commit()
+    try:
+        with pytest.raises(seed.EvalDatabaseInUse):
+            seed.seed_database(url)
+        with pytest.raises(seed.EvalDatabaseInUse):
+            seed.clear_database(url)
+    finally:
+        with connect(url) as conn:
+            conn.execute("delete from garmin_activities where id = 'real-activity'")
+            conn.commit()
+
+
+@pytest.mark.db
+def test_seeding_refuses_a_database_with_daily_metrics_and_no_eval_profile():
+    url = _url()
+    with connect(url) as conn:
+        conn.execute("insert into daily_metrics (metric_date, tss_day) values ('2026-09-01', 50)")
+        conn.commit()
+    try:
+        with pytest.raises(seed.EvalDatabaseInUse):
+            seed.seed_database(url)
+        with pytest.raises(seed.EvalDatabaseInUse):
+            seed.clear_database(url)
+    finally:
+        with connect(url) as conn:
+            conn.execute("delete from daily_metrics where metric_date = '2026-09-01'")
+            conn.commit()
+
+
+@pytest.mark.db
+def test_verify_readable_passes_once_seeded():
+    url = _url()
+    try:
+        seed.seed_database(url)
+        seed.verify_readable(url)  # tri_reader sees exactly the seeded workouts; does not raise
+    finally:
+        seed.clear_database(url)
