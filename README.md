@@ -109,6 +109,10 @@ line, and writes the same figures to the `usage` key of its `.evals/` file:
 usage: analyst 400k in / 40k out (cache read 300k) $1.65 · judge 96k in / 8.0k out $0.68 · total $2.33
 ```
 
+Costs come from the price table in `tri_core.eval_usage` (`PRICES`, dated by `PRICES_AS_OF`).
+Re-check it against Anthropic's pricing page when the models in use change. A model missing from
+the table shows `$?`.
+
 There are cheaper ways to check a change before the full run that gates it:
 
 ```bash

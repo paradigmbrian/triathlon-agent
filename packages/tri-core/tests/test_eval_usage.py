@@ -46,7 +46,7 @@ def test_counts_from_takes_cache_tokens_out_of_the_input_total():
                 "ephemeral_1h_input_tokens": 50,
             },
         }
-    ) == TokenCounts(input=750, cache_write=250)
+    ) == TokenCounts(input=750, cache_write=200, cache_write_1h=50)
     assert counts_from({"input_tokens": 10, "output_tokens": 2}) == TokenCounts(input=10, output=2)
 
 
@@ -56,6 +56,10 @@ def test_cost_prices_each_kind_of_token():
     )
     assert cost("claude-opus-5", every) == pytest.approx(5 + 25 + 0.5 + 6.25)
     assert cost("claude-sonnet-5", TokenCounts(input=2_000_000)) == pytest.approx(4.0)
+    # a 1-hour write costs 2x the input rate, a 5-minute write 1.25x
+    assert cost("claude-opus-5", TokenCounts(cache_write_1h=1_000_000)) == pytest.approx(10.0)
+    assert cost("claude-haiku-4-5", TokenCounts(cache_write=1_000_000)) == pytest.approx(1.25)
+    assert cost("claude-unknown-9", TokenCounts(cache_write_1h=1)) is None
     assert cost("claude-unknown-9", every) is None
 
 
@@ -124,6 +128,13 @@ def test_the_usage_line_splits_roles_and_totals():
     )
 
 
+def test_the_usage_line_counts_one_hour_writes_as_input():
+    usage = UsageByRole()
+    usage.add("coach", "claude-opus-5", TokenCounts(input=10_000, cache_write_1h=20_000))
+    # 30k in: 10k uncached + 20k 1-hour writes; $0.05 + $0.20
+    assert render_usage(usage) == "usage: coach 30k in / 0 out $0.25 · total $0.25"
+
+
 def test_an_unknown_model_shows_a_question_mark_and_so_does_the_total():
     usage = UsageByRole()
     usage.add("judge", "claude-next-9", TokenCounts(input=1000, output=10))
@@ -152,6 +163,7 @@ def test_the_record_names_the_models_and_sums_the_counts():
         "output": 40_000,
         "cache_read": 300_000,
         "cache_write": 0,
+        "cache_write_1h": 0,
         "cost": 3.65,
     }
     assert record["total_cost"] == 3.65

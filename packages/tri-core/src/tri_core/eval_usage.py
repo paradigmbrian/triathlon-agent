@@ -18,7 +18,8 @@ from langchain_core.outputs import ChatGeneration, LLMResult
 
 from tri_core.llm import ModelProvider, Role
 
-CACHE_WRITE_FACTOR = 1.25
+CACHE_WRITE_FACTOR = 1.25  # 5-minute TTL, and a write that arrives without a TTL
+CACHE_WRITE_1H_FACTOR = 2.0
 CACHE_READ_FACTOR = 0.1
 
 
@@ -30,7 +31,9 @@ class Price:
     output: float
 
 
-# Anthropic first-party list prices, checked 2026-09-28. A model missing here costs `$?`.
+# Anthropic first-party list prices. A model missing here costs `$?`. Re-check them against
+# Anthropic's pricing page when the models in use change.
+PRICES_AS_OF = "2026-09-28"
 PRICES: dict[str, Price] = {
     "claude-opus-5": Price(5.0, 25.0),
     "claude-opus-4-8": Price(5.0, 25.0),
@@ -41,12 +44,14 @@ PRICES: dict[str, Price] = {
 
 @dataclass
 class TokenCounts:
-    """`input` is the uncached input; cache reads and writes are counted apart."""
+    """`input` is the uncached input; cache reads and writes are counted apart, and 1-hour writes
+    apart from 5-minute (or unsplit) ones because they cost more."""
 
     input: int = 0
     output: int = 0
     cache_read: int = 0
     cache_write: int = 0
+    cache_write_1h: int = 0
 
     def add(self, other: TokenCounts) -> None:
         for f in fields(self):
@@ -54,25 +59,27 @@ class TokenCounts:
 
     @property
     def total_input(self) -> int:
-        return self.input + self.cache_read + self.cache_write
+        return self.input + self.cache_read + self.cache_write + self.cache_write_1h
 
 
 def counts_from(usage: Mapping[str, Any]) -> TokenCounts:
     """LangChain's `usage_metadata` as counts. langchain-anthropic's `input_tokens` already
-    includes cache reads and writes, and a write comes either as `cache_creation` or split by TTL
-    (with `cache_creation` zeroed); the uncached part is what is left."""
+    includes cache reads and writes, and a write comes either as `cache_creation` (no TTL, counted
+    as a 5-minute write) or split by TTL (with `cache_creation` zeroed); the uncached part is what
+    is left."""
     details = usage.get("input_token_details") or {}
     read = int(details.get("cache_read") or 0)
     write = sum(
-        int(details.get(key) or 0)
-        for key in ("cache_creation", "ephemeral_5m_input_tokens", "ephemeral_1h_input_tokens")
+        int(details.get(key) or 0) for key in ("cache_creation", "ephemeral_5m_input_tokens")
     )
+    write_1h = int(details.get("ephemeral_1h_input_tokens") or 0)
     total = int(usage.get("input_tokens") or 0)
     return TokenCounts(
-        input=max(total - read - write, 0),
+        input=max(total - read - write - write_1h, 0),
         output=int(usage.get("output_tokens") or 0),
         cache_read=read,
         cache_write=write,
+        cache_write_1h=write_1h,
     )
 
 
@@ -99,6 +106,7 @@ def cost(model: str, counts: TokenCounts) -> float | None:
     return (
         counts.input * price.input
         + counts.cache_write * price.input * CACHE_WRITE_FACTOR
+        + counts.cache_write_1h * price.input * CACHE_WRITE_1H_FACTOR
         + counts.cache_read * price.input * CACHE_READ_FACTOR
         + counts.output * price.output
     ) / 1_000_000
@@ -152,7 +160,7 @@ class UsageByRole:
             }
 
     def as_record(self) -> dict[str, Any]:
-        """For the results file: per role its model(s), the four counts and the cost (None when
+        """For the results file: per role its model(s), the five counts and the cost (None when
         a model has no price), and the total (None when any cost is)."""
         roles: dict[str, Any] = {}
         total: float | None = 0.0
@@ -213,10 +221,8 @@ def render_usage(usage: UsageByRole) -> str:
         return "usage: no model calls"
     parts = []
     for role, r in record["roles"].items():
-        text = (
-            f"{role} {_tokens(r['input'] + r['cache_read'] + r['cache_write'])} in"
-            f" / {_tokens(r['output'])} out"
-        )
+        total_in = r["input"] + r["cache_read"] + r["cache_write"] + r["cache_write_1h"]
+        text = f"{role} {_tokens(total_in)} in / {_tokens(r['output'])} out"
         if r["cache_read"]:
             text += f" (cache read {_tokens(r['cache_read'])})"
         parts.append(f"{text} {_usd(r['cost'])}")
