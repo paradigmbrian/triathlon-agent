@@ -109,6 +109,10 @@ line, and writes the same figures to the `usage` key of its `.evals/` file:
 usage: analyst 400k in / 40k out (cache read 300k) $1.65 · judge 96k in / 8.0k out $0.68 · total $2.33
 ```
 
+Costs come from the price table in `tri_core.eval_usage` (`PRICES`, dated by `PRICES_AS_OF`).
+Re-check it against Anthropic's pricing page when the models in use change. A model missing from
+the table shows `$?`.
+
 There are cheaper ways to check a change before the full run that gates it:
 
 ```bash
@@ -119,8 +123,9 @@ TRI_MODEL_JUDGE=claude-sonnet-5 uv run tri-analyze eval --rescore .evals/<file>.
 ```
 
 The same flags work on every package's `eval`. A subset's experiment name ends in `-subset`, and
-its header reads `N of M examples (subset)`; it is never a gate. `--rescore` with `--failed-from`
-on the same file re-judges only the failures. Plans estimate a full run from the latest full
+its header reads `N of M examples (subset)`; it is never a gate. Subsets and rescores record
+`gate: false` in their metadata and print `not a gate run`, though a clean one still exits 0.
+`--rescore` with `--failed-from` on the same file re-judges only the failures. Plans estimate a full run from the latest full
 run's `.evals/` file (no `-subset` or `-rescore` in its name), `usage.total_cost` (see `CLAUDE.md`).
 
 ### First conversation

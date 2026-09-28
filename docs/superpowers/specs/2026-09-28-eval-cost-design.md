@@ -2,6 +2,7 @@
 
 **Date:** 2026-09-28
 **Status:** Draft
+**Amended:** 2026-09-28, after the first rollout merged (`9f4f048`): 1-hour cache writes are counted and priced apart (§3), and subsets and rescores record `gate: false` (§3.3, §4, §5, §7). Plan: `docs/superpowers/plans/2026-09-28-eval-cost-followup.md`.
 **Purpose:** Make the eval runs between gates cheap, and every run's cost visible. `docs/notes/2026-09-28-anthropic-api-usage-audit.md` found that almost all of September's $20 Anthropic spend was `tri-* eval` runs, at about $1 per full run. Some of those runs re-ran every Opus target only to test a judge change or re-check a few failing cases. Line numbers are `main` @ 8eb8506.
 
 ## 1. Decisions already made
@@ -13,6 +14,7 @@
 | Shape | Shared helpers in `tri_core` (`eval_usage.py` for usage and prices, `eval_select.py` for case selection and rescore, plus a shared run tail in `evals.py`), with thin wiring in each package's `evals/run.py` and `cli.py` (chosen 2026-09-28). | Follows how local results and `--local` landed. Merging the five runners is a refactor that isn't needed for this. |
 | Unknown model price | Print the tokens and show the cost as `?`. Never fail the run (chosen 2026-09-28). | A new fallback model must not break an eval. |
 | Asking before runs | Claude asks before **every** eval run, including rescores and subsets (chosen 2026-09-28). | The audit found a run Claude started from a handoff note. The rule is simplest when it has no exceptions. |
+| Subsets and rescores vs. the gate | A subset or rescore run is marked `gate: false` in its metadata and prints `not a gate run`. Exit codes stay 0, 1 and 2 (chosen 2026-09-28). | A clean subset must not be mistaken for a gate pass, and changing the documented exit codes would break callers that check for 0. |
 
 ## 2. Feasibility, verified 2026-09-28
 
@@ -22,33 +24,34 @@
 - Results: `record_rows` (`tri_core/evals.py:145`) writes case, inputs, outputs, error and results per line, with no `reference_outputs`. Only analyze passes `metadata` (`tri_analyze/evals/run.py:138`); the other four don't.
 - Case names: analyze, coach, nutrition and wellness put `metadata.case` on each example. Planning doesn't: `build_examples` (`tri_planning/evals/design_eval.py:62`) sets only `goal_type` and `phase`.
 - CLI: each package's `eval_cmd` (analyze `cli.py:130`, coach `:275`, nutrition `:322`, planning `:243`, wellness `:275`) calls an async `_eval` that calls `run_eval`.
-- Prices (per MTok, Anthropic first-party, 2026-09-28): `claude-opus-5` $5 in / $25 out, and `claude-sonnet-5` $2 / $10. Cache writes cost 1.25× the input rate and cache reads 0.1×.
+- Prices (per MTok, Anthropic first-party, pricing page fetched 2026-09-28): `claude-opus-5` and `claude-opus-4-8` $5 in / $25 out, `claude-sonnet-5` $2 / $10, and `claude-haiku-4-5` $1 / $5. Cache reads cost 0.1× the input rate. Cache writes cost 1.25× for the 5-minute TTL and 2× for the 1-hour TTL.
 
 ## 3. Usage and cost record
 
 ### 3.1 Collector
 
-- `tri_core.eval_usage.UsageByRole` collects the sums, and hands out one LangChain callback handler per role (`usage.handler(role)`). Each handler's `on_llm_end` adds every response's `usage_metadata` under its role and the response's model name. The role comes from which handler fired, not from model metadata, so fakes in tests are counted too. Four counts are summed: uncached input, output, cache read and cache write. langchain-anthropic's `input_tokens` already includes cache reads and writes, and cache writes arrive either as `cache_creation` or split into `ephemeral_5m_input_tokens` / `ephemeral_1h_input_tokens`, so the uncached count is the total minus both. A response with no usage adds nothing. A lock guards the sums.
+- `tri_core.eval_usage.UsageByRole` collects the sums, and hands out one LangChain callback handler per role (`usage.handler(role)`). Each handler's `on_llm_end` adds every response's `usage_metadata` under its role and the response's model name. The role comes from which handler fired, not from model metadata, so fakes in tests are counted too. Five counts are summed: uncached input, output, cache read, cache write (5-minute) and 1-hour cache write. langchain-anthropic's `input_tokens` already includes cache reads and writes, and cache writes arrive either as `cache_creation` (counted as a 5-minute write, since it has no TTL) or split into `ephemeral_5m_input_tokens` / `ephemeral_1h_input_tokens`, so the uncached count is the total minus the reads and both kinds of write. A response with no usage adds nothing. A lock guards the sums.
 - `with_usage(models: ModelProvider, usage: UsageByRole) -> ModelProvider` wraps a provider so every model it returns has the handler for the role it was asked for in its `callbacks`. Each `run_eval` wraps its `models` argument once, before building the target and the judge. A model object handed out for two roles reports under the last one (`make_model` builds a new model per call). `fallbacks_of` copies the primary's `callbacks` onto the fallbacks it builds, so a fallback's tokens are counted under the same role.
 
 ### 3.2 Pricing
 
-- `tri_core.eval_usage.PRICES: dict[str, Price]` has entries for `claude-opus-5`, `claude-opus-4-8` (the fallback chain), `claude-sonnet-5` and `claude-haiku-4-5`. A `Price` is input and output $ per MTok. Cache writes are costed at 1.25× the input rate and cache reads at 0.1×.
+- `tri_core.eval_usage.PRICES: dict[str, Price]` has entries for `claude-opus-5`, `claude-opus-4-8` (the fallback chain), `claude-sonnet-5` and `claude-haiku-4-5`. A `Price` is input and output $ per MTok. 5-minute cache writes are costed at 1.25× the input rate, 1-hour cache writes at 2×, and cache reads at 0.1×.
+- `PRICES_AS_OF = "2026-09-28"` sits next to the table. The README's "Evals and cost" section says to re-check the prices against Anthropic's pricing page when the models in use change.
 - `cost(model, counts) -> float | None` returns `None` for a model missing from `PRICES`.
 
 ### 3.3 Output
 
 - After the pass rates, each run logs one line: `usage: analyst 412k in / 38k out (cache read 290k) $2.41 · judge 96k in / 9k out $0.71 · total $3.12`. Roles come in first-use order. A role with an unknown model shows `$?`, and so does the total. A run with no model calls (a rescore with no judge) logs `usage: no model calls`.
-- `record_rows` writes the same figures into each line's top-level `usage` key: per role, the model, the four counts and the cost (or `null`), plus `total_cost`. `usage` sits beside `metadata`, not inside it, so `metadata` stays equal to what the experiment sent LangSmith. All five runners now pass `metadata`: `prompt_version` where the package has one, plus `eval_metadata(...)`. A shared `tri_core.evals.finish_run` logs the experiment, pass rates, errored count, failed checks and usage, then writes the file and logs its path last.
+- `record_rows` writes the same figures into each line's top-level `usage` key: per role, the model, the five counts and the cost (or `null`), plus `total_cost`. `usage` sits beside `metadata`, not inside it, so `metadata` stays equal to what the experiment sent LangSmith. All five runners now pass `metadata`: `prompt_version` where the package has one, plus `eval_metadata(...)`. A shared `tri_core.evals.finish_run` logs the experiment, pass rates, errored count, failed checks and usage, then writes the file and logs its path last. When the metadata has `gate: false` (a subset or a rescore, §4-5), it also logs `not a gate run` after the failed checks.
 
 ## 4. `--rescore <results.jsonl>`
 
 - **Scope:** all five `eval` commands. Rescore re-runs the package's evaluators (code checks, plus the judge where the package has one) over the file's saved outputs. It makes no target calls, doesn't seed or touch a database, and never talks to LangSmith. It is always local, whatever `--local` or `TRI_EVAL_LOCAL` say.
-- **Shared loop:** `tri_core.eval_select.rescore_rows(lines, evaluators, *, lookup, cases, log)` wraps each evaluator with langsmith's `run_evaluator` and calls `aevaluate_run(run, example)` on each line, so arguments are mapped the way `aevaluate` maps them. It awaits async evaluators, with tracing off and awaiting async evaluators, with two rows at a time. It returns rows in the shape `pass_rates`, `failure_lines` and `record_rows` already read.
+- **Shared loop:** `tri_core.eval_select.rescore_rows(lines, evaluators, *, lookup, cases, log)` wraps each evaluator with langsmith's `run_evaluator` and calls `aevaluate_run(run, example)` on each line, so arguments are mapped the way `aevaluate` maps them. It runs the evaluators with tracing off, awaiting the async ones, two rows at a time. It returns rows in the shape `pass_rates`, `failure_lines` and `record_rows` already read.
 - **Reference outputs:** from now on `record_rows` writes `reference_outputs` on every line whose example has outputs (every real `Example`), and rescore uses the file's value when it's present. For an older file, `lookup(case)` returns the case's current example from the package's cases. If the case is gone, the row is skipped and listed as `skipped: <case> (no longer a case)`.
 - **Inputs:** rescore uses the file's inputs, because those produced the saved outputs. When a case's current inputs differ, it logs `<package>: <case> inputs changed since this file` once per case and scores anyway.
 - **Errored rows:** a row with an `error` and no outputs is counted and skipped, and logged as `N errored in the source, not rescored`.
-- **Output:** the experiment is named `<source experiment>-rescore-<8 hex>`, with the source name taken from the file name. Pass rates, failed checks, the usage line (judge only) and a results file follow as usual. The metadata copies the source's `prompt_version`, `model` and `effort`, adds `rescored_from: <path>`, and sets the current `judge_model` and `judge_version`.
+- **Output:** the experiment is named `<source experiment>-rescore-<8 hex>`, with the source name taken from the file name. Pass rates, failed checks, the usage line (judge only) and a results file follow as usual. The metadata copies the source's `prompt_version`, `model` and `effort`, adds `rescored_from: <path>`, sets the current `judge_model` and `judge_version`, and sets `gate: false`. A rescore is never a gate, because it makes no target calls.
 - **Flags:** `--rescore` with `--recreate-dataset` or `--eval-db` exits 2 with a message. `--rescore` with `--cases` scores only those cases. `--rescore` with `--failed-from` scores the union of the two case sets. A missing or unreadable file exits 2.
 
 ## 5. Case subsets
@@ -65,7 +68,7 @@
 - **LangSmith runs** read the dataset's examples (`client.list_examples(dataset_name=...)`) and keep those whose `metadata.case` is selected, passing that list to `aevaluate` as `data`. A subset never rebuilds the dataset.
 - **Marking a subset:**
   - The experiment prefix gets `-subset`.
-  - The metadata records `cases: [...]`.
+  - The metadata records `cases: [...]` and `gate: false`, and the run prints `not a gate run` (§3.3).
   - `render_pass_rates` takes an optional `total` and prints `pass rate over 3 of 12 examples (subset)`.
 - **Planning case names:** `build_examples` sets `metadata.case` to `<goal_type>-<phase>`. The four presets have distinct goal types, so all 23 names are unique (checked 2026-09-28), and a test asserts it. A LangSmith subset of planning needs one `--recreate-dataset` run after this lands, so the stored examples carry the name. The planning README says so.
 
@@ -82,7 +85,7 @@
 
 - An unknown model price never fails a run (§3.2).
 - A callback that raises inside `UsageByRole` must not fail a model call. The handler sets `raise_error = False`, which is langchain's default, and a test covers it.
-- `--rescore` and subset argument errors exit 2 before any model or database is touched. The existing exit codes are unchanged: 0 means every rate is 1.0, and 1 means a failure or an errored example.
+- `--rescore` and subset argument errors exit 2 before any model or database is touched. The existing exit codes are unchanged: 0 means every rate is 1.0, and 1 means a failure or an errored example. A subset or rescore that passes still exits 0; `gate: false` and the `not a gate run` line are what mark it.
 
 ## 8. Out of scope
 
@@ -105,8 +108,11 @@
   - `run_eval` on stub models logs a usage line and runs only the selected cases under a `-subset` name.
   - A rescore of a fixture results file with a fake judge writes a `-rescore-` results file with `rescored_from`.
 - **Planning:** case names are unique.
+- **Follow-up (amended 2026-09-28):** a 1-hour write is counted apart and priced at 2×, and the usage line's `in` total includes it. `finish_run` prints `not a gate run` only when the metadata has `gate: false`, and every package's subset and a rescore set it.
 - **No live calls:** every test uses stub or fake models, and CI still skips `--live`.
 
 ## 10. Rollout
 
 One branch, `feat/eval-cost`, in this order: collector and pricing (§3), then subsets (§5), then rescore (§4), then docs (§6). There's no eval run in this rollout. The first real usage lines come from the next gate run a plan asks for, which Claude asks about first (§6).
+
+The follow-up in the Amended line lands on `feat/eval-cost-followup` with its own plan; it has no eval run either.

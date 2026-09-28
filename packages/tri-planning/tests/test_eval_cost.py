@@ -73,7 +73,9 @@ async def test_a_local_subset_runs_only_the_chosen_weeks_and_says_so(monkeypatch
     assert [e.metadata["case"] for e in captured["data"]] == ["olympic-base"]
     assert captured["experiment_prefix"].endswith("-subset-local")
     assert captured["metadata"]["cases"] == ["olympic-base"]
+    assert captured["metadata"]["gate"] is False
     assert "pass rate over 0 of 23 examples (subset)" in "\n".join(logged)
+    assert "not a gate run" in "\n".join(logged)
 
 
 async def test_a_langsmith_subset_on_a_dataset_without_case_names_asks_for_a_recreate(

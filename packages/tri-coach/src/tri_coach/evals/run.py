@@ -124,6 +124,7 @@ async def run_eval(
     }
     if chosen is not None:
         metadata["cases"] = chosen
+        metadata["gate"] = False
     with tracing_context(enabled="local", client=client) if local else nullcontext():
         results = await aevaluate(
             make_target(models(Role.COACH)),

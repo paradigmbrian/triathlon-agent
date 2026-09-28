@@ -202,8 +202,8 @@ def finish_run(
     total: int | None = None,
 ) -> tuple[dict[str, float], int]:
     """The end every eval run shares: the experiment name, pass rates, errored count, failed
-    checks and usage line, then the results file, whose path is logged last. Returns the pass
-    rates and the errored count."""
+    checks, a `not a gate run` line when the metadata has `gate: false`, and the usage line, then
+    the results file, whose path is logged last. Returns the pass rates and the errored count."""
     rates = pass_rates(rows)
     errors = errored(rows)
     log(f"experiment: {experiment}")
@@ -213,6 +213,8 @@ def finish_run(
     failures = failure_lines(rows)
     if failures:
         log("failed checks:\n" + "\n".join(failures))
+    if metadata.get("gate") is False:
+        log("not a gate run")
     log(render_usage(usage))
     path = record_rows(rows, experiment, metadata=metadata, usage=usage.as_record())
     log(f"results: {path}")

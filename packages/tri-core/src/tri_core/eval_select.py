@@ -276,6 +276,7 @@ async def run_rescore(
     metadata = {k: v for k, v in source.items() if k not in _NOT_CARRIED}
     metadata.update(current)
     metadata["rescored_from"] = str(path)
+    metadata["gate"] = False  # no target calls: never a gate
     if cases is not None:
         metadata["cases"] = cases
     version = metadata.get("prompt_version")

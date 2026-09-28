@@ -281,6 +281,7 @@ async def test_run_rescore_names_the_experiment_after_its_source_and_records_whe
     assert named.startswith("experiment: analyst-v3-judge2-local-00e7585f-rescore-")
     assert "1 errored in the source, not rescored" in logged
     assert "usage: no model calls" in logged
+    assert "not a gate run" in logged
     assert "pass rate over 1 examples (prompt version 3):" in "\n".join(logged)
     [out_file] = (tmp_path / "out").glob("*-rescore-*.jsonl")
     out = json.loads(out_file.read_text().splitlines()[0])
@@ -290,6 +291,7 @@ async def test_run_rescore_names_the_experiment_after_its_source_and_records_whe
         "judge_model": "claude-sonnet-5",
         "judge_version": "2",
         "rescored_from": str(src),
+        "gate": False,
     }
     assert out["reference_outputs"] == {"want": "z2"}
 
@@ -312,7 +314,8 @@ async def test_run_rescore_of_a_subset_marks_it(tmp_path, monkeypatch):
     )
     assert "pass rate over 1 of 2 examples (subset):" in "\n".join(logged)
     [out_file] = (tmp_path / "out").glob("*-rescore-*.jsonl")
-    assert json.loads(out_file.read_text())["metadata"]["cases"] == ["brick"]
+    out = json.loads(out_file.read_text())["metadata"]
+    assert out["cases"] == ["brick"] and out["gate"] is False
 
 
 async def test_run_rescore_survives_a_source_where_every_row_errored(tmp_path, monkeypatch):

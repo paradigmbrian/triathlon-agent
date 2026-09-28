@@ -67,9 +67,11 @@ async def test_a_local_subset_runs_only_the_chosen_cases_and_says_so(monkeypatch
     assert [e.metadata["case"] for e in captured["data"]] == [name]
     assert captured["experiment_prefix"].endswith("-subset-local")
     assert captured["metadata"]["cases"] == [name]
+    assert captured["metadata"]["gate"] is False
     text = "\n".join(logged)
     assert f"pass rate over 0 of {len(CASES)} examples (subset)" in text
     assert "usage: no model calls" in text
+    assert "not a gate run" in text
 
 
 async def test_rescore_reads_the_file_and_never_builds_the_fueling_model(monkeypatch, tmp_path):
