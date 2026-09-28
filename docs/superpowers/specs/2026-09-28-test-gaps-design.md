@@ -54,6 +54,8 @@ class CalibrationCase:
     reason: str                 # one line: why the label is what it is
 ```
 
+Cases drawn from a baseline run come from its local results file, `.evals/<experiment>.jsonl` (commit 5091b93). That file holds each example's inputs, outputs and judge comments. The LangSmith copy isn't used: the monthly trace limit dropped every trace of `analyst-v2-base-0c882dd5` on 2026-09-28.
+
 Twelve cases per judge:
 - **Analyst:** 4 clean answers from `analyst-v2-base`; 3 with derived numbers, two showing the arithmetic and one not; 2 with an invented number (critical); 1 stating missing data correctly; 2 missing a rule or ignoring an athlete comment.
 - **Coach:** 4 clean briefs from `coach-v4-base`; 2 citing a number found only in a served answer, both grounded; 2 with an invented number, date or lab value (critical); 2 unbounded ("review the plan"); 2 missing signal, lever or constraint.
