@@ -13,7 +13,7 @@ export default function ChartFrame({ title, summary, table, controls, children }
   const [asTable, setAsTable] = useState(false);
   const id = useId();
   return (
-    <section aria-labelledby={id} className="rounded-md border border-line bg-surface-2 px-4 py-4 sm:px-5">
+    <section aria-labelledby={id} className="border-b border-line py-5">
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <div className="min-w-0">
           <h2 id={id} className="text-xs font-medium tracking-wider text-ink-2 uppercase">{title}</h2>
@@ -36,7 +36,7 @@ export default function ChartFrame({ title, summary, table, controls, children }
           <div className="max-h-80 overflow-auto">
             <table className="w-full text-left text-xs tabular-nums">
               <caption className="sr-only">{title}</caption>
-              <thead className="sticky top-0 bg-surface-2 text-ink-2">
+              <thead className="sticky top-0 bg-surface text-ink-2">
                 <tr>{table.head.map((h) => <th key={h} scope="col" className="py-1 pr-4 font-medium">{h}</th>)}</tr>
               </thead>
               <tbody>

@@ -40,7 +40,7 @@ export default function Progress() {
         </div>
       )}
       {view && (
-        <div className="mt-4 space-y-4">
+        <div className="mt-2">
           <Pmc pmc={view.pmc} ramp28={view.ramp.find((r) => r.days === 28)?.delta ?? null} />
           <RampRates ramp={view.ramp} />
           <WeeklyBars weeks={view.weeks} />

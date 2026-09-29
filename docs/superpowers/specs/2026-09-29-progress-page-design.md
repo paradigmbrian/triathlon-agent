@@ -1,7 +1,7 @@
 # Progress page: performance management and weekly volume
 
 **Date:** 2026-09-29
-**Status:** Approved in chat 2026-09-29 (design); awaiting review of this written spec
+**Status:** Approved 2026-09-29; implemented on `feat/progress-page` (plan: `docs/superpowers/plans/2026-09-29-progress-page.md`)
 **Purpose:** Piece 1 of three toward surfacing the TrainingPeaks dashboard metrics (Brian's screenshots, 2026-09-29) in tri-web. This piece fills the `/progress` placeholder using only data already synced. Piece 2 (sleep, HRV, weight and body-fat history) and piece 3 (time in zones, peak power/HR/pace) get their own specs; piece 3 starts with a feasibility spike because the store holds per-workout aggregates only. Line references are `main` @ 9760e03.
 
 ## 1. Decisions already made
@@ -45,7 +45,7 @@ New `packages/tri-web/src/tri_web/progress.py` with `build_progress(rt, range)`,
 - `useProgress(range)` in `queries.ts`, keyed by range; the range picker state lives in the URL search param `?range=` so a view is linkable and survives reload.
 - `web/src/components/progress/`:
   - `RangePicker`: segmented control, keyboard operable, at least 24px targets.
-  - `Pmc`: CTL area, ATL line and TSB on a second axis with the 0 line and a shaded form band, following the TP chart. Null days break the line.
+  - `Pmc`: CTL area and ATL line in one panel, and TSB in a second panel below on the same x axis, with the 0 line and the neutral-form band (-10 to 5). Two panels replace a dual axis, which reads more clearly. Null days break the line.
   - `RampRates`: four tiles (7, 28, 90, 365 days) with the delta as a signed figure and a `Sparkline`.
   - `WeeklyBars`: stacked bars by sport, a metric switch (distance, duration, elevation, calories), a dashed average line, and the partial week drawn hatched and labelled.
   - `LongestWorkout`: one bar per week with a dashed average, switchable between duration and distance.
@@ -56,7 +56,7 @@ New `packages/tri-web/src/tri_web/progress.py` with `build_progress(rt, range)`,
 ### 3.1 Accessibility (WCAG 2.2 AA)
 
 - Each chart frame has a one-sentence text summary (for example, "CTL 16, up 1 over 28 days") and a "view as table" toggle that swaps the SVG for a real `<table>` of the same data.
-- Points and bars are keyboard focusable and show their value in a visible readout on focus and hover.
+- Each chart has a slider that steps through its points with the arrow keys and shows the value in a visible readout, and the PMC also reads on pointer move; bars and points are not individual tab stops, so a 150-week history is one stop.
 - Motion respects `prefers-reduced-motion`; nothing animates by default.
 - Contrast for text and lines meets AA in both themes; no status by colour alone.
 - Layout works at phone width with a 16px gutter and no horizontal page scroll; wide charts scroll inside their frame only if needed.

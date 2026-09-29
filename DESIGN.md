@@ -185,6 +185,9 @@ A tab bar on Panel ground with a bottom rule. Tabs are text-sm, 40px high; the a
 ### View Toggle
 A two-button segmented control (Figures, Trends), 6px radius, hairline border, 28px high; the pressed state is a Hold 10% wash with ink text.
 
+### Progress Charts
+The Progress page reuses the board's rules: each chart is a ruled band (`ChartFrame`: title, one sentence that states the point, controls, then the chart), never a filled card. Charts are hand-rolled SVG on the same tokens. Sport identity comes from five `--sport-*` tokens (swim, bike, run, strength, other), each at least 3:1 against the ground in both themes, and always pairs with a marker shape (circle, square, triangle, diamond, ring) and a written name. Every chart offers "View as table", and stepping through points is a single slider (arrow keys) with a visible readout, so a long history is one tab stop, not one per bar. A partial week is hatched and labelled. The PMC stacks CTL and ATL over a separate TSB panel with a zero line and the neutral-form band, instead of a second axis.
+
 ### Motion
 One motion: `board-flash`, a 700ms fade from a 22% Hold wash on a value that changed after a refetch. Buttons and links ease colour over 150ms. Under reduced motion the flash is removed and all durations collapse.
 
