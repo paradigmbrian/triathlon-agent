@@ -6,9 +6,9 @@ const blurbs = {
 
 export default function Placeholder({ name, subProject }: { name: string; subProject: 2 | 3 | 4 }) {
   return (
-    <section className="p-6">
-      <h1 className="text-lg font-semibold">{name}</h1>
-      <p className="mt-2 text-ink-2">Coming soon: {blurbs[subProject]}.</p>
+    <section className="mx-auto w-full max-w-4xl px-6 py-6">
+      <h1 className="text-sm font-semibold tracking-wide uppercase">{name}</h1>
+      <p className="mt-3 border-t border-line pt-3 text-sm text-ink-2">Coming soon: {blurbs[subProject]}.</p>
     </section>
   );
 }
