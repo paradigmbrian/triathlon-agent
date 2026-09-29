@@ -38,3 +38,24 @@ test("the board tokens are dark first with a daylight variant", () => {
 test("the row flash only animates when motion is allowed", () => {
   expect(css).toMatch(/@media \(prefers-reduced-motion: no-preference\)\s*\{[^}]*\.board-flash/);
 });
+
+const luminance = (hex: string) => {
+  const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+};
+const contrast = (a: string, b: string) => {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+};
+const token = (block: string, name: string) => new RegExp(`${name}:\\s*(#[0-9a-fA-F]{6});`).exec(block)![1];
+
+test("sport colours reach 3:1 against the surface in both themes", () => {
+  const dark = css.slice(0, css.indexOf("@media (prefers-color-scheme: light)"));
+  const light = css.slice(css.indexOf("@media (prefers-color-scheme: light)"), css.indexOf("@theme"));
+  for (const block of [dark, light]) {
+    const surface = token(block, "--surface");
+    for (const s of ["swim", "bike", "run", "strength", "other"]) {
+      expect(contrast(token(block, `--sport-${s}`), surface)).toBeGreaterThanOrEqual(3);
+    }
+  }
+});

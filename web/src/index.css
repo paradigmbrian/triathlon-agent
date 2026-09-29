@@ -19,6 +19,11 @@
   --good: #5fd38d;
   --danger: #ef6a63;
   --on-fill: #0b0f14;
+  --sport-swim: #4fb3d9;
+  --sport-bike: #b08cf0;
+  --sport-run: #f0a15c;
+  --sport-strength: #e0709f;
+  --sport-other: #95a0ae;
 }
 
 @media (prefers-color-scheme: light) {
@@ -40,6 +45,11 @@
     --good: #19663a;
     --danger: #b3261e;
     --on-fill: #ffffff;
+    --sport-swim: #0b6f94;
+    --sport-bike: #6b41c2;
+    --sport-run: #a3520f;
+    --sport-strength: #b02a66;
+    --sport-other: #555e6b;
   }
 }
 
@@ -60,6 +70,11 @@
   --color-rest: var(--rest);
   --color-hold: var(--hold);
   --color-on-fill: var(--on-fill);
+  --color-sport-swim: var(--sport-swim);
+  --color-sport-bike: var(--sport-bike);
+  --color-sport-run: var(--sport-run);
+  --color-sport-strength: var(--sport-strength);
+  --color-sport-other: var(--sport-other);
 }
 
 html, body, #root { height: 100%; }

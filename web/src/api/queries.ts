@@ -34,6 +34,8 @@ export type JobOut = S["JobOut"];
 export type VerdictOut = S["VerdictOut"];
 export type ReasonOut = S["ReasonOut"];
 export type ConditionOut = S["ConditionOut"];
+export type ProgressView = S["ProgressView"];
+export type ProgressRange = "6w" | "6m" | "12m" | "all";
 
 export const keys = {
   today: ["today"] as const,
@@ -51,5 +53,7 @@ export const useThreadRunning = () =>
   useQuery({ queryKey: keys.thread, queryFn: fetchThread, enabled: false, select: (v: ThreadView) => v.running }).data ?? null;
 export const useMemory = () => useQuery({ queryKey: keys.memory, queryFn: () => api<MemoryOut>("/api/coach/memory") });
 export const useStatus = () => useQuery({ queryKey: keys.status, queryFn: () => api<StatusOut>("/api/system/status") });
+export const useProgress = (range: ProgressRange) =>
+  useQuery({ queryKey: ["progress", range], queryFn: () => api<ProgressView>(`/api/progress?range=${range}`) });
 export const useSchema = () =>
   useQuery({ queryKey: keys.schema, queryFn: () => api<SchemaOut>("/api/coach/review/schema"), staleTime: Infinity });
