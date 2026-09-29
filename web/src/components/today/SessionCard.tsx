@@ -2,6 +2,23 @@ import type { TodayView } from "../../api/queries";
 import { n, secsAsHours } from "../../lib/format";
 import { Card, Empty } from "./Card";
 
+type Workout = NonNullable<TodayView["session"]>["workouts"][number];
+
+const pct = (actual: number | null, planned: number | null) =>
+  actual != null && planned ? Math.round((actual / planned) * 100) : null;
+
+function detail(w: Workout): string[] {
+  const effort = [
+    w.actual_if != null ? `IF ${w.actual_if.toFixed(2)}` : null,
+    w.avg_hr != null ? `${w.avg_hr} bpm` : null,
+    w.avg_power != null ? `${w.avg_power} W${w.normalized_power != null ? ` (NP ${w.normalized_power})` : ""}` : null,
+  ].filter(Boolean);
+  const time = pct(w.actual_duration_sec, w.planned_duration_sec);
+  const tss = pct(w.actual_tss, w.planned_tss);
+  const vsPlan = [time != null ? `${time}% of planned time` : null, tss != null ? `${tss}% of planned TSS` : null].filter(Boolean);
+  return [effort.join(" · "), vsPlan.join(" · ")].filter(Boolean);
+}
+
 export default function SessionCard({ session }: { session: TodayView["session"] }) {
   return (
     <Card title="Session" tone="planning">
@@ -16,6 +33,12 @@ export default function SessionCard({ session }: { session: TodayView["session"]
                 {w.sport} · {secsAsHours(w.completed ? w.actual_duration_sec : w.planned_duration_sec)} · {n(w.completed ? w.actual_tss : w.planned_tss)} TSS
                 {w.completed ? " · done" : ""}
               </div>
+              {w.completed &&
+                detail(w).map((line) => (
+                  <div key={line} className="text-xs text-ink-2 tabular-nums">
+                    {line}
+                  </div>
+                ))}
             </li>
           ))}
           {session.fuel && (

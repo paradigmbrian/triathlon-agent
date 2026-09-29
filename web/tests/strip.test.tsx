@@ -22,7 +22,8 @@ test("the cards show today's numbers", () => {
   expect(screen.getByText(/380 C · 150 P · 80 F/)).toBeInTheDocument();
   expect(screen.getByText(/2\.5 h of 6\.0 h/)).toBeInTheDocument();
   expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "42");
-  expect(screen.getByText(/run 1\/2 · bike 1\/2/)).toBeInTheDocument();
+  expect(screen.getByText("run 1/2 · 60 of 120 TSS · 1.0 of 2.0 h")).toBeInTheDocument();
+  expect(screen.getByText("bike 1/2 · 60 of 180 TSS · 1.5 of 4.0 h")).toBeInTheDocument();
 });
 
 test("readiness from an earlier day says which day", () => {
@@ -35,4 +36,75 @@ test("readiness from an earlier day says which day", () => {
 test("the strip shows skeletons while loading", () => {
   renderWith(<Strip today={undefined} />);
   expect(screen.getAllByTestId("card-skeleton")).toHaveLength(4);
+});
+
+test("readiness leads with training readiness and falls back to sleep score", () => {
+  const { unmount } = renderWith(<Strip today={todayFull()} />);
+  expect(screen.getByText("training readiness")).toBeInTheDocument();
+  expect(screen.getByText("77")).toBeInTheDocument();
+  unmount();
+  const t = todayFull();
+  t.readiness = { ...t.readiness!, training_readiness: null };
+  renderWith(<Strip today={t} />);
+  expect(screen.getByText("sleep score")).toBeInTheDocument();
+  expect(screen.getAllByText("81")).toHaveLength(2); // headline and the sleep row
+});
+
+test("a trend row says how today compares, in words and colour", () => {
+  const t = todayFull();
+  t.readiness!.trends.hrv = { ...t.readiness!.trends.hrv, now: 50, band: "below", better: false };
+  renderWith(<Strip today={t} />);
+  const row = screen.getByText(/↓ 8 vs 28-day avg · low/);
+  expect(row).toHaveClass("text-warn");
+  expect(screen.getByText(/↓ 2 vs 28-day avg/)).toHaveClass("text-good"); // RHR 48 vs 50, lower is better
+});
+
+test("the load line names the TSB zone and flags ramp and ACWR", () => {
+  const t = todayFull();
+  t.readiness = { ...t.readiness!, ramp_7d: 9.2, ramp_caution: true, acwr: 1.45, acwr_flag: "high" };
+  renderWith(<Strip today={t} />);
+  expect(screen.getByText(/TSB -4\.9 · neutral/)).toBeInTheDocument();
+  expect(screen.getByText("ramp +9.2/wk fast")).toHaveClass("text-warn");
+  expect(screen.getByText("ACWR 1.45 high")).toHaveClass("text-warn");
+});
+
+test("the readiness card copes with no trends and no load", () => {
+  const t = todayFull();
+  t.readiness = { ...t.readiness!, trends: {}, tsb: null, tsb_zone: null, ramp_7d: null, acwr: null, acwr_flag: null };
+  renderWith(<Strip today={t} />);
+  expect(screen.getByText("77")).toBeInTheDocument();
+  expect(screen.queryByText(/vs 28-day avg/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/ramp|ACWR/)).not.toBeInTheDocument();
+});
+
+test("a completed session shows intensity, HR, power and percent of planned", () => {
+  const t = todayFull();
+  t.session!.workouts[0] = {
+    ...t.session!.workouts[0],
+    completed: true,
+    actual_duration_sec: 3780,
+    actual_tss: 57,
+    actual_if: 0.82,
+    avg_hr: 148,
+    avg_power: 212,
+    normalized_power: 225,
+  };
+  renderWith(<Strip today={t} />);
+  expect(screen.getByText("IF 0.82 · 148 bpm · 212 W (NP 225)")).toBeInTheDocument();
+  expect(screen.getByText("105% of planned time · 95% of planned TSS")).toBeInTheDocument();
+});
+
+test("the week shows sessions done so far, hidden before the first session", () => {
+  const { unmount } = renderWith(<Strip today={todayFull()} />);
+  expect(screen.getByText("2 of 3 so far")).toBeInTheDocument();
+  unmount();
+  const t = todayFull();
+  t.week = { ...t.week!, planned_to_date: 0, completed_to_date: 0 };
+  renderWith(<Strip today={t} />);
+  expect(screen.queryByText(/so far/)).not.toBeInTheDocument();
+});
+
+test("skeletons pulse only when motion is allowed", () => {
+  renderWith(<Strip today={undefined} />);
+  expect(screen.getAllByTestId("card-skeleton")[0]).toHaveClass("motion-safe:animate-pulse");
 });
