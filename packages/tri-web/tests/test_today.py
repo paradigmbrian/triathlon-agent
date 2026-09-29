@@ -13,6 +13,7 @@ from tri_nutrition import repo as nrepo
 from tri_nutrition.nutrition.models import DayTarget
 from tri_nutrition.testing import seed_workouts
 from tri_planning.testing import MONDAY, FakeTp
+from tri_web.metrics import BASELINE_DAYS
 from tri_web.today import TodayView, build_today
 
 pytestmark = pytest.mark.db
@@ -177,3 +178,81 @@ def test_decimals_become_floats():
     from tri_web.today import _f
 
     assert _f(Decimal("45.20")) == 45.2 and _f(None) is None and _f(3) == 3.0
+
+
+def seed_metrics(conn, end: date, *, gap: date | None = None) -> None:
+    """28 days ending on `end`: HRV 60 and RHR 48 every day, then 50 and 55 on `end`; CTL rising
+    0.5 a day from 40; ATL 60 and TSB -6.5 on `end`; no training readiness or sleep time."""
+    for i in range(BASELINE_DAYS):
+        d = end - timedelta(days=BASELINE_DAYS - 1 - i)
+        if d == gap:
+            continue
+        last = d == end
+        conn.execute(
+            "insert into daily_metrics (metric_date, sleep_score, hrv_overnight_avg, resting_hr, "
+            "ctl, atl, tsb) values (%s, 80, %s, %s, %s, %s, %s)",
+            (
+                d,
+                50 if last else 60,
+                55 if last else 48,
+                40 + 0.5 * i,
+                60 if last else 50,
+                -6.5 if last else 0,
+            ),
+        )
+
+
+async def test_trends_from_28_days_of_metrics(nocommit, runtime):
+    seed_metrics(nocommit, TODAY, gap=TODAY - timedelta(days=3))
+    r = (await build_today(runtime(today=TODAY))).readiness
+    assert r is not None
+    assert set(r.trends) == {"hrv", "resting_hr", "sleep_score"}
+    hrv = r.trends["hrv"]
+    assert hrv.now == 50 and hrv.band == "below" and hrv.better is False
+    rhr = r.trends["resting_hr"]
+    assert rhr.band == "above" and rhr.better is False
+    assert len(hrv.spark) == 14 and hrv.spark[10] is None
+    assert r.tsb_zone == "neutral"
+    assert r.ramp_7d == 3.5 and r.ramp_caution is False
+    assert r.acwr == 1.12 and r.acwr_flag is None
+
+
+async def test_trends_anchor_on_the_readiness_row(nocommit, runtime):
+    seed_metrics(nocommit, TODAY - timedelta(days=2))
+    r = (await build_today(runtime(today=TODAY))).readiness
+    assert r is not None and r.is_today is False
+    assert r.trends["hrv"].now == 50 and r.trends["hrv"].band == "below"
+
+
+async def test_one_row_of_metrics_gives_no_ramp_and_no_band(nocommit, runtime):
+    nocommit.execute(
+        "insert into daily_metrics (metric_date, hrv_overnight_avg, ctl, atl, tsb) "
+        "values (%s, 60, 0, 10, 30)",
+        (TODAY,),
+    )
+    r = (await build_today(runtime(today=TODAY))).readiness
+    assert r is not None
+    assert r.trends["hrv"].band is None
+    assert r.ramp_7d is None and r.acwr is None and r.acwr_flag is None
+    assert r.tsb_zone == "detraining"
+
+
+async def test_workout_detail_and_per_sport_week(nocommit, runtime):
+    seed_active_plan(nocommit)
+    seed_day(nocommit, TODAY)
+    nocommit.execute(
+        "update workouts set completed = true, actual_duration_sec = 3780, actual_tss = 57, "
+        "actual_if = 0.82, avg_hr = 148, avg_power = 212, normalized_power = 225 "
+        "where tp_workout_id = 'w1'"
+    )
+    view = await build_today(runtime(today=TODAY))
+    assert view.session is not None
+    w1 = view.session.workouts[0]
+    assert (w1.actual_if, w1.avg_hr, w1.avg_power, w1.normalized_power) == (0.82, 148, 212, 225)
+    week = view.week
+    assert week is not None
+    by = {s.sport: s for s in week.sessions}
+    assert (by["run"].planned_tss, by["run"].actual_tss) == (60, 57)
+    assert (by["run"].planned_hours, by["run"].actual_hours) == (1.0, 1.05)
+    assert (by["bike"].planned_tss, by["bike"].actual_tss, by["bike"].planned_hours) == (80, 0, 1.5)
+    assert (week.planned_to_date, week.completed_to_date) == (2, 2)
