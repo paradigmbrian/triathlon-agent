@@ -38,3 +38,10 @@ test("empty shares say so and draw no bars", () => {
   expect(screen.getAllByText("No data in this range.").length).toBeGreaterThanOrEqual(1);
   expect(screen.queryAllByTestId("share-bar")).toHaveLength(0);
 });
+
+test("with nothing completed but a plan, the summary speaks for the plan and does not say no data", () => {
+  const share = progressFull().share;
+  render(<ShareBars share={{ ...share, completed: { duration_sec: {}, distance_m: {} } }} />);
+  expect(screen.queryByText("No data in this range.")).not.toBeInTheDocument();
+  expect(screen.getByText(/Nothing completed yet; Bike is 62\.5% of planned duration/)).toBeInTheDocument();
+});

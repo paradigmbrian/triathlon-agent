@@ -1,7 +1,7 @@
 import { useId } from "react";
 import { axisLabels, niceMax, scaleLinear, ticks } from "./scale";
+import { useWidth } from "./useWidth";
 
-const W = 800;
 const H = 200;
 const LEFT = 44;
 const RIGHT = 8;
@@ -21,6 +21,7 @@ export default function StackedBars({ weeks, stacks, partialLast, average, digit
   marked: number | null;
 }) {
   const hatch = useId();
+  const [ref, W] = useWidth();
   const n = weeks.length;
   const totals = weeks.map((_, i) => stacks.reduce((s, st) => s + st.values[i], 0));
   const top = niceMax(Math.max(0, ...totals));
@@ -30,6 +31,7 @@ export default function StackedBars({ weeks, stacks, partialLast, average, digit
   const x = (i: number) => LEFT + i * slot + (slot - bw) / 2;
   const labels = axisLabels(weeks, 5);
   return (
+    <div ref={ref}>
     <svg role="img" aria-label={label} viewBox={`0 0 ${W} ${H}`} className="w-full">
       <defs>
         <pattern id={hatch} width={5} height={5} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
@@ -66,5 +68,6 @@ export default function StackedBars({ weeks, stacks, partialLast, average, digit
         <text key={l.i} x={x(l.i) + bw / 2} y={H - 4} textAnchor="middle" fontSize={12} fill="var(--ink-2)">{l.text}</text>
       ))}
     </svg>
+    </div>
   );
 }

@@ -4,8 +4,8 @@ import ChartFrame from "./ChartFrame";
 import Scrubber from "./Scrubber";
 import { axisDate, axisLabels, niceMax, scaleLinear, segments, ticks } from "./scale";
 import { signed } from "./units";
+import { useWidth } from "./useWidth";
 
-const W = 800;
 const LEFT = 40;
 const RIGHT = 8;
 const TOP_H = 170;
@@ -21,7 +21,8 @@ export default function Pmc({ pmc, ramp28 }: { pmc: Point[]; ramp28: number | nu
   const [picked, setPicked] = useState<number | null>(null);
   const known = pmc.filter((p) => p.ctl != null);
   const last = known.at(-1);
-  const index = picked != null && picked < pmc.length ? picked : pmc.length - 1;
+  const lastKnown = pmc.map((p) => p.ctl != null).lastIndexOf(true);
+  const index = picked != null && picked < pmc.length ? picked : Math.max(lastKnown, 0);
   const at = pmc[index];
   const readout = at
     ? at.ctl == null
@@ -56,6 +57,7 @@ export default function Pmc({ pmc, ramp28 }: { pmc: Point[]; ramp28: number | nu
 }
 
 function Chart({ pmc, index, onPick }: { pmc: Point[]; index: number; onPick: (i: number) => void }) {
+  const [ref, W] = useWidth();
   const n = pmc.length;
   const x = (i: number) => (n > 1 ? LEFT + (i / (n - 1)) * (W - LEFT - RIGHT) : (LEFT + W - RIGHT) / 2);
   const ctl = pmc.map((p) => p.ctl);
@@ -76,6 +78,7 @@ function Chart({ pmc, index, onPick }: { pmc: Point[]; index: number; onPick: (i
   });
   const labels = axisLabels(pmc.map((p) => p.date), 5);
   return (
+    <div ref={ref}>
     <svg
       role="img"
       aria-label="Performance management chart: CTL, ATL and TSB by day. Use the day slider or the table for values."
@@ -106,5 +109,6 @@ function Chart({ pmc, index, onPick }: { pmc: Point[]; index: number; onPick: (i
       ))}
       <line x1={x(index)} x2={x(index)} y1={0} y2={TOP_H + GAP + BOT_H} stroke="var(--ink-2)" strokeWidth={1} />
     </svg>
+    </div>
   );
 }

@@ -256,6 +256,16 @@ def list_daily_metrics_between(conn: Conn, start: date, end: date) -> list[dict[
     ).fetchall()
 
 
+def latest_ctl_date(conn: Conn, end: date) -> date | None:
+    """The newest day up to `end` that has a CTL reading."""
+    row = conn.execute(
+        "select max(metric_date) as d from daily_metrics "
+        "where ctl is not null and metric_date <= %s",
+        (end,),
+    ).fetchone()
+    return None if row is None else row["d"]
+
+
 def mark_missing_deleted(conn: Conn, start: date, end: date, seen_ids: Collection[str]) -> int:
     """Tombstone live workouts dated in [start, end] that the TrainingPeaks listing for that
     window did not return. Rows outside the window are never touched. A tombstoned workout lets

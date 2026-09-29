@@ -42,3 +42,10 @@ test("RampRates shows four signed tiles and a dash for a missing delta", () => {
   expect(tiles[2]).toHaveTextContent("−4.0");
   expect(tiles[3]).toHaveTextContent("Last 365 days");
 });
+
+test("when the curve lags today the scrubber starts on the last reading, not on a gap", () => {
+  const pmc = progressFull().pmc.map((p, i, all) => (i === all.length - 1 ? { ...p, ctl: null, atl: null, tsb: null } : p));
+  render(<Pmc pmc={pmc} ramp28={null} />);
+  expect(screen.getByTestId("pmc-readout")).toHaveTextContent("CTL 39.5");
+  expect(screen.getByTestId("pmc-readout")).not.toHaveTextContent("no reading");
+});

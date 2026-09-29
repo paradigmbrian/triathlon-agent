@@ -35,7 +35,7 @@ export function segments(values: (number | null)[], x: (i: number) => number, y:
 }
 
 export function axisDate(iso: string, withYear = false): string {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, withYear ? { month: "short", year: "2-digit" } : { month: "short", day: "numeric" });
+  return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, withYear ? { month: "short", year: "numeric" } : { month: "short", day: "numeric" });
 }
 
 /** About `n` evenly spaced axis labels for a list of ISO dates: [{i, text}]. */

@@ -164,3 +164,9 @@ def test_an_empty_store_is_all_empty_and_never_raises():
     assert all(p.ctl is None for p in out.pmc)
     assert all(x.delta is None for x in out.ramp)
     assert out.share.completed.duration_sec == {} and out.share.planned.distance_m == {}
+
+
+def test_metrics_floor_reaches_a_year_before_the_latest_ctl_day_not_before_today():
+    lag = TODAY - timedelta(days=2)
+    assert metrics_floor("6w", TODAY, as_of=lag) == lag - timedelta(days=365)
+    assert metrics_floor("6w", TODAY) == TODAY - timedelta(days=365)

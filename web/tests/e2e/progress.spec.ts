@@ -64,4 +64,7 @@ test("Progress fits a phone with no horizontal scroll", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Sport share" })).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
   expect(overflow).toBe(false);
+  // axis text stays legible: the SVG is drawn at container width, so 12px text renders near 12px
+  const smallest = await page.evaluate(() => Math.min(...Array.from(document.querySelectorAll("svg text")).map((t) => t.getBoundingClientRect().height)));
+  expect(smallest).toBeGreaterThanOrEqual(10);
 });

@@ -22,7 +22,13 @@ export default function ShareBars({ share }: { share: ProgressView["share"] }) {
   const pct = (s: Shares, sport: Sport) => (s.total > 0 ? ((s.by[sport] ?? 0) / s.total) * 100 : 0);
   const rows = SPORTS.filter((s) => (done.by[s] ?? 0) > 0 || (plan.by[s] ?? 0) > 0);
   const lead = rows.length ? [...rows].sort((a, b) => pct(done, b) - pct(done, a))[0] : null;
-  const summary = lead && done.total > 0 ? `${SPORT_LABEL[lead]} is ${pct(done, lead).toFixed(1)}% of completed ${LABEL[measure]}.` : "No data in this range.";
+  const planLead = rows.length ? [...rows].sort((a, b) => pct(plan, b) - pct(plan, a))[0] : null;
+  const summary =
+    lead && done.total > 0
+      ? `${SPORT_LABEL[lead]} is ${pct(done, lead).toFixed(1)}% of completed ${LABEL[measure]}.`
+      : planLead && plan.total > 0
+        ? `Nothing completed yet; ${SPORT_LABEL[planLead]} is ${pct(plan, planLead).toFixed(1)}% of planned ${LABEL[measure]}.`
+        : "No data in this range.";
   return (
     <ChartFrame
       title="Sport share"

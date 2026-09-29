@@ -91,9 +91,10 @@ def range_floor(range_: RangeKey, today: date) -> date:
     return week_monday(today - timedelta(days=RANGE_DAYS[range_]))
 
 
-def metrics_floor(range_: RangeKey, today: date) -> date:
-    """Metrics reach back at least as far as the longest ramp window."""
-    return min(range_floor(range_, today), today - timedelta(days=max(RAMP_WINDOWS)))
+def metrics_floor(range_: RangeKey, today: date, as_of: date | None = None) -> date:
+    """Metrics reach back a full ramp window before the latest CTL day (a lagging sync must not
+    push the 365-day start out of reach), and at least to the range's own start."""
+    return min(range_floor(range_, today), (as_of or today) - timedelta(days=max(RAMP_WINDOWS)))
 
 
 def _ramp_out(by_day: dict[date, dict[str, Any]], as_of: date | None, days: int) -> RampOut:
@@ -188,5 +189,6 @@ async def build_progress(rt: Runtime, range_: RangeKey) -> ProgressView:
     today = rt.today()
     with rt.connect() as conn:
         workouts = crepo.list_workouts_between(conn, range_floor(range_, today), today)
-        metrics = crepo.list_daily_metrics_between(conn, metrics_floor(range_, today), today)
+        as_of = crepo.latest_ctl_date(conn, today)
+        metrics = crepo.list_daily_metrics_between(conn, metrics_floor(range_, today, as_of), today)
     return compute_progress(range_, today, workouts, metrics)

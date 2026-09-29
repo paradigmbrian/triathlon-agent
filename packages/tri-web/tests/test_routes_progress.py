@@ -93,3 +93,13 @@ async def test_an_empty_database_still_answers(runtime, client):
     body = r.json()
     assert r.status_code == 200 and body["as_of"] is None
     assert all(p["ctl"] is None for p in body["pmc"])
+
+
+async def test_the_365_day_ramp_survives_a_curve_that_lags_today(runtime, client, nocommit):
+    lag = date(2026, 9, 14)  # two days behind today
+    for d, ctl in ((lag, 40), (date(2025, 9, 14), 30)):
+        nocommit.execute("insert into daily_metrics (metric_date, ctl) values (%s, %s)", (d, ctl))
+    async with client(runtime(today=TODAY)) as c:
+        body = (await c.get("/api/progress", params={"range": "6w"})).json()
+    ramp = {r["days"]: r for r in body["ramp"]}
+    assert body["as_of"] == "2026-09-14" and ramp[365]["delta"] == 10.0

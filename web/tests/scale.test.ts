@@ -41,3 +41,9 @@ test("unknown sports fold into other and their totals add", () => {
   expect(sportKey("bike")).toBe("bike");
   expect(fold({ bike: 1, brick: 2, walk: 4 }, (a, b) => a + b)).toEqual({ bike: 1, other: 6 });
 });
+
+test("long ranges label months with a four-digit year so they never read as a day", () => {
+  const dates = Array.from({ length: 130 }, (_, i) => new Date(Date.UTC(2025, 8, 1 + i)).toISOString().slice(0, 10));
+  const labels = axisLabels(dates, 5).map((l) => l.text);
+  expect(labels.every((t) => /\b20\d\d\b/.test(t))).toBe(true);
+});
