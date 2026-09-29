@@ -1,10 +1,9 @@
 const blurbs = {
-  2: "your fitness curve, weekly load by sport and recovery trends",
   3: "daily targets, fuel plans and the fuel log",
   4: "lab panels, reports and PDF upload",
 };
 
-export default function Placeholder({ name, subProject }: { name: string; subProject: 2 | 3 | 4 }) {
+export default function Placeholder({ name, subProject }: { name: string; subProject: 3 | 4 }) {
   return (
     <section className="mx-auto w-full max-w-4xl px-6 py-6">
       <h1 className="text-sm font-semibold tracking-wide uppercase">{name}</h1>

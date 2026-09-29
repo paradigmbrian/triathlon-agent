@@ -4,14 +4,13 @@ import { Route, Routes } from "react-router";
 import { renderWith, todayFull } from "./fixtures";
 import Shell from "../src/components/Shell";
 import Header from "../src/components/Header";
-import Placeholder from "../src/pages/Placeholder";
 
 function tree() {
   return (
     <Routes>
       <Route element={<Shell />}>
         <Route path="/" element={<div>today body</div>} />
-        <Route path="/progress" element={<Placeholder name="Progress" subProject={2} />} />
+        <Route path="/progress" element={<div>progress body</div>} />
         <Route path="/settings" element={<div>settings body</div>} />
       </Route>
     </Routes>
