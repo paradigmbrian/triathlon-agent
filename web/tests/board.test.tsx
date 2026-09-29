@@ -16,7 +16,7 @@ test("the board shows today's numbers", () => {
   expect(screen.getByText(/run · 1\.0 h · 60 TSS/)).toBeInTheDocument();
   expect(screen.getByText(/60 g\/h/)).toBeInTheDocument();
   expect(screen.getByText("81")).toBeInTheDocument(); // sleep score
-  expect(screen.getByText(/7\.5 h/)).toBeInTheDocument();
+  expect(document.getElementById("cond-sleep_hours")).toHaveTextContent("7.5 h");
   expect(screen.getByText(/45\.2 \/ 50\.1 \/ -4\.9/)).toBeInTheDocument();
   expect(screen.getByText(/2,900 kcal/)).toBeInTheDocument();
   expect(screen.getByText(/380 C · 150 P · 80 F/)).toBeInTheDocument();

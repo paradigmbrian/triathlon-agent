@@ -48,12 +48,12 @@ test("the conditions table shows each row's figures and status word", () => {
   render(<Board />);
   const table = screen.getByRole("table");
   expect(table).toBeInTheDocument();
-  expect(screen.getByText("62 ms")).toBeInTheDocument();
+  expect(document.getElementById("cond-hrv")).toHaveTextContent("62 ms");
   expect(screen.getByText("81")).toBeInTheDocument();
-  expect(screen.getByText("7.5 h")).toBeInTheDocument();
+  expect(document.getElementById("cond-sleep_hours")).toHaveTextContent("7.5 h");
   expect(screen.getByText("-4.9")).toBeInTheDocument();
   expect(screen.getByText("1.11")).toBeInTheDocument();
-  expect(screen.getByText("+3.5/wk")).toBeInTheDocument();
+  expect(document.getElementById("cond-ramp")).toHaveTextContent("+3.5/wk");
   expect(screen.getByText("neutral")).toBeInTheDocument();
   expect(screen.getAllByText("within").length).toBeGreaterThan(0);
 });
@@ -115,12 +115,23 @@ test("a no-call reason is plain text, not a button that goes nowhere", () => {
   expect(screen.queryByRole("button")).not.toBeInTheDocument();
 });
 
-test("the figures lead: large tabular numerals, the flagged one in its reason's colour", () => {
+test("each row wears its state: a rail and a large figure in the same colour, the unit small", () => {
   const rows = todayFull().conditions.map((c) => (c.key === "acwr" ? { ...c, value: 1.45, status: "high", flagged: true } : c));
   render(<Board rows={rows} />);
-  expect(screen.getByText("62 ms")).toHaveClass("text-2xl", "font-semibold");
-  expect(screen.getByText("1.45")).toHaveClass("text-easy");
-  expect(screen.getByText("81")).not.toHaveClass("text-easy");
+  const fig = (key: string) => document.querySelector(`#cond-${key} [data-figure]`)!;
+  const rail = (key: string) => document.querySelector(`#cond-${key} th[scope="row"]`)!;
+  expect(fig("hrv")).toHaveClass("text-4xl", "font-semibold");
+  expect(fig("hrv").textContent).toBe("62"); // the unit is its own smaller element
+  expect(document.querySelector("#cond-hrv [data-unit]")).toHaveClass("text-sm");
+  // inside your band: go. above the band but not flagged: hold. flagged: its reason's colour. no band word: plain.
+  expect(fig("sleep_score")).toHaveClass("text-go");
+  expect(rail("sleep_score")).toHaveClass("border-go");
+  expect(fig("hrv")).toHaveClass("text-hold");
+  expect(rail("hrv")).toHaveClass("border-hold");
+  expect(fig("acwr")).toHaveClass("text-easy");
+  expect(rail("acwr")).toHaveClass("border-easy");
+  expect(fig("tsb")).not.toHaveClass("text-go", "text-hold", "text-easy", "text-rest");
+  expect(rail("tsb")).toHaveClass("border-line");
 });
 
 test("Figures is the default view, and Trends swaps the columns for a line per row", async () => {
@@ -137,7 +148,7 @@ test("Figures is the default view, and Trends swaps the columns for a line per r
   expect(screen.queryByRole("columnheader", { name: "28-day" })).not.toBeInTheDocument();
   expect(document.querySelectorAll("svg[data-trend]")).toHaveLength(5); // the five rows with history
   expect(screen.getAllByText("no history")).toHaveLength(3); // Form, ACWR, Ramp
-  expect(screen.getByText("62 ms")).toBeInTheDocument(); // the figure and the status word stay
+  expect(document.getElementById("cond-hrv")).toHaveTextContent("62 ms"); // the figure and the status word stay
   expect(document.getElementById("cond-hrv")).toHaveTextContent("high");
 });
 

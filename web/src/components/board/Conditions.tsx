@@ -3,7 +3,7 @@ import type { ConditionOut, ReasonOut, TodayView } from "../../api/queries";
 import { day, n } from "../../lib/format";
 import LimitMarker from "./LimitMarker";
 import Sparkline from "./Sparkline";
-import { baselineValue, conditionValue } from "./format";
+import { baselineValue, conditionParts } from "./format";
 
 type Props = {
   readiness: TodayView["readiness"];
@@ -13,7 +13,25 @@ type Props = {
   onActive: (key: string | null) => void;
 };
 
-const SEVERITY_TONE = { stop: "text-rest", caution: "text-easy", info: "text-ink-2" } as const;
+// A row wears one state, on its rail, its figure and its status word: a flagged row its reason's
+// colour, a row inside your band go, one outside your band but not flagged hold, and a row with
+// no band word to judge (neutral form, no data, no baseline, a guarded ACWR) nothing. Colour is
+// only ever an addition to the status word beside it.
+const STATE = {
+  stop: { text: "text-rest", rail: "border-rest" },
+  caution: { text: "text-easy", rail: "border-easy" },
+  info: { text: "text-ink-2", rail: "border-ink-2" },
+  go: { text: "text-go", rail: "border-go" },
+  hold: { text: "text-hold", rail: "border-hold" },
+  plain: { text: "text-ink-2", rail: "border-line" },
+} as const;
+
+function stateOf(c: ConditionOut, severity: ReasonOut["severity"] | undefined) {
+  if (c.flagged) return STATE[severity ?? "caution"];
+  if (c.status === "within") return STATE.go;
+  if (["neutral", "no data", "no baseline"].includes(c.status) || c.status.startsWith("ignored")) return STATE.plain;
+  return STATE.hold;
+}
 
 export default function Conditions({ readiness, rows, reasons, active, onActive }: Props) {
   // Remember the last rows (React's adjust-state-during-render pattern) so only a value that
@@ -71,7 +89,8 @@ export default function Conditions({ readiness, rows, reasons, active, onActive 
           </thead>
           <tbody>
             {rows.map((c) => {
-              const tone = c.flagged ? SEVERITY_TONE[severity.get(c.key) ?? "caution"] : "text-ink-2";
+              const state = stateOf(c, severity.get(c.key));
+              const parts = conditionParts(c);
               return (
                 <tr
                   key={c.key}
@@ -85,9 +104,16 @@ export default function Conditions({ readiness, rows, reasons, active, onActive 
                   onBlur={() => onActive(null)}
                   className={`border-t border-line focus:outline-none focus-visible:ring-2 focus-visible:ring-hold ${active === c.key ? "bg-hold/10" : ""}`}
                 >
-                  <th scope="row" className="py-2 pr-3 text-left font-normal text-ink-2">{c.label}</th>
-                  <td key={`${c.key}:${c.value}`} className={`pr-3 text-2xl font-semibold ${c.flagged ? tone : ""} ${changed.has(c.key) ? "board-flash" : ""}`}>
-                    {conditionValue(c)}
+                  <th scope="row" className={`border-l-4 py-3 pr-3 pl-3 text-left text-xs font-normal tracking-wider text-ink-2 uppercase ${state.rail}`}>{c.label}</th>
+                  <td key={`${c.key}:${c.value}`} className={`pr-3 ${changed.has(c.key) ? "board-flash" : ""}`}>
+                    {parts ? (
+                      <>
+                        <span data-figure className={`text-4xl leading-none font-semibold tracking-tight ${c.flagged || c.status === "within" || state === STATE.hold ? state.text : ""}`}>{parts.num}</span>
+                        {parts.unit && <span data-unit className="text-sm font-normal whitespace-pre text-ink-2">{parts.unit}</span>}
+                      </>
+                    ) : (
+                      <span className="text-base text-ink-2">no data</span>
+                    )}
                   </td>
                   {view === "figures" ? (
                     <>
@@ -95,11 +121,11 @@ export default function Conditions({ readiness, rows, reasons, active, onActive 
                       <td className="pr-3"><LimitMarker low={c.band_low} high={c.band_high} value={c.value} /></td>
                     </>
                   ) : (
-                    <td className={`pr-3 ${c.flagged ? tone : "text-ink"}`}>
+                    <td className={`pr-3 ${state === STATE.plain ? "text-ink" : state.text}`}>
                       {c.spark.some((v) => v != null) ? <Sparkline values={c.spark} low={c.band_low} high={c.band_high} /> : <span className="text-ink-2">no history</span>}
                     </td>
                   )}
-                  <td data-status className={tone}>{c.status}</td>
+                  <td data-status className={`text-xs font-semibold tracking-wide uppercase ${state.text}`}>{c.status}</td>
                 </tr>
               );
             })}
