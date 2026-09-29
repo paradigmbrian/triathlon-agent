@@ -1355,7 +1355,7 @@ test("the metric switch changes the unit", async () => {
   const user = userEvent.setup();
   render(<WeeklyBars weeks={progressFull().weeks} />);
   await user.click(screen.getByRole("radio", { name: "Duration" }));
-  expect(screen.getByText(/Average 3\.3 h per week/)).toBeInTheDocument();
+  expect(screen.getByText(/Average 2\.[23] h per week/)).toBeInTheDocument();
   await user.click(screen.getByRole("radio", { name: "Elevation" }));
   expect(screen.getByText(/ft per week/)).toBeInTheDocument();
 });
@@ -1407,18 +1407,14 @@ test("LongestWorkout switches between duration and distance and states the longe
 });
 ```
 
-Fixture arithmetic for the expected numbers: week 1 distance 48280 + 10000 = 58280 m = 36.2 mi; week 2 24140 + 5000 = 29140 m = 18.1 mi; mean 27.2 mi. Duration: week 1 10800 s = 3.0 h, week 2 5400 s = 1.5 h, mean 2.25 h shown as "2.3 h" by `toFixed(1)`. That contradicts the test's "3.3 h": fix the expectation in Step 4 if it fails: the correct string is `Average 2.3 h per week` (2.25 rounds to 2.3 in `toFixed(1)`; if it prints 2.2, floating error, use `Average 2.[23] h`). Other week 2 (brick 5000 m) = 3.1 mi, matching the readout test. Longest distance is week 1's 48280 m = 30.0 mi; longest duration 7200 s = 2.0 h.
+Fixture arithmetic behind the expected numbers: week 1 distance 48280 + 10000 = 58280 m = 36.2 mi; week 2 24140 + 5000 = 29140 m = 18.1 mi; mean 27.2 mi. Duration: 10800 s and 5400 s average 2.25 h, which `toFixed(1)` may print as 2.2 or 2.3 (hence the regex). Week 2's brick (5000 m) folds into Other at 3.1 mi. Longest distance is week 1's 48280 m = 30.0 mi; longest duration 7200 s = 2.0 h.
 
-- [ ] **Step 2: Correct the duration expectation now**
-
-In `weekly.test.tsx`, change `/Average 3\.3 h per week/` to `/Average 2\.[23] h per week/`.
-
-- [ ] **Step 3: Run tests to verify they fail**
+- [ ] **Step 2: Run tests to verify they fail**
 
 Run: `cd web && npx vitest run tests/weekly.test.tsx`
 Expected: FAIL (modules not found).
 
-- [ ] **Step 4: Implement `StackedBars.tsx`**
+- [ ] **Step 3: Implement `StackedBars.tsx`**
 
 Create `web/src/components/progress/StackedBars.tsx`:
 
@@ -1495,7 +1491,7 @@ export default function StackedBars({ weeks, stacks, partialLast, average, digit
 }
 ```
 
-- [ ] **Step 5: Implement `WeeklyBars.tsx` and `LongestWorkout.tsx`**
+- [ ] **Step 4: Implement `WeeklyBars.tsx` and `LongestWorkout.tsx`**
 
 Create `web/src/components/progress/WeeklyBars.tsx`:
 
@@ -1628,12 +1624,12 @@ export default function LongestWorkout({ weeks }: { weeks: Week[] }) {
 }
 ```
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [ ] **Step 5: Run tests to verify they pass**
 
 Run: `cd web && npx vitest run tests/weekly.test.tsx`
 Expected: PASS. Likely fixes: if the "Other 3.1 mi" readout fails, the brick totals were not folded (check `fold` in Task 3 and that week index 1 is selected after one ArrowLeft from the last week). If `getByRole("list")` finds more than one list, scope it with `within` on the chart's `section`.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add web/src web/tests
@@ -1942,7 +1938,7 @@ In `web/src/router.tsx`: add `import Progress from "./pages/Progress";` and repl
 
 In `web/src/pages/Placeholder.tsx`: remove the `2:` entry from `blurbs` and change the prop type to `subProject: 3 | 4`.
 
-In `web/tests/shell.test.tsx`: it renders `<Placeholder name="Progress" subProject={2} />` for `/progress`; change that route element to `<Placeholder name="Nutrition" subProject={3} />` at path `/progress`? No: keep the test about navigation, not the placeholder. Replace that route element with `<div>progress body</div>` and update the assertions that look for "Coming soon" text on Progress (search the file for `Coming soon` and `Progress`; expect `progress body` instead), and remove the now-unused `Placeholder` import if nothing else uses it.
+In `web/tests/shell.test.tsx`: it renders `<Placeholder name="Progress" subProject={2} />` at `/progress`, which no longer type-checks. Read the file, replace that element with `<div>progress body</div>`, update any assertion that expects the placeholder's "Coming soon" text on Progress to expect `progress body`, and drop the `Placeholder` import if nothing else in the file uses it. Change nothing else in that test.
 
 - [ ] **Step 5: Run the web suite**
 
@@ -2060,7 +2056,7 @@ cp docs/architecture/tri-web.md $V/docs/architecture/
 cp DESIGN.md $V/DESIGN.md
 ```
 
-The vault keeps `DESIGN.md` lowercase-free at its root as it does today (`ls $V` showed `DESIGN.md`).
+`DESIGN.md` goes at the vault root, where the existing copy lives.
 
 - [ ] **Step 5: Definition of Done, in order**
 
