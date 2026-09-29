@@ -31,6 +31,9 @@ export type SchemaOut = S["SchemaOut"];
 export type Validated = S["Validated"];
 export type ValidationItem = S["ValidationItem"];
 export type JobOut = S["JobOut"];
+export type VerdictOut = S["VerdictOut"];
+export type ReasonOut = S["ReasonOut"];
+export type ConditionOut = S["ConditionOut"];
 
 export const keys = {
   today: ["today"] as const,

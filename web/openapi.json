@@ -497,6 +497,97 @@
         "type": "object",
         "title": "CheckinIn"
       },
+      "ConditionOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "enum": [
+              "training_readiness",
+              "hrv",
+              "resting_hr",
+              "sleep_score",
+              "sleep_hours",
+              "tsb",
+              "acwr",
+              "ramp"
+            ],
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "baseline": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline"
+          },
+          "band_low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Band Low"
+          },
+          "band_high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Band High"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "flagged": {
+            "type": "boolean",
+            "title": "Flagged"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "value",
+          "unit",
+          "baseline",
+          "band_low",
+          "band_high",
+          "status",
+          "flagged"
+        ],
+        "title": "ConditionOut"
+      },
       "FuelOut": {
         "properties": {
           "target": {
@@ -1213,6 +1304,34 @@
         "title": "ReadinessOut",
         "description": "null: \"No Garmin data yet, sync first\"."
       },
+      "ReasonOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "caution",
+              "stop",
+              "info"
+            ],
+            "title": "Severity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "text",
+          "severity"
+        ],
+        "title": "ReasonOut"
+      },
       "ResetIn": {
         "properties": {
           "confirm": {
@@ -1656,6 +1775,16 @@
             "type": "boolean",
             "title": "Labs Missing"
           },
+          "verdict": {
+            "$ref": "#/components/schemas/VerdictOut"
+          },
+          "conditions": {
+            "items": {
+              "$ref": "#/components/schemas/ConditionOut"
+            },
+            "type": "array",
+            "title": "Conditions"
+          },
           "pending": {
             "anyOf": [
               {
@@ -1676,7 +1805,9 @@
           "week",
           "labs",
           "labs_enabled",
-          "labs_missing"
+          "labs_missing",
+          "verdict",
+          "conditions"
         ],
         "title": "TodayView"
       },
@@ -1896,6 +2027,61 @@
           "msg"
         ],
         "title": "ValidationItem"
+      },
+      "VerdictOut": {
+        "properties": {
+          "call": {
+            "type": "string",
+            "enum": [
+              "go",
+              "easy",
+              "rest",
+              "none"
+            ],
+            "title": "Call"
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/ReasonOut"
+            },
+            "type": "array",
+            "title": "Reasons"
+          },
+          "based_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Based On"
+          },
+          "stale": {
+            "type": "boolean",
+            "title": "Stale"
+          },
+          "harder_than_call": {
+            "type": "boolean",
+            "title": "Harder Than Call"
+          },
+          "session_done": {
+            "type": "boolean",
+            "title": "Session Done"
+          }
+        },
+        "type": "object",
+        "required": [
+          "call",
+          "reasons",
+          "based_on",
+          "stale",
+          "harder_than_call",
+          "session_done"
+        ],
+        "title": "VerdictOut"
       },
       "WeekHeader": {
         "properties": {

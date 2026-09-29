@@ -27,6 +27,7 @@ from tri_web.metrics import (
 )
 from tri_web.runtime import Runtime, cfg
 from tri_web.thread import ReviewPayload, review_payload
+from tri_web.verdict import ConditionOut, VerdictOut, conditions, verdict
 
 SOURCES = ("trainingpeaks", "garmin")
 
@@ -179,6 +180,8 @@ class TodayView(BaseModel):
     labs: LabsOut | None
     labs_enabled: bool
     labs_missing: bool
+    verdict: VerdictOut
+    conditions: list[ConditionOut]
     pending: ReviewPayload | None = Field(default=None)
 
 
@@ -333,6 +336,8 @@ async def build_today(rt: Runtime) -> TodayView:
         )
 
     readiness = _readiness(metric, today, history) if metric is not None else None
+    call = verdict(readiness, todays, today)
+    rows = conditions(readiness)
 
     target = None
     if targets:
@@ -392,5 +397,7 @@ async def build_today(rt: Runtime) -> TodayView:
         labs=_labs(ctx.labs),
         labs_enabled=ctx.labs_enabled,
         labs_missing=ctx.labs_missing,
+        verdict=call,
+        conditions=rows,
         pending=pending,
     )

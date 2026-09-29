@@ -271,6 +271,30 @@ export interface components {
              */
             sync: boolean;
         };
+        /** ConditionOut */
+        ConditionOut: {
+            /**
+             * Key
+             * @enum {string}
+             */
+            key: "training_readiness" | "hrv" | "resting_hr" | "sleep_score" | "sleep_hours" | "tsb" | "acwr" | "ramp";
+            /** Label */
+            label: string;
+            /** Value */
+            value: number | null;
+            /** Unit */
+            unit: string;
+            /** Baseline */
+            baseline: number | null;
+            /** Band Low */
+            band_low: number | null;
+            /** Band High */
+            band_high: number | null;
+            /** Status */
+            status: string;
+            /** Flagged */
+            flagged: boolean;
+        };
         /**
          * FuelOut
          * @description target null: "No targets yet, ask the coach".
@@ -471,6 +495,18 @@ export interface components {
             /** Acwr Flag */
             acwr_flag: ("low" | "high") | null;
         };
+        /** ReasonOut */
+        ReasonOut: {
+            /** Key */
+            key: string;
+            /** Text */
+            text: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "caution" | "stop" | "info";
+        };
         /** ResetIn */
         ResetIn: {
             /**
@@ -629,6 +665,9 @@ export interface components {
             labs_enabled: boolean;
             /** Labs Missing */
             labs_missing: boolean;
+            verdict: components["schemas"]["VerdictOut"];
+            /** Conditions */
+            conditions: components["schemas"]["ConditionOut"][];
             pending?: components["schemas"]["ReviewPayload"] | null;
         };
         /** TurnIn */
@@ -697,6 +736,24 @@ export interface components {
             loc: (string | number)[];
             /** Msg */
             msg: string;
+        };
+        /** VerdictOut */
+        VerdictOut: {
+            /**
+             * Call
+             * @enum {string}
+             */
+            call: "go" | "easy" | "rest" | "none";
+            /** Reasons */
+            reasons: components["schemas"]["ReasonOut"][];
+            /** Based On */
+            based_on: string | null;
+            /** Stale */
+            stale: boolean;
+            /** Harder Than Call */
+            harder_than_call: boolean;
+            /** Session Done */
+            session_done: boolean;
         };
         /** WeekHeader */
         WeekHeader: {

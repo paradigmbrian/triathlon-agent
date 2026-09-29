@@ -6,7 +6,10 @@ const today = {
   readiness: null,
   fuel: { target: null, targets_through: null },
   week: { phase: "build", target_hours: 6, target_tss: 300, actual_hours: 1, actual_tss: 60, sessions: [{ sport: "run", planned: 2, completed: 1, planned_tss: 120, actual_tss: 60, planned_hours: 2, actual_hours: 1 }], planned_to_date: 1, completed_to_date: 0 },
-  labs: null, labs_enabled: false, labs_missing: false, pending: null,
+  labs: null, labs_enabled: false, labs_missing: false,
+  verdict: { call: "none", reasons: [{ key: "training_readiness", text: "No Garmin data, sync first", severity: "info" }], based_on: null, stale: false, harder_than_call: false, session_done: false },
+  conditions: [],
+  pending: null,
 };
 const proposal = { id: "p1", domain: "planning", summary: "move it", changes: [{ op: "move", workout_date: null, tp_workout_id: "w1", workout: null, new_date: "2026-09-18", payload: null, reason: "knee", athlete_requested: false }], violations: [], question: null, overrides: null };
 const interrupt = { narration: "Knee: move Wednesday to Friday.", proposals: [proposal] };
