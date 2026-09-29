@@ -1,34 +1,45 @@
 @import "tailwindcss";
 
+/* Dark first: the board is read at 5 AM. The daylight board overrides for light schemes. */
 :root {
-  --surface: #f7f6f2;
-  --surface-2: #ffffff;
-  --ink: #1b1b1f;
-  --ink-2: #5d5f66;
-  --line: #d6d3c8;
-  --accent: #1f6f5f;
-  --planning: #3552a8;
-  --nutrition: #b3551d;
-  --warn: #805800;
-  --good: #23703a;
-  --danger: #b3261e;
-  --on-fill: #ffffff;
+  color-scheme: dark;
+  --surface: #0b0f14;
+  --surface-2: #111820;
+  --ink: #d9dee5;
+  --ink-2: #95a0ae;
+  --line: #2e3d52;
+  --accent: #8fb8ff;
+  --planning: #8ea3ea;
+  --nutrition: #e9915a;
+  --go: #5fd38d;
+  --easy: #f2c14e;
+  --rest: #ff8f6b;
+  --hold: #8fb8ff;
+  --warn: #f2c14e;
+  --good: #5fd38d;
+  --danger: #ef6a63;
+  --on-fill: #0b0f14;
 }
 
-@media (prefers-color-scheme: dark) {
+@media (prefers-color-scheme: light) {
   :root {
-    --surface: #131417;
-    --surface-2: #1d1f24;
-    --ink: #ececec;
-    --ink-2: #a3a6ad;
-    --line: #3a3e47;
-    --accent: #4fb39c;
-    --planning: #8ea3ea;
-    --nutrition: #e9915a;
-    --warn: #e0b449;
-    --good: #6fcf97;
-    --danger: #ef6a63;
-    --on-fill: #131417;
+    color-scheme: light;
+    --surface: #f4f5f7;
+    --surface-2: #ffffff;
+    --ink: #12161c;
+    --ink-2: #555e6b;
+    --line: #d3d8df;
+    --accent: #2f5fb3;
+    --planning: #3552a8;
+    --nutrition: #9c4a18;
+    --go: #19663a;
+    --easy: #7d5400;
+    --rest: #a13a18;
+    --hold: #2f5fb3;
+    --warn: #7d5400;
+    --good: #19663a;
+    --danger: #b3261e;
+    --on-fill: #ffffff;
   }
 }
 
@@ -44,6 +55,10 @@
   --color-warn: var(--warn);
   --color-good: var(--good);
   --color-danger: var(--danger);
+  --color-go: var(--go);
+  --color-easy: var(--easy);
+  --color-rest: var(--rest);
+  --color-hold: var(--hold);
   --color-on-fill: var(--on-fill);
 }
 
@@ -70,4 +85,12 @@ body { @apply bg-surface text-ink antialiased; }
       transition-duration: 0.01ms !important;
     }
   }
+}
+
+@keyframes board-flash {
+  from { background-color: color-mix(in srgb, var(--hold) 22%, transparent); }
+  to { background-color: transparent; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .board-flash { animation: board-flash 700ms ease-out 1; }
 }

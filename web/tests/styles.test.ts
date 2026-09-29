@@ -22,13 +22,19 @@ test("pulses only run when motion is allowed", () => {
   expect(bare).toEqual([]);
 });
 
-test("the tokens pass contrast and include good", () => {
-  expect(css).toContain("--warn: #805800;");
-  expect(css).toContain("--good: #23703a;");
-  expect(css).toContain("--good: #6fcf97;");
-  expect(css).toContain("--line: #d6d3c8;");
-  expect(css).toContain("--line: #3a3e47;");
-  expect(css).toContain("--color-good: var(--good);");
+test("the board tokens are dark first with a daylight variant", () => {
+  for (const v of [
+    "--surface: #0b0f14;", "--surface-2: #111820;", "--ink: #d9dee5;", "--ink-2: #95a0ae;", "--line: #2e3d52;",
+    "--go: #5fd38d;", "--easy: #f2c14e;", "--rest: #ff8f6b;", "--hold: #8fb8ff;",
+    "--surface: #f4f5f7;", "--ink: #12161c;", "--ink-2: #555e6b;",
+    "--go: #19663a;", "--easy: #7d5400;", "--rest: #a13a18;", "--hold: #2f5fb3;",
+  ]) expect(css).toContain(v);
+  for (const c of ["go", "easy", "rest", "hold", "good", "warn", "danger"]) expect(css).toContain(`--color-${c}: var(--${c});`);
+  expect(css).toContain("prefers-color-scheme: light");
   expect(css).toContain("prefers-reduced-motion: reduce");
   expect(css).toMatch(/button:not\(:disabled\)[^{]*\{\s*cursor: pointer;/);
+});
+
+test("the row flash only animates when motion is allowed", () => {
+  expect(css).toMatch(/@media \(prefers-reduced-motion: no-preference\)\s*\{[^}]*\.board-flash/);
 });
