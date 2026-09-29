@@ -1,11 +1,37 @@
 import type { ReactNode } from "react";
+import Markdown, { type Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
+import "./prose.css";
+
+/** react-markdown passes the hast node; it is not a DOM attribute. */
+function dom<T extends { node?: unknown }>({ node, ...rest }: T) {
+  void node;
+  return rest;
+}
+
+const heading = (props: { node?: unknown; children?: ReactNode }) => <p className="font-semibold">{dom(props).children}</p>;
+
+const md: Components = {
+  a: (props) => <a {...dom(props)} target="_blank" rel="noreferrer" />,
+  table: (props) => (
+    <div className="overflow-x-auto">
+      <table {...dom(props)} />
+    </div>
+  ),
+  h1: heading,
+  h2: heading,
+  h3: heading,
+  h4: heading,
+  h5: heading,
+  h6: heading,
+};
 
 const tagColor: Record<string, string> = { planning: "text-planning", nutrition: "text-nutrition", analyst: "text-ink-2" };
 
 export function Bubble({ role, where, children }: { role: "user" | "assistant" | "consult" | "report" | "error"; where?: string | null; children: ReactNode }) {
   if (role === "user") {
     return (
-      <div className="ml-auto max-w-[85%] rounded-2xl rounded-br-sm border border-accent/30 bg-accent/15 px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap">
+      <div className="ml-auto max-w-[85%] rounded-2xl rounded-br-sm border border-accent/30 bg-accent/15 px-3.5 py-2 text-base leading-relaxed whitespace-pre-wrap">
         {children}
       </div>
     );
@@ -17,12 +43,21 @@ export function Bubble({ role, where, children }: { role: "user" | "assistant" |
     return <div className="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">{children}</div>;
   }
   const tag = where && where !== "coach" ? where : null;
+  const prose = role === "assistant" && typeof children === "string";
   return (
     <div
-      className={`max-w-[85%] rounded-2xl rounded-bl-sm border border-line bg-surface-2 px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap ${role === "consult" ? "font-mono text-xs text-ink-2" : ""}`}
+      className={`max-w-[85%] rounded-2xl rounded-bl-sm border border-line bg-surface-2 px-3.5 py-2 leading-relaxed ${prose ? "" : "whitespace-pre-wrap"} ${role === "consult" ? "font-mono text-xs text-ink-2" : "text-base"}`}
     >
-      {tag && <span className={`mr-2 text-[11px] font-semibold tracking-wide uppercase ${tagColor[tag] ?? "text-ink-2"}`}>{tag}</span>}
-      {children}
+      {tag && <span className={`mr-2 text-xs font-semibold tracking-wide uppercase ${tagColor[tag] ?? "text-ink-2"}`}>{tag}</span>}
+      {prose ? (
+        <div className="chat-prose">
+          <Markdown remarkPlugins={[remarkGfm]} components={md} disallowedElements={["img"]} unwrapDisallowed>
+            {children}
+          </Markdown>
+        </div>
+      ) : (
+        children
+      )}
     </div>
   );
 }

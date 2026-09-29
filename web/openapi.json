@@ -904,6 +904,99 @@
         ],
         "title": "MemoryOut"
       },
+      "MetricTrend": {
+        "properties": {
+          "now": {
+            "type": "number",
+            "title": "Now"
+          },
+          "avg_7d": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg 7D"
+          },
+          "avg_28d": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg 28D"
+          },
+          "sd_28d": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sd 28D"
+          },
+          "band": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "below",
+                  "normal",
+                  "above"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Band"
+          },
+          "better": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Better"
+          },
+          "spark": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Spark"
+          }
+        },
+        "type": "object",
+        "required": [
+          "now",
+          "avg_7d",
+          "avg_28d",
+          "sd_28d",
+          "band",
+          "better",
+          "spark"
+        ],
+        "title": "MetricTrend"
+      },
       "Readiness": {
         "properties": {
           "api_key": {
@@ -1036,6 +1129,65 @@
               }
             ],
             "title": "Tsb"
+          },
+          "trends": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MetricTrend"
+            },
+            "type": "object",
+            "title": "Trends"
+          },
+          "tsb_zone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tsb Zone"
+          },
+          "ramp_7d": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ramp 7D"
+          },
+          "ramp_caution": {
+            "type": "boolean",
+            "title": "Ramp Caution"
+          },
+          "acwr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acwr"
+          },
+          "acwr_flag": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "high"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acwr Flag"
           }
         },
         "type": "object",
@@ -1050,7 +1202,13 @@
           "training_readiness",
           "ctl",
           "atl",
-          "tsb"
+          "tsb",
+          "trends",
+          "tsb_zone",
+          "ramp_7d",
+          "ramp_caution",
+          "acwr",
+          "acwr_flag"
         ],
         "title": "ReadinessOut",
         "description": "null: \"No Garmin data yet, sync first\"."
@@ -1207,13 +1365,33 @@
           "completed": {
             "type": "integer",
             "title": "Completed"
+          },
+          "planned_tss": {
+            "type": "number",
+            "title": "Planned Tss"
+          },
+          "actual_tss": {
+            "type": "number",
+            "title": "Actual Tss"
+          },
+          "planned_hours": {
+            "type": "number",
+            "title": "Planned Hours"
+          },
+          "actual_hours": {
+            "type": "number",
+            "title": "Actual Hours"
           }
         },
         "type": "object",
         "required": [
           "sport",
           "planned",
-          "completed"
+          "completed",
+          "planned_tss",
+          "actual_tss",
+          "planned_hours",
+          "actual_hours"
         ],
         "title": "SportCount"
       },
@@ -1799,6 +1977,14 @@
             },
             "type": "array",
             "title": "Sessions"
+          },
+          "planned_to_date": {
+            "type": "integer",
+            "title": "Planned To Date"
+          },
+          "completed_to_date": {
+            "type": "integer",
+            "title": "Completed To Date"
           }
         },
         "type": "object",
@@ -1808,7 +1994,9 @@
           "target_tss",
           "actual_hours",
           "actual_tss",
-          "sessions"
+          "sessions",
+          "planned_to_date",
+          "completed_to_date"
         ],
         "title": "WeekOut",
         "description": "null: \"No plan; ask the coach to build one\"."
@@ -1881,6 +2069,50 @@
               }
             ],
             "title": "Actual Tss"
+          },
+          "actual_if": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual If"
+          },
+          "avg_hr": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Hr"
+          },
+          "avg_power": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Power"
+          },
+          "normalized_power": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normalized Power"
           }
         },
         "type": "object",
@@ -1892,7 +2124,11 @@
           "planned_duration_sec",
           "planned_tss",
           "actual_duration_sec",
-          "actual_tss"
+          "actual_tss",
+          "actual_if",
+          "avg_hr",
+          "avg_power",
+          "normalized_power"
         ],
         "title": "WorkoutOut"
       },

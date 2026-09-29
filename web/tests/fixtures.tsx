@@ -29,12 +29,32 @@ export function todayFull(): TodayView {
       last_sync: [{ source: "garmin", last_synced_date: "2026-09-16", last_run_at: "2026-09-16T06:10:00Z", status: "ok", error: null }],
     },
     session: {
-      workouts: [{ tp_workout_id: "w1", sport: "run", title: "Tempo", completed: false, planned_duration_sec: 3600, planned_tss: 60, actual_duration_sec: null, actual_tss: null }],
+      workouts: [{ tp_workout_id: "w1", sport: "run", title: "Tempo", completed: false, planned_duration_sec: 3600, planned_tss: 60, actual_duration_sec: null, actual_tss: null, actual_if: null, avg_hr: null, avg_power: null, normalized_power: null }],
       fuel: { id: 1, kind: "session", tp_workout_id: "w1", payload: { carbs_g_per_h: 60, pre: "toast" }, violations: [], written: false },
     },
-    readiness: { date: "2026-09-16", is_today: true, sleep_score: 81, sleep_hours: 7.5, hrv: 62, resting_hr: 48, body_battery: 92, training_readiness: 77, ctl: 45.2, atl: 50.1, tsb: -4.9 },
+    readiness: {
+      date: "2026-09-16", is_today: true, sleep_score: 81, sleep_hours: 7.5, hrv: 62, resting_hr: 48, body_battery: 92, training_readiness: 77, ctl: 45.2, atl: 50.1, tsb: -4.9,
+      trends: {
+        hrv: { now: 62, avg_7d: 60, avg_28d: 58, sd_28d: 3, band: "above", better: true, spark: [55, 56, 58, 57, 59, null, 60, 61, 58, 59, 60, 61, 60, 62] },
+        resting_hr: { now: 48, avg_7d: 49, avg_28d: 50, sd_28d: 2, band: "normal", better: true, spark: [51, 50, 50, 49, 49, 50, 49, 48, 49, 50, 49, 48, 49, 48] },
+        sleep_score: { now: 81, avg_7d: 79, avg_28d: 78, sd_28d: 5, band: "normal", better: true, spark: [75, 80, 78, 77, 79, 82, 76, 78, 80, 79, 77, 81, 78, 81] },
+        sleep_hours: { now: 7.5, avg_7d: 7.3, avg_28d: 7.2, sd_28d: 0.4, band: "normal", better: true, spark: [7, 7.4, 7.2, 7.1, 7.3, 7.6, 7, 7.2, 7.4, 7.3, 7.1, 7.5, 7.2, 7.5] },
+        training_readiness: { now: 77, avg_7d: 72, avg_28d: 70, sd_28d: 8, band: "normal", better: true, spark: [65, 70, 68, 72, 74, 71, 69, 70, 73, 72, 70, 75, 74, 77] },
+      },
+      tsb_zone: "neutral",
+      ramp_7d: 3.5,
+      ramp_caution: false,
+      acwr: 1.11,
+      acwr_flag: null,
+    },
     fuel: { target: { day_type: "moderate", total_kcal: 2900, carbs_g: 380, protein_g: 150, fat_g: 80, fluid_baseline_ml: 2500, written_to_garmin: false }, targets_through: "2026-09-20" },
-    week: { phase: "build", target_hours: 6, target_tss: 300, actual_hours: 2.5, actual_tss: 120, sessions: [{ sport: "run", planned: 2, completed: 1 }, { sport: "bike", planned: 2, completed: 1 }] },
+    week: { phase: "build", target_hours: 6, target_tss: 300, actual_hours: 2.5, actual_tss: 120, sessions: [
+        { sport: "run", planned: 2, completed: 1, planned_tss: 120, actual_tss: 60, planned_hours: 2, actual_hours: 1 },
+        { sport: "bike", planned: 2, completed: 1, planned_tss: 180, actual_tss: 60, planned_hours: 4, actual_hours: 1.5 },
+      ],
+      planned_to_date: 3,
+      completed_to_date: 2,
+    },
   };
 }
 

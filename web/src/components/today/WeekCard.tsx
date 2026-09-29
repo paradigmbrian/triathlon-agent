@@ -22,7 +22,18 @@ export default function WeekCard({ week }: { week: TodayView["week"] }) {
       <div className="text-ink-2">
         {n(week.actual_tss)} of {n(week.target_tss)} TSS
       </div>
-      <div className="text-ink-2">{week.sessions.map((s) => `${s.sport} ${s.completed}/${s.planned}`).join(" · ")}</div>
+      <ul className="space-y-0.5 text-ink-2 tabular-nums">
+        {week.sessions.map((s) => (
+          <li key={s.sport}>
+            {`${s.sport} ${s.completed}/${s.planned} · ${n(s.actual_tss)} of ${n(s.planned_tss)} TSS · ${n(s.actual_hours, 1)} of ${hours(s.planned_hours)}`}
+          </li>
+        ))}
+      </ul>
+      {week.planned_to_date > 0 && (
+        <div className="text-xs text-ink-2">
+          {week.completed_to_date} of {week.planned_to_date} so far
+        </div>
+      )}
     </Card>
   );
 }

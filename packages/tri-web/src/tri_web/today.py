@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import date, datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -15,6 +15,16 @@ from tri_core.harness.turns import paused_review
 from tri_nutrition import repo as nrepo
 from tri_planning import repo as prepo
 from tri_planning.planning.targets import week_monday
+from tri_web.metrics import (
+    BASELINE_DAYS,
+    RAMP_CAUTION,
+    MetricTrend,
+    acwr,
+    acwr_flag,
+    ramp,
+    trend,
+    tsb_zone,
+)
 from tri_web.runtime import Runtime, cfg
 from tri_web.thread import ReviewPayload, review_payload
 
@@ -63,6 +73,10 @@ class WorkoutOut(BaseModel):
     planned_tss: float | None
     actual_duration_sec: int | None
     actual_tss: float | None
+    actual_if: float | None
+    avg_hr: int | None
+    avg_power: int | None
+    normalized_power: int | None
 
 
 class FuelPlanOut(BaseModel):
@@ -95,6 +109,12 @@ class ReadinessOut(BaseModel):
     ctl: float | None
     atl: float | None
     tsb: float | None
+    trends: dict[str, MetricTrend]  # a key is absent when that metric is null on this day
+    tsb_zone: str | None
+    ramp_7d: float | None  # CTL now minus CTL seven days earlier
+    ramp_caution: bool
+    acwr: float | None  # ATL / CTL
+    acwr_flag: Literal["low", "high"] | None
 
 
 class TargetOut(BaseModel):
@@ -118,6 +138,10 @@ class SportCount(BaseModel):
     sport: str
     planned: int
     completed: int
+    planned_tss: float
+    actual_tss: float
+    planned_hours: float
+    actual_hours: float
 
 
 class WeekOut(BaseModel):
@@ -129,6 +153,8 @@ class WeekOut(BaseModel):
     actual_hours: float
     actual_tss: float
     sessions: list[SportCount]
+    planned_to_date: int  # sessions dated on or before today
+    completed_to_date: int
 
 
 class LabsOut(BaseModel):
@@ -166,23 +192,60 @@ def _workout(row: dict[str, Any]) -> WorkoutOut:
         planned_tss=_f(row.get("planned_tss")),
         actual_duration_sec=row.get("actual_duration_sec"),
         actual_tss=_f(row.get("actual_tss")),
+        actual_if=_f(row.get("actual_if")),
+        avg_hr=row.get("avg_hr"),
+        avg_power=row.get("avg_power"),
+        normalized_power=row.get("normalized_power"),
     )
 
 
-def _readiness(row: dict[str, Any], today: date) -> ReadinessOut:
+# (key, daily_metrics column, higher is better)
+TRENDS = (
+    ("hrv", "hrv_overnight_avg", True),
+    ("resting_hr", "resting_hr", False),
+    ("sleep_score", "sleep_score", True),
+    ("sleep_hours", "sleep_seconds", True),
+    ("training_readiness", "training_readiness", True),
+)
+
+
+def _readiness(row: dict[str, Any], today: date, history: list[dict[str, Any]]) -> ReadinessOut:
+    """history: daily_metrics rows in the BASELINE_DAYS ending on row's date, any order."""
+    end: date = row["metric_date"]
+    by_day = {h["metric_date"]: h for h in history}
+    days = [end - timedelta(days=BASELINE_DAYS - 1 - i) for i in range(BASELINE_DAYS)]
+
+    def series(column: str) -> list[float | None]:
+        out: list[float | None] = []
+        for d in days:
+            v = _f(by_day[d].get(column)) if d in by_day else None
+            out.append(round(v / 3600, 2) if v is not None and column == "sleep_seconds" else v)
+        return out
+
+    trends = {key: t for key, column, up in TRENDS if (t := trend(series(column), up)) is not None}
     secs = row.get("sleep_seconds")
+    ctl, atl, tsb = _f(row.get("ctl")), _f(row.get("atl")), _f(row.get("tsb"))
+    week_ago = by_day.get(end - timedelta(days=7))
+    ramp_7d = ramp(ctl, _f(week_ago.get("ctl")) if week_ago else None)
+    ratio = acwr(atl, ctl)
     return ReadinessOut(
-        date=row["metric_date"],
-        is_today=row["metric_date"] == today,
+        date=end,
+        is_today=end == today,
         sleep_score=row.get("sleep_score"),
         sleep_hours=round(secs / 3600, 2) if secs is not None else None,
         hrv=row.get("hrv_overnight_avg"),
         resting_hr=row.get("resting_hr"),
         body_battery=row.get("body_battery_high"),
         training_readiness=row.get("training_readiness"),
-        ctl=_f(row.get("ctl")),
-        atl=_f(row.get("atl")),
-        tsb=_f(row.get("tsb")),
+        ctl=ctl,
+        atl=atl,
+        tsb=tsb,
+        trends=trends,
+        tsb_zone=tsb_zone(tsb),
+        ramp_7d=ramp_7d,
+        ramp_caution=ramp_7d is not None and ramp_7d > RAMP_CAUTION,
+        acwr=ratio,
+        acwr_flag=acwr_flag(ratio),
     )
 
 
@@ -216,6 +279,14 @@ async def build_today(rt: Runtime) -> TodayView:
             "select * from daily_metrics where metric_date <= %s order by metric_date desc limit 1",
             (today,),
         ).fetchone()
+        history = (
+            conn.execute(
+                "select * from daily_metrics where metric_date between %s and %s",
+                (metric["metric_date"] - timedelta(days=BASELINE_DAYS - 1), metric["metric_date"]),
+            ).fetchall()
+            if metric is not None
+            else []
+        )
         targets = nrepo.list_targets(conn, today, today)
         fuel_plans = nrepo.list_fuel_plans(conn, today, today)
         syncs = [s for s in (crepo.get_sync_state(conn, src) for src in SOURCES) if s is not None]
@@ -261,7 +332,7 @@ async def build_today(rt: Runtime) -> TodayView:
             fuel=FuelPlanOut(**plan.model_dump()) if plan is not None else None,
         )
 
-    readiness = _readiness(metric, today) if metric is not None else None
+    readiness = _readiness(metric, today, history) if metric is not None else None
 
     target = None
     if targets:
@@ -279,10 +350,16 @@ async def build_today(rt: Runtime) -> TodayView:
 
     week = None
     if ctx.this_week is not None:
-        counts: dict[str, list[int]] = defaultdict(lambda: [0, 0])
+        per: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
         for w in week_rows:
-            counts[w["sport"]][0] += 1
-            counts[w["sport"]][1] += int(bool(w["completed"]))
+            a = per[w["sport"]]
+            a["planned"] += 1
+            a["completed"] += int(bool(w["completed"]))
+            a["planned_tss"] += float(w["planned_tss"] or 0)
+            a["actual_tss"] += float(w["actual_tss"] or 0)
+            a["planned_hours"] += (w["planned_duration_sec"] or 0) / 3600
+            a["actual_hours"] += (w["actual_duration_sec"] or 0) / 3600
+        to_date = [w for w in week_rows if w["workout_date"] <= today]
         week = WeekOut(
             phase=ctx.this_week.phase,
             target_hours=ctx.this_week.target_hours,
@@ -290,8 +367,19 @@ async def build_today(rt: Runtime) -> TodayView:
             actual_hours=round(ctx.actual_hours, 2),
             actual_tss=round(ctx.actual_tss, 1),
             sessions=[
-                SportCount(sport=s, planned=p, completed=c) for s, (p, c) in sorted(counts.items())
+                SportCount(
+                    sport=s,
+                    planned=int(a["planned"]),
+                    completed=int(a["completed"]),
+                    planned_tss=round(a["planned_tss"], 1),
+                    actual_tss=round(a["actual_tss"], 1),
+                    planned_hours=round(a["planned_hours"], 2),
+                    actual_hours=round(a["actual_hours"], 2),
+                )
+                for s, a in sorted(per.items())
             ],
+            planned_to_date=len(to_date),
+            completed_to_date=sum(1 for w in to_date if w["completed"]),
         )
 
     pending = review_payload(paused) if paused is not None else review_payload(held)

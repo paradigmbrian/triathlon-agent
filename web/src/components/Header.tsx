@@ -1,8 +1,12 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { TodayView } from "../api/queries";
 import { day, when } from "../lib/format";
 
-export default function Header({ today, slots }: { today?: TodayView; slots?: ReactNode }) {
+const STALE_MS = 24 * 3_600_000;
+
+export default function Header({ today, slots, now }: { today?: TodayView; slots?: ReactNode; now?: number }) {
+  const [mountedAt] = useState(Date.now);
+  const clock = now ?? mountedAt;
   const h = today?.header;
   const week = h?.week.number != null ? `${h.phase} · week ${h.week.number} of ${h.week.of}` : (h?.phase ?? "");
   const goal = h?.goal;
@@ -17,11 +21,17 @@ export default function Header({ today, slots }: { today?: TodayView; slots?: Re
             {goal.days_to_go} days to {goal.event_name ?? "race day"}
           </div>
         )}
-        {h?.last_sync.map((s) => (
-          <div key={s.source} className={`text-xs ${s.status === "ok" ? "text-ink-2" : "text-warn"}`} title={s.error ?? ""}>
-            {s.source} {when(s.last_run_at)}
-          </div>
-        ))}
+        {h?.last_sync.map((s) => {
+          const failed = s.status !== "ok";
+          const stale = !failed && clock - Date.parse(s.last_run_at) > STALE_MS;
+          const tone = failed ? "text-danger" : stale ? "text-warn" : "text-ink-2";
+          return (
+            <div key={s.source} className={`text-xs ${tone}`} title={s.error ?? ""}>
+              {s.source} {when(s.last_run_at)}
+              {failed ? " · failed" : stale ? " · stale" : ""}
+            </div>
+          );
+        })}
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {pendingCount > 0 && (

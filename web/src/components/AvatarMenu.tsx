@@ -52,7 +52,7 @@ export default function AvatarMenu() {
         <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden="true">
           <path d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Zm0 2c-4.4 0-8 2.4-8 5.3V21h16v-1.7c0-2.9-3.6-5.3-8-5.3Z" />
         </svg>
-        {busy && <span aria-hidden="true" className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 animate-pulse rounded-full bg-accent ring-2 ring-surface-2" />}
+        {busy && <span aria-hidden="true" className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 motion-safe:animate-pulse rounded-full bg-accent ring-2 ring-surface-2" />}
       </button>
       {/* Hidden rather than unmounted so a running job keeps its stream and transcript. */}
       <div

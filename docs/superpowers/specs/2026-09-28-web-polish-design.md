@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-28
 **Status:** Approved 2026-09-28
-**Amended:** 2026-09-28, while planning: `acwr_flag` (§6.1, §6.2, §6.3) and the full list of existing test lines that change (§7).
+**Amended:** 2026-09-29, after Brian's review in the browser: the Readiness card became compact tiles and load chips, with no sparklines (§1, §6.3). 2026-09-28, while planning: `acwr_flag` (§6.1, §6.2, §6.3) and the full list of existing test lines that change (§7).
 **Purpose:** Option A from the 2026-09-28 web review: a styling and accessibility pass over the React app and richer numbers on the four Today cards, backed by a `ui-ux-pro-max` audit. The Progress page with charts and the visible navigation rail (option B) get their own spec. Line numbers are `main` @ 328ed9a.
 
 ## 1. Decisions already made
@@ -14,7 +14,7 @@
 | Style | Keep the existing minimal look and the `index.css` token palette; do not adopt the skill's stock palettes. | The skill's style pick ("Minimalism & Swiss") matches what exists; its palettes clash with the planning and nutrition hues. |
 | Component library | None added. | Tailwind v4 with the existing tokens covers everything here. |
 | New dependencies | `react-markdown` and `remark-gfm` only. | Checked with Context7: safe by default (no raw HTML, `defaultUrlTransform`). |
-| Charts | Sparklines are hand-written inline SVG. Recharts arrives with B. | A 14-point polyline does not justify a chart library. |
+| Charts | None on the Today cards (sparklines were tried and removed, 2026-09-29, as too bulky). Trend charts arrive with B. | The cards stay compact; history belongs on Progress. |
 
 ## 2. Findings this spec fixes (verified 2026-09-28)
 
@@ -102,10 +102,10 @@ Functions:
 
 ### 6.3 Cards
 
-- **Readiness.** The headline is `training_readiness`, falling back to `sleep_score` when it is null, with the label saying which. Under it is one row per trend: the value, a 14-day sparkline, and an arrow with `vs 28-day avg` coloured `good`/`warn` by `better`. An outside-band value adds the word "low" or "high". The load line reads `TSB -4.9 · neutral`, then `ramp +6.1/wk`, which turns `warn` with "fast" past `RAMP_CAUTION`, then `ACWR 1.11`, which turns `warn` with the `acwr_flag` word ("high" or "low"). CTL and ATL stay on the small line.
+- **Readiness.** The headline is `training_readiness`, falling back to `sleep_score` when it is null, with the label saying which. The headline carries its own compact arrow. One caption, `arrows: vs 28-day avg`, sits under it (the comparison is also screen-reader text on every arrow). Below is a 2×2 grid of tiles (HRV, RHR, Sleep, Slept), each with its value and a compact arrow (`↓7`, `↑0.3`, or `=` when it rounds to level), coloured `good`/`warn` by `better`. An outside-band value adds the word "low" or "high". The load is one row of chips: `TSB -4.9 neutral`, `ramp +6.1/wk` (warn with "fast" when `ramp_caution`), and `ACWR 1.11` (warn with the `acwr_flag` word). CTL and ATL stay on the small line.
 - **Session.** A completed workout adds `IF 0.82 · 148 bpm · 212 W (NP 225)` when present, and `{pct}% of planned` for duration and TSS when both sides exist.
 - **Week.** Under the hours bar, one row per sport shows `run 1/2 · 42 of 60 TSS · 1.2 of 2.0 h`. The compliance figure is `completed_to_date / planned_to_date` as "3 of 4 so far". It is hidden when `planned_to_date` is 0.
-- **Sparkline.** `web/src/components/today/Spark.tsx` is an inline SVG polyline (`aria-hidden`, gaps for null days, `currentColor`); the row's text carries the meaning.
+- **Sparkline.** Removed 2026-09-29: the card was too bulky. `MetricTrend.spark` stays in the API for the Progress page.
 
 **Errors.** Fewer than `BASELINE_MIN` rows means no band and no arrow word; a missing metric omits its row; a missing CTL omits ramp and ACWR. Nothing throws on sparse data.
 
@@ -127,7 +127,7 @@ Functions:
 
 ## 8. Out of scope
 
-The navigation rail and route layout, the Progress page and every chart beyond sparklines (spec B). A manual theme toggle, web fonts, a component or icon library. Changes to coach prompts. C3 and C4a from `2026-09-28-features-design.md`: C4a's race card will reuse `tsb_zone` when it lands.
+The navigation rail and route layout, the Progress page and every chart (spec B). A manual theme toggle, web fonts, a component or icon library. Changes to coach prompts. C3 and C4a from `2026-09-28-features-design.md`: C4a's race card will reuse `tsb_zone` when it lands.
 
 ## 9. Rollout
 

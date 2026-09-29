@@ -400,6 +400,23 @@ export interface components {
             /** Active Ids */
             active_ids: string[];
         };
+        /** MetricTrend */
+        MetricTrend: {
+            /** Now */
+            now: number;
+            /** Avg 7D */
+            avg_7d: number | null;
+            /** Avg 28D */
+            avg_28d: number | null;
+            /** Sd 28D */
+            sd_28d: number | null;
+            /** Band */
+            band: ("below" | "normal" | "above") | null;
+            /** Better */
+            better: boolean | null;
+            /** Spark */
+            spark: (number | null)[];
+        };
         /** Readiness */
         Readiness: {
             /** Api Key */
@@ -439,6 +456,20 @@ export interface components {
             atl: number | null;
             /** Tsb */
             tsb: number | null;
+            /** Trends */
+            trends: {
+                [key: string]: components["schemas"]["MetricTrend"];
+            };
+            /** Tsb Zone */
+            tsb_zone: string | null;
+            /** Ramp 7D */
+            ramp_7d: number | null;
+            /** Ramp Caution */
+            ramp_caution: boolean;
+            /** Acwr */
+            acwr: number | null;
+            /** Acwr Flag */
+            acwr_flag: ("low" | "high") | null;
         };
         /** ResetIn */
         ResetIn: {
@@ -508,6 +539,14 @@ export interface components {
             planned: number;
             /** Completed */
             completed: number;
+            /** Planned Tss */
+            planned_tss: number;
+            /** Actual Tss */
+            actual_tss: number;
+            /** Planned Hours */
+            planned_hours: number;
+            /** Actual Hours */
+            actual_hours: number;
         };
         /** StatusOut */
         StatusOut: {
@@ -688,6 +727,10 @@ export interface components {
             actual_tss: number;
             /** Sessions */
             sessions: components["schemas"]["SportCount"][];
+            /** Planned To Date */
+            planned_to_date: number;
+            /** Completed To Date */
+            completed_to_date: number;
         };
         /** WorkoutOut */
         WorkoutOut: {
@@ -707,6 +750,14 @@ export interface components {
             actual_duration_sec: number | null;
             /** Actual Tss */
             actual_tss: number | null;
+            /** Actual If */
+            actual_if: number | null;
+            /** Avg Hr */
+            avg_hr: number | null;
+            /** Avg Power */
+            avg_power: number | null;
+            /** Normalized Power */
+            normalized_power: number | null;
         };
         /** YamlOut */
         YamlOut: {

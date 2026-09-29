@@ -30,7 +30,7 @@ export default function MemoryTable() {
                 <td className="pr-2 whitespace-nowrap text-ink-2">{day(e.created)}</td>
                 <td className="pr-2 whitespace-nowrap text-ink-2">{e.until ? day(e.until) : "–"}</td>
                 <td className="pr-2 text-xs">{active.has(e.id) ? <span className="text-accent">active</span> : <span className="text-ink-2">expired</span>}</td>
-                <td><button type="button" disabled={forget.isPending} aria-label={`forget ${e.id}`} onClick={() => forget.mutate(e.id)} className="text-xs text-danger disabled:opacity-50">forget</button></td>
+                <td><button type="button" disabled={forget.isPending} aria-label={`forget ${e.id}`} onClick={() => forget.mutate(e.id)} className="inline-flex min-h-6 min-w-6 items-center px-1 text-xs text-danger disabled:opacity-50">{forget.isPending && forget.variables === e.id ? "forgetting…" : "forget"}</button></td>
               </tr>
             ))}
           </tbody>

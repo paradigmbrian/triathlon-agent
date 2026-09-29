@@ -100,6 +100,7 @@ test("a busy 409 hands the text back to the composer; it sends once the run ends
   sendText("move my run");
   await waitFor(() => expect(screen.getByLabelText("Message")).toHaveValue("move my run"));
   expect(screen.getByText("a checkin is running")).toBeInTheDocument();
+  expect(screen.getByText("a checkin is running")).toHaveClass("text-ink-2");
   expect(screen.getByLabelText("Message")).toBeDisabled();
   expect(within(screen.getByTestId("chat-messages")).queryByText("move my run")).not.toBeInTheDocument();
   await poll(); // still running: stays busy
@@ -129,4 +130,22 @@ test("a paused review disables the composer with the hint to answer it first", a
   expect(screen.getByLabelText("Message")).toBeDisabled();
   expect(screen.getByText("answer the review first")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+});
+
+test("the conversation is a polite log that is busy while a turn streams", async () => {
+  stubServer(() => threadEmpty(), () => openStream());
+  renderWith(<Harness />);
+  const log = screen.getByRole("log", { name: "Conversation" });
+  expect(log).toHaveAttribute("aria-live", "polite");
+  expect(log).toHaveAttribute("aria-busy", "false");
+  sendText("how am I doing?");
+  await waitFor(() => expect(log).toHaveAttribute("aria-busy", "true"));
+});
+
+test("the hint is a status line: muted while running, warn when the athlete must act", async () => {
+  stubServer(() => threadEmpty(), () => openStream());
+  renderWith(<Harness paused />);
+  const hint = await screen.findByText("answer the review first");
+  expect(hint).toHaveAttribute("role", "status");
+  expect(hint).toHaveClass("text-warn");
 });

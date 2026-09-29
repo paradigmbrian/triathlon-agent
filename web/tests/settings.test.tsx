@@ -113,3 +113,26 @@ test("status fetch 500 shows could not load status", async () => {
   await screen.findByText("left knee");
   expect(screen.getByText(/could not load status:/)).toHaveClass("text-danger");
 });
+
+test("confirm reset reads Resetting… while the request runs", async () => {
+  let release: () => void;
+  const hold = new Promise<void>((r) => (release = r));
+  const f = vi.spyOn(globalThis, "fetch");
+  f.mockImplementation(async (input) => {
+    const url = String(input);
+    if (url === "/api/coach/memory") return new Response(JSON.stringify(memory), { status: 200 });
+    if (url === "/api/system/status") return new Response(JSON.stringify(status), { status: 200 });
+    if (url === "/api/coach/reset") {
+      await hold;
+      return new Response(null, { status: 204 });
+    }
+    return new Response("nope", { status: 404 });
+  });
+  const user = userEvent.setup();
+  renderWith(<Settings />);
+  await user.click(screen.getByRole("button", { name: "Reset conversation" }));
+  await user.click(screen.getByRole("button", { name: "Confirm reset" }));
+  expect(await screen.findByRole("button", { name: "Resetting…" })).toBeDisabled();
+  release!();
+  expect(await screen.findByText("conversation cleared")).toBeInTheDocument();
+});

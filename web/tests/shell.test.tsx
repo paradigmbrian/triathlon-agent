@@ -28,7 +28,7 @@ afterEach(() => {
 test("the avatar menu holds the five sections, marks the current one, and the two jobs", async () => {
   const user = userEvent.setup();
   renderWith(tree(), { route: "/progress" });
-  expect(screen.getByText(/arrives in sub-project 2/)).toBeInTheDocument();
+  expect(screen.getByText(/Coming soon/)).toBeInTheDocument();
   expect(screen.queryByRole("link", { name: "Progress" })).not.toBeInTheDocument();
   const avatar = screen.getByRole("button", { name: "Account menu" });
   expect(avatar).toHaveAttribute("aria-expanded", "false");
@@ -53,7 +53,7 @@ test("the menu closes on Escape, on an outside click, and after following a link
   expect(avatar).toHaveFocus();
 
   await user.click(avatar);
-  await user.click(screen.getByText(/arrives in sub-project 2/));
+  await user.click(screen.getByText(/Coming soon/));
   expect(screen.queryByRole("link", { name: "Settings" })).not.toBeInTheDocument();
 
   await user.click(avatar);
@@ -80,4 +80,40 @@ test("the header shows date, phase and week, countdown, last sync and the pendin
 test("the header without a plan says so and shows no badge", () => {
   renderWith(<Header today={undefined} />);
   expect(screen.queryByText(/review pending/)).not.toBeInTheDocument();
+});
+
+test("a skip link targets main, and main takes focus after a route change", async () => {
+  const user = userEvent.setup();
+  renderWith(tree(), { route: "/progress" });
+  expect(screen.getByRole("link", { name: "Skip to main content" })).toHaveAttribute("href", "#main");
+  const main = screen.getByRole("main");
+  expect(main).not.toHaveFocus();
+  await user.click(screen.getByRole("button", { name: "Account menu" }));
+  await user.click(screen.getByRole("link", { name: "Settings" }));
+  expect(main).toHaveFocus();
+});
+
+test("sync status says failed or stale in words, not only colour", () => {
+  const t = todayFull();
+  const at = Date.parse(t.header.last_sync[0].last_run_at);
+  const failed = { ...t, header: { ...t.header, last_sync: [{ ...t.header.last_sync[0], status: "error", error: "401" }] } };
+  const { unmount } = renderWith(<Header today={failed} now={at + 60_000} />);
+  expect(screen.getByText(/garmin .* · failed/)).toHaveClass("text-danger");
+  unmount();
+  renderWith(<Header today={t} now={at + 25 * 3_600_000} />);
+  expect(screen.getByText(/garmin .* · stale/)).toHaveClass("text-warn");
+});
+
+test("a fresh sync carries no status word", () => {
+  const t = todayFull();
+  renderWith(<Header today={t} now={Date.parse(t.header.last_sync[0].last_run_at) + 3_600_000} />);
+  expect(screen.queryByText(/stale|failed/)).not.toBeInTheDocument();
+});
+
+test("the shell marks a sync stale from the fetch-time clock", async () => {
+  const t = todayFull();
+  t.header.last_sync[0].last_run_at = new Date(Date.now() - 2 * 86_400_000).toISOString();
+  vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify(t), { status: 200 }));
+  renderWith(tree(), { route: "/settings" });
+  expect(await screen.findByText(/· stale/)).toBeInTheDocument();
 });

@@ -1,8 +1,8 @@
 import { useState, type FormEvent, type KeyboardEvent } from "react";
 
-type Props = { disabled: boolean; hint?: string; initialText?: string; onSend: (text: string) => void };
+type Props = { disabled: boolean; hint?: string; hintTone?: "warn" | "muted"; initialText?: string; onSend: (text: string) => void };
 
-export default function Composer({ disabled, hint, initialText = "", onSend }: Props) {
+export default function Composer({ disabled, hint, hintTone = "muted", initialText = "", onSend }: Props) {
   const [text, setText] = useState(initialText);
   const doSend = () => {
     const t = text.trim();
@@ -23,7 +23,9 @@ export default function Composer({ disabled, hint, initialText = "", onSend }: P
   return (
     <form onSubmit={submit} className="border-t border-line bg-surface-2 px-4 py-3">
       <div className="mx-auto w-full max-w-3xl">
-        {hint && <p className="mb-2 text-xs text-warn">{hint}</p>}
+        <p role="status" className={hint ? `mb-2 text-xs ${hintTone === "warn" ? "text-warn" : "text-ink-2"}` : "sr-only"}>
+          {hint}
+        </p>
         <div className="flex gap-2">
           <textarea
             aria-label="Message"

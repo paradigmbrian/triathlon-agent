@@ -5,11 +5,12 @@
   --surface-2: #ffffff;
   --ink: #1b1b1f;
   --ink-2: #5d5f66;
-  --line: #e2e0d8;
+  --line: #d6d3c8;
   --accent: #1f6f5f;
   --planning: #3552a8;
   --nutrition: #b3551d;
-  --warn: #9a6b00;
+  --warn: #805800;
+  --good: #23703a;
   --danger: #b3261e;
   --on-fill: #ffffff;
 }
@@ -20,11 +21,12 @@
     --surface-2: #1d1f24;
     --ink: #ececec;
     --ink-2: #a3a6ad;
-    --line: #2c2f36;
+    --line: #3a3e47;
     --accent: #4fb39c;
     --planning: #8ea3ea;
     --nutrition: #e9915a;
     --warn: #e0b449;
+    --good: #6fcf97;
     --danger: #ef6a63;
     --on-fill: #131417;
   }
@@ -40,6 +42,7 @@
   --color-planning: var(--planning);
   --color-nutrition: var(--nutrition);
   --color-warn: var(--warn);
+  --color-good: var(--good);
   --color-danger: var(--danger);
   --color-on-fill: var(--on-fill);
 }
@@ -53,4 +56,18 @@ body { @apply bg-surface text-ink antialiased; }
     outline-offset: 2px;
   }
   summary { list-style-position: inside; }
+  /* Tailwind v4 preflight gives buttons cursor: default. */
+  button:not(:disabled), [role="button"], summary {
+    cursor: pointer;
+  }
+  button, a {
+    transition: color 150ms ease-out, background-color 150ms ease-out, border-color 150ms ease-out;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 }
