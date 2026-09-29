@@ -2,10 +2,10 @@ import { expect, test, type Page } from "@playwright/test";
 
 const today = {
   header: { today: "2026-09-16", phase: "active", goal: { goal_type: "olympic", event_name: "City Tri", event_date: "2026-11-01", days_to_go: 46 }, week: { start: "2026-09-14", number: 1, of: 3 }, last_sync: [] },
-  session: { workouts: [{ tp_workout_id: "w1", sport: "run", title: "Tempo", completed: false, planned_duration_sec: 3600, planned_tss: 60, actual_duration_sec: null, actual_tss: null }], fuel: null },
+  session: { workouts: [{ tp_workout_id: "w1", sport: "run", title: "Tempo", completed: false, planned_duration_sec: 3600, planned_tss: 60, actual_duration_sec: null, actual_tss: null, actual_if: null, avg_hr: null, avg_power: null, normalized_power: null }], fuel: null },
   readiness: null,
   fuel: { target: null, targets_through: null },
-  week: { phase: "build", target_hours: 6, target_tss: 300, actual_hours: 1, actual_tss: 60, sessions: [] },
+  week: { phase: "build", target_hours: 6, target_tss: 300, actual_hours: 1, actual_tss: 60, sessions: [{ sport: "run", planned: 2, completed: 1, planned_tss: 120, actual_tss: 60, planned_hours: 2, actual_hours: 1 }], planned_to_date: 1, completed_to_date: 0 },
   labs: null, labs_enabled: false, labs_missing: false, pending: null,
 };
 const proposal = { id: "p1", domain: "planning", summary: "move it", changes: [{ op: "move", workout_date: null, tp_workout_id: "w1", workout: null, new_date: "2026-09-18", payload: null, reason: "knee", athlete_requested: false }], violations: [], question: null, overrides: null };

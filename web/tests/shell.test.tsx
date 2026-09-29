@@ -109,3 +109,11 @@ test("a fresh sync carries no status word", () => {
   renderWith(<Header today={t} now={Date.parse(t.header.last_sync[0].last_run_at) + 3_600_000} />);
   expect(screen.queryByText(/stale|failed/)).not.toBeInTheDocument();
 });
+
+test("the shell marks a sync stale from the fetch-time clock", async () => {
+  const t = todayFull();
+  t.header.last_sync[0].last_run_at = new Date(Date.now() - 2 * 86_400_000).toISOString();
+  vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify(t), { status: 200 }));
+  renderWith(tree(), { route: "/settings" });
+  expect(await screen.findByText(/· stale/)).toBeInTheDocument();
+});

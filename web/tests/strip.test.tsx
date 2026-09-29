@@ -108,3 +108,23 @@ test("skeletons pulse only when motion is allowed", () => {
   renderWith(<Strip today={undefined} />);
   expect(screen.getAllByTestId("card-skeleton")[0]).toHaveClass("motion-safe:animate-pulse");
 });
+
+test("the headline carries its own vs-28-day-avg context", () => {
+  renderWith(<Strip today={todayFull()} />);
+  expect(screen.getByText("↑ 7 vs 28-day avg")).toHaveClass("text-good");
+});
+
+test("a delta that rounds to zero reads as level, not as an arrow", () => {
+  const t = todayFull();
+  t.readiness!.trends.hrv = { ...t.readiness!.trends.hrv, now: 57.6, avg_28d: 58, band: "normal", better: false };
+  renderWith(<Strip today={t} />);
+  expect(screen.getByText("= 28-day avg")).toHaveClass("text-ink-2");
+  expect(screen.queryByText(/↓ 0 vs/)).not.toBeInTheDocument();
+});
+
+test("a ramp that rounds to zero never shows a minus sign", () => {
+  const t = todayFull();
+  t.readiness = { ...t.readiness!, ramp_7d: -0.04 };
+  renderWith(<Strip today={t} />);
+  expect(screen.getByText("ramp 0.0/wk")).toBeInTheDocument();
+});

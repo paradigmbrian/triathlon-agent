@@ -51,7 +51,7 @@ export function Bubble({ role, where, children }: { role: "user" | "assistant" |
       {tag && <span className={`mr-2 text-xs font-semibold tracking-wide uppercase ${tagColor[tag] ?? "text-ink-2"}`}>{tag}</span>}
       {prose ? (
         <div className="chat-prose">
-          <Markdown remarkPlugins={[remarkGfm]} components={md}>
+          <Markdown remarkPlugins={[remarkGfm]} components={md} disallowedElements={["img"]} unwrapDisallowed>
             {children}
           </Markdown>
         </div>

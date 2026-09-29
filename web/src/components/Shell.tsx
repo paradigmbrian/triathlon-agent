@@ -23,7 +23,7 @@ export default function Shell() {
       >
         Skip to main content
       </a>
-      <Header today={today.data} slots={<AvatarMenu />} />
+      <Header today={today.data} now={today.dataUpdatedAt || undefined} slots={<AvatarMenu />} />
       <main id="main" ref={main} tabIndex={-1} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto focus:outline-none">
         <Outlet />
       </main>
