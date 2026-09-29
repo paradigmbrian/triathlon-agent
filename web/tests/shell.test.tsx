@@ -96,3 +96,9 @@ test("the observations line takes a row of its own on a narrow screen, so the jo
   renderWith(<Header today={todayFull()} />);
   expect(screen.getByText(/Wed, Sep 16/).parentElement).toHaveClass("basis-full", "sm:basis-0");
 });
+
+test("the pending badge and the job buttons wrap together instead of overflowing a phone", () => {
+  const today = { ...todayFull(), pending: { narration: "n", proposals: [] } };
+  renderWith(<Header today={today} slots={<button type="button">job</button>} />);
+  expect(screen.getByText("1 review pending").parentElement).toHaveClass("flex-wrap");
+});

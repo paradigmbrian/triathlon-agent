@@ -33,7 +33,7 @@ export default function Header({ today, slots, now }: { today?: TodayView; slots
           );
         })}
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {pendingCount > 0 && (
           <span className="rounded-full border border-hold/60 px-2 py-0.5 text-xs font-medium text-hold">{pendingCount} review pending</span>
         )}
