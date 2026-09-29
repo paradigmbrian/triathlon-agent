@@ -1,6 +1,6 @@
 import type { TodayView } from "../../api/queries";
-import { n, secsAsHours } from "../../lib/format";
-import { Card, Empty } from "./Card";
+import { day, kcal, n, secsAsHours } from "../../lib/format";
+import Section, { Empty } from "./Section";
 
 type Workout = NonNullable<TodayView["session"]>["workouts"][number];
 
@@ -19,23 +19,24 @@ function detail(w: Workout): string[] {
   return [effort.join(" · "), vsPlan.join(" · ")].filter(Boolean);
 }
 
-export default function SessionCard({ session }: { session: TodayView["session"] }) {
+export default function Plan({ session, fuel }: { session: TodayView["session"]; fuel: TodayView["fuel"] }) {
+  const t = fuel.target;
   return (
-    <Card title="Session" tone="planning">
+    <Section title="Today's plan">
       {!session ? (
         <Empty>No session planned</Empty>
       ) : (
         <ul className="space-y-2">
           {session.workouts.map((w, i) => (
             <li key={w.tp_workout_id}>
-              <div className={i === 0 ? "text-lg leading-tight font-semibold" : "font-medium"}>{w.title || w.sport}</div>
+              <div className={i === 0 ? "text-base font-medium" : "font-medium"}>{w.title || w.sport}</div>
               <div className="text-ink-2 tabular-nums">
                 {w.sport} · {secsAsHours(w.completed ? w.actual_duration_sec : w.planned_duration_sec)} · {n(w.completed ? w.actual_tss : w.planned_tss)} TSS
                 {w.completed ? " · done" : ""}
               </div>
               {w.completed &&
-                detail(w).map((line) => (
-                  <div key={line} className="text-xs text-ink-2 tabular-nums">
+                detail(w).map((line, j) => (
+                  <div key={j} className="text-xs text-ink-2 tabular-nums">
                     {line}
                   </div>
                 ))}
@@ -49,6 +50,19 @@ export default function SessionCard({ session }: { session: TodayView["session"]
           )}
         </ul>
       )}
-    </Card>
+      <div className="pt-2">
+        {!t ? (
+          <Empty>No targets yet, ask the coach</Empty>
+        ) : (
+          <>
+            <div className="text-base font-medium tabular-nums">{kcal(t.total_kcal)}</div>
+            <div className="text-ink-2 tabular-nums">
+              {t.day_type} · {t.carbs_g} C · {t.protein_g} P · {t.fat_g} F · {t.fluid_baseline_ml} ml
+            </div>
+            <div className="text-xs text-ink-2">targets through {day(fuel.targets_through)}{t.written_to_garmin ? " · on Garmin" : ""}</div>
+          </>
+        )}
+      </div>
+    </Section>
   );
 }

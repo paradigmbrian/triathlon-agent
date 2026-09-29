@@ -54,14 +54,10 @@ test("load Today, send a message, see tokens, see a gate, approve, see a report"
   await page.goto("/");
   await expect(page.getByText("Tempo")).toBeVisible();
   await expect(page.getByText(/46 days to City Tri/)).toBeVisible();
-  // from md the cards stack in one column left of the chat
-  const cards = page.getByTestId("strip-card");
-  await expect(cards).toHaveCount(4);
-  const first = (await cards.first().boundingBox())!;
-  const last = (await cards.last().boundingBox())!;
-  expect(Math.abs(last.x - first.x)).toBeLessThan(2);
-  expect(last.y).toBeGreaterThan(first.y);
-  expect((await page.getByTestId("chat-messages").boundingBox())!.x).toBeGreaterThanOrEqual(first.x + first.width);
+  await expect(page.getByRole("region", { name: "Today's call" })).toBeVisible();
+  await expect(page.getByText("NO CALL")).toBeVisible();
+  // at 1200 px the coach opens over the board from the Coach toggle
+  await page.getByRole("button", { name: "Coach" }).click();
   await page.getByLabel("Message").fill("move my Wednesday run");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page.getByText("Planning suggests Friday.")).toBeVisible();
@@ -79,25 +75,10 @@ test("the page works at phone width", async ({ page }) => {
   await stub(page);
   await page.setViewportSize({ width: 400, height: 800 });
   await page.goto("/");
-  const avatar = page.getByRole("button", { name: "Account menu" });
-  const box = await avatar.boundingBox();
-  expect(box && box.y < 80 && box.x > 300).toBeTruthy(); // the avatar sits top right
-  await expect(page.getByRole("link", { name: "Settings" })).toBeHidden();
-  await avatar.click();
-  await expect(page.getByRole("link", { name: "Settings" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Sync now" })).toBeInViewport();
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("link", { name: "Settings" })).toBeHidden();
-  await expect(page.getByLabel("Message")).toBeVisible();
-  // the strip stacks: four cards in one column, no sideways scroll
-  const cards = page.getByTestId("strip-card");
-  await expect(cards).toHaveCount(4);
-  const boxes = [];
-  for (const card of await cards.all()) boxes.push(await card.boundingBox());
-  for (let i = 1; i < boxes.length; i++) {
-    expect(Math.abs(boxes[i]!.x - boxes[0]!.x)).toBeLessThan(2);
-    expect(boxes[i]!.y).toBeGreaterThan(boxes[i - 1]!.y);
-  }
+  await expect(page.getByRole("navigation", { name: "Sections" }).getByRole("link", { name: "Settings" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sync now" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Today's call" })).toBeVisible();
+  await page.getByRole("button", { name: "Coach" }).click();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
   // past the strip the chat keeps a usable height: send, see the gate, approve it
