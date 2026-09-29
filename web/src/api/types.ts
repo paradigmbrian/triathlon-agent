@@ -294,6 +294,8 @@ export interface components {
             status: string;
             /** Flagged */
             flagged: boolean;
+            /** Spark */
+            spark: (number | null)[];
         };
         /**
          * FuelOut

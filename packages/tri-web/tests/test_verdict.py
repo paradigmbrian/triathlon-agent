@@ -258,3 +258,15 @@ def test_ramp_row():
 def test_combined_stop_flags_both_rows():
     r = rd(trends={**TRENDS, "hrv": HRV_LOW, "resting_hr": RHR_HIGH}, hrv=52, resting_hr=55)
     assert rows(r)["hrv"].flagged and rows(r)["resting_hr"].flagged
+
+
+def test_trend_rows_carry_their_history_and_the_rest_carry_none():
+    spark: list[float | None] = [55, 56, None, 58, 60]
+    hist = MetricTrend(
+        now=60, avg_7d=58, avg_28d=58, sd_28d=3, band="normal", better=None, spark=spark
+    )
+    r = rows(with_trend("hrv", hist))
+    assert r["hrv"].spark == spark
+    assert r["tsb"].spark == [] and r["acwr"].spark == [] and r["ramp"].spark == []
+    no_trend = rows(rd(trends={k: v for k, v in TRENDS.items() if k != "hrv"}))
+    assert no_trend["hrv"].spark == []

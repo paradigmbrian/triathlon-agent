@@ -59,14 +59,14 @@ export function todayFull(): TodayView {
     },
     verdict: { call: "go", reasons: [], based_on: "2026-09-16", stale: false, harder_than_call: false, session_done: false },
     conditions: [
-      { key: "training_readiness", label: "Readiness", value: 77, unit: "", baseline: 70, band_low: 62, band_high: 78, status: "within", flagged: false },
-      { key: "hrv", label: "HRV", value: 62, unit: "ms", baseline: 58, band_low: 55, band_high: 61, status: "high", flagged: false },
-      { key: "resting_hr", label: "RHR", value: 48, unit: "bpm", baseline: 50, band_low: 48, band_high: 52, status: "within", flagged: false },
-      { key: "sleep_score", label: "Sleep", value: 81, unit: "", baseline: 78, band_low: 73, band_high: 83, status: "within", flagged: false },
-      { key: "sleep_hours", label: "Slept", value: 7.5, unit: "h", baseline: 7.2, band_low: 6.8, band_high: 7.6, status: "within", flagged: false },
-      { key: "tsb", label: "Form (TSB)", value: -4.9, unit: "", baseline: null, band_low: -30, band_high: 25, status: "neutral", flagged: false },
-      { key: "acwr", label: "ACWR", value: 1.11, unit: "", baseline: null, band_low: 0.8, band_high: 1.3, status: "within", flagged: false },
-      { key: "ramp", label: "Ramp", value: 3.5, unit: "/wk", baseline: null, band_low: null, band_high: 8, status: "within", flagged: false },
+      { key: "training_readiness", label: "Readiness", value: 77, unit: "", baseline: 70, band_low: 62, band_high: 78, status: "within", flagged: false, spark: [65, 70, 68, 72, 74, 71, 69, 70, 73, 72, 70, 75, 74, 77] },
+      { key: "hrv", label: "HRV", value: 62, unit: "ms", baseline: 58, band_low: 55, band_high: 61, status: "high", flagged: false, spark: [55, 56, 58, 57, 59, null, 60, 61, 58, 59, 60, 61, 60, 62] },
+      { key: "resting_hr", label: "RHR", value: 48, unit: "bpm", baseline: 50, band_low: 48, band_high: 52, status: "within", flagged: false, spark: [51, 50, 50, 49, 49, 50, 49, 48, 49, 50, 49, 48, 49, 48] },
+      { key: "sleep_score", label: "Sleep", value: 81, unit: "", baseline: 78, band_low: 73, band_high: 83, status: "within", flagged: false, spark: [75, 80, 78, 77, 79, 82, 76, 78, 80, 79, 77, 81, 78, 81] },
+      { key: "sleep_hours", label: "Slept", value: 7.5, unit: "h", baseline: 7.2, band_low: 6.8, band_high: 7.6, status: "within", flagged: false, spark: [7, 7.4, 7.2, 7.1, 7.3, 7.6, 7, 7.2, 7.4, 7.3, 7.1, 7.5, 7.2, 7.5] },
+      { key: "tsb", label: "Form (TSB)", value: -4.9, unit: "", baseline: null, band_low: -30, band_high: 25, status: "neutral", flagged: false, spark: [] },
+      { key: "acwr", label: "ACWR", value: 1.11, unit: "", baseline: null, band_low: 0.8, band_high: 1.3, status: "within", flagged: false, spark: [] },
+      { key: "ramp", label: "Ramp", value: 3.5, unit: "/wk", baseline: null, band_low: null, band_high: 8, status: "within", flagged: false, spark: [] },
     ],
   };
 }

@@ -114,3 +114,48 @@ test("a no-call reason is plain text, not a button that goes nowhere", () => {
   expect(screen.getByText("No Garmin data, sync first")).toBeInTheDocument();
   expect(screen.queryByRole("button")).not.toBeInTheDocument();
 });
+
+test("the figures lead: large tabular numerals, the flagged one in its reason's colour", () => {
+  const rows = todayFull().conditions.map((c) => (c.key === "acwr" ? { ...c, value: 1.45, status: "high", flagged: true } : c));
+  render(<Board rows={rows} />);
+  expect(screen.getByText("62 ms")).toHaveClass("text-2xl", "font-semibold");
+  expect(screen.getByText("1.45")).toHaveClass("text-easy");
+  expect(screen.getByText("81")).not.toHaveClass("text-easy");
+});
+
+test("Figures is the default view, and Trends swaps the columns for a line per row", async () => {
+  const user = userEvent.setup();
+  render(<Board />);
+  const figures = screen.getByRole("button", { name: "Figures" });
+  const trends = screen.getByRole("button", { name: "Trends" });
+  expect(figures).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("columnheader", { name: "28-day" })).toBeInTheDocument();
+  expect(document.querySelectorAll("svg[data-trend]")).toHaveLength(0);
+  await user.click(trends);
+  expect(trends).toHaveAttribute("aria-pressed", "true");
+  expect(figures).toHaveAttribute("aria-pressed", "false");
+  expect(screen.queryByRole("columnheader", { name: "28-day" })).not.toBeInTheDocument();
+  expect(document.querySelectorAll("svg[data-trend]")).toHaveLength(5); // the five rows with history
+  expect(screen.getAllByText("no history")).toHaveLength(3); // Form, ACWR, Ramp
+  expect(screen.getByText("62 ms")).toBeInTheDocument(); // the figure and the status word stay
+  expect(document.getElementById("cond-hrv")).toHaveTextContent("high");
+});
+
+test("a trend line breaks at a missing day and marks today's value", async () => {
+  const user = userEvent.setup();
+  render(<Board />);
+  await user.click(screen.getByRole("button", { name: "Trends" }));
+  const svg = document.querySelector("#cond-hrv svg[data-trend]")!;
+  expect(svg.querySelectorAll("polyline")).toHaveLength(2); // one gap, so two runs
+  expect(svg.querySelectorAll("circle")).toHaveLength(1);
+  expect(svg.querySelector("rect[data-band]")).not.toBeNull();
+  expect(svg).toHaveAttribute("aria-hidden", "true");
+});
+
+test("chips still find their row in the Trends view", async () => {
+  const user = userEvent.setup();
+  render(<Board />);
+  await user.click(screen.getByRole("button", { name: "Trends" }));
+  await user.click(screen.getByRole("button", { name: "ACWR 1.45, over 1.3" }));
+  expect(document.getElementById("cond-acwr")).toHaveFocus();
+});

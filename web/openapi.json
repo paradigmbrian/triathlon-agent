@@ -572,6 +572,20 @@
           "flagged": {
             "type": "boolean",
             "title": "Flagged"
+          },
+          "spark": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Spark"
           }
         },
         "type": "object",
@@ -584,7 +598,8 @@
           "band_low",
           "band_high",
           "status",
-          "flagged"
+          "flagged",
+          "spark"
         ],
         "title": "ConditionOut"
       },

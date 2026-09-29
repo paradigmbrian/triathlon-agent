@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ConditionOut, ReasonOut, TodayView } from "../../api/queries";
 import { day, n } from "../../lib/format";
 import LimitMarker from "./LimitMarker";
+import Sparkline from "./Sparkline";
 import { baselineValue, conditionValue } from "./format";
 
 type Props = {
@@ -24,13 +25,31 @@ export default function Conditions({ readiness, rows, reasons, active, onActive 
     setChanged(new Set(rows.filter((c) => before.has(c.key) && before.get(c.key) !== c.value).map((c) => c.key)));
     setPrevRows(rows);
   }
+  const [view, setView] = useState<"figures" | "trends">("figures");
   const severity = new Map(reasons.map((r) => [r.key, r.severity]));
   const title = readiness && !readiness.is_today ? `Conditions from ${day(readiness.date)}` : "Conditions";
   return (
     <section aria-labelledby="conditions-h" className="border-b border-line px-6 py-5">
-      <h2 id="conditions-h" className="text-xs font-medium tracking-wider text-ink-2 uppercase">
-        {title}
-      </h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 id="conditions-h" className="text-xs font-medium tracking-wider text-ink-2 uppercase">
+          {title}
+        </h2>
+        {rows.length > 0 && (
+          <div role="group" aria-label="Conditions view" className="inline-flex overflow-hidden rounded-md border border-line text-xs">
+            {([["figures", "Figures"], ["trends", "Trends"]] as const).map(([v, label]) => (
+              <button
+                key={v}
+                type="button"
+                aria-pressed={view === v}
+                onClick={() => setView(v)}
+                className={`min-h-7 px-3 ${view === v ? "bg-hold/10 font-medium text-ink" : "text-ink-2 hover:text-ink"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       {rows.length === 0 ? (
         <p className="mt-2 text-sm text-ink-2">No Garmin data yet, sync first</p>
       ) : (
@@ -39,8 +58,14 @@ export default function Conditions({ readiness, rows, reasons, active, onActive 
             <tr>
               <th scope="col" className="py-1.5 font-medium">Condition</th>
               <th scope="col" className="font-medium">Now</th>
-              <th scope="col" className="font-medium">28-day</th>
-              <th scope="col" className="font-medium"><span className="sr-only">Limit</span></th>
+              {view === "figures" ? (
+                <>
+                  <th scope="col" className="font-medium">28-day</th>
+                  <th scope="col" className="font-medium"><span className="sr-only">Limit</span></th>
+                </>
+              ) : (
+                <th scope="col" className="font-medium">14 days</th>
+              )}
               <th scope="col" className="font-medium">Status</th>
             </tr>
           </thead>
@@ -61,11 +86,19 @@ export default function Conditions({ readiness, rows, reasons, active, onActive 
                   className={`border-t border-line focus:outline-none focus-visible:ring-2 focus-visible:ring-hold ${active === c.key ? "bg-hold/10" : ""}`}
                 >
                   <th scope="row" className="py-2 pr-3 text-left font-normal text-ink-2">{c.label}</th>
-                  <td key={`${c.key}:${c.value}`} className={`pr-3 text-base font-medium ${changed.has(c.key) ? "board-flash" : ""}`}>
+                  <td key={`${c.key}:${c.value}`} className={`pr-3 text-2xl font-semibold ${c.flagged ? tone : ""} ${changed.has(c.key) ? "board-flash" : ""}`}>
                     {conditionValue(c)}
                   </td>
-                  <td className="pr-3 text-ink-2">{baselineValue(c)}</td>
-                  <td className="pr-3"><LimitMarker low={c.band_low} high={c.band_high} value={c.value} /></td>
+                  {view === "figures" ? (
+                    <>
+                      <td className="pr-3 text-ink-2">{baselineValue(c)}</td>
+                      <td className="pr-3"><LimitMarker low={c.band_low} high={c.band_high} value={c.value} /></td>
+                    </>
+                  ) : (
+                    <td className={`pr-3 ${c.flagged ? tone : "text-ink"}`}>
+                      {c.spark.some((v) => v != null) ? <Sparkline values={c.spark} low={c.band_low} high={c.band_high} /> : <span className="text-ink-2">no history</span>}
+                    </td>
+                  )}
                   <td data-status className={tone}>{c.status}</td>
                 </tr>
               );

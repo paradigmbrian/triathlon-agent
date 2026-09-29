@@ -208,6 +208,7 @@ class ConditionOut(BaseModel):
     band_high: float | None
     status: str
     flagged: bool
+    spark: list[float | None]  # recent history, oldest first; empty where the server has none
 
 
 def _raw(r: ReadinessOut, key: str) -> float | None:
@@ -252,6 +253,7 @@ def conditions(r: ReadinessOut | None) -> list[ConditionOut]:
                 band_high=hi,
                 status=status,
                 flagged=key in flagged,
+                spark=list(t.spark) if t is not None else [],
             )
         )
     out.append(
@@ -265,6 +267,7 @@ def conditions(r: ReadinessOut | None) -> list[ConditionOut]:
             band_high=TSB_BAND[1],
             status="no data" if r.tsb is None else (r.tsb_zone or "no data"),
             flagged="tsb" in flagged,
+            spark=[],
         )
     )
     if r.acwr is None:
@@ -284,6 +287,7 @@ def conditions(r: ReadinessOut | None) -> list[ConditionOut]:
             band_high=ACWR_HIGH,
             status=acwr_status,
             flagged="acwr" in flagged,
+            spark=[],
         )
     )
     out.append(
@@ -297,6 +301,7 @@ def conditions(r: ReadinessOut | None) -> list[ConditionOut]:
             band_high=RAMP_CAUTION,
             status="no data" if r.ramp_7d is None else ("fast" if r.ramp_caution else "within"),
             flagged="ramp" in flagged,
+            spark=[],
         )
     )
     return out
