@@ -14,7 +14,7 @@ export function todayEmpty(): TodayView {
     labs: null,
     labs_enabled: false,
     labs_missing: false,
-    verdict: { call: "none", reasons: [{ key: "training_readiness", text: "No Garmin data, sync first", severity: "info" }], based_on: null, stale: false, harder_than_call: false, session_done: false },
+    verdict: { level: "none", reasons: [{ key: "training_readiness", text: "No Garmin data, sync first", severity: "info" }], based_on: null, stale: false, harder_than_call: false, session_done: false },
     conditions: [],
     pending: null,
   };
@@ -57,7 +57,7 @@ export function todayFull(): TodayView {
       planned_to_date: 3,
       completed_to_date: 2,
     },
-    verdict: { call: "go", reasons: [], based_on: "2026-09-16", stale: false, harder_than_call: false, session_done: false },
+    verdict: { level: "high", reasons: [], based_on: "2026-09-16", stale: false, harder_than_call: false, session_done: false },
     conditions: [
       { key: "training_readiness", label: "Readiness", value: 77, unit: "", baseline: 70, band_low: 62, band_high: 78, status: "within", flagged: false, spark: [65, 70, 68, 72, 74, 71, 69, 70, 73, 72, 70, 75, 74, 77] },
       { key: "hrv", label: "HRV", value: 62, unit: "ms", baseline: 58, band_low: 55, band_high: 61, status: "high", flagged: false, spark: [55, 56, 58, 57, 59, null, 60, 61, 58, 59, 60, 61, 60, 62] },

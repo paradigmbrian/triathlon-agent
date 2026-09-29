@@ -7,7 +7,7 @@ const today = {
   fuel: { target: null, targets_through: null },
   week: { phase: "build", target_hours: 6, target_tss: 300, actual_hours: 1, actual_tss: 60, sessions: [{ sport: "run", planned: 2, completed: 1, planned_tss: 120, actual_tss: 60, planned_hours: 2, actual_hours: 1 }], planned_to_date: 1, completed_to_date: 0 },
   labs: null, labs_enabled: false, labs_missing: false,
-  verdict: { call: "none", reasons: [{ key: "training_readiness", text: "No Garmin data, sync first", severity: "info" }], based_on: null, stale: false, harder_than_call: false, session_done: false },
+  verdict: { level: "none", reasons: [{ key: "training_readiness", text: "No Garmin data, sync first", severity: "info" }], based_on: null, stale: false, harder_than_call: false, session_done: false },
   conditions: [],
   pending: null,
 };
@@ -54,8 +54,8 @@ test("load Today, send a message, see tokens, see a gate, approve, see a report"
   await page.goto("/");
   await expect(page.getByText("Tempo")).toBeVisible();
   await expect(page.getByText(/46 days to City Tri/)).toBeVisible();
-  await expect(page.getByRole("region", { name: "Today's call" })).toBeVisible();
-  await expect(page.getByText("NO CALL")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Readiness" })).toBeVisible();
+  await expect(page.getByText("NO READING")).toBeVisible();
   // at 1200 px the coach opens over the board from the Coach toggle
   await page.getByRole("button", { name: "Coach" }).click();
   await page.getByLabel("Message").fill("move my Wednesday run");
@@ -77,7 +77,7 @@ test("the page works at phone width", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("navigation", { name: "Sections" }).getByRole("link", { name: "Settings" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Sync now" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Today's call" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Readiness" })).toBeVisible();
   await page.getByRole("button", { name: "Coach" }).click();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);

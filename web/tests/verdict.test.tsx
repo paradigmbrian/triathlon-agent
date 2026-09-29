@@ -1,44 +1,73 @@
 import { useState } from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import VerdictStrip from "../src/components/board/VerdictStrip";
+import ReadinessStatus from "../src/components/board/ReadinessStatus";
 import Conditions from "../src/components/board/Conditions";
 import type { ConditionOut, VerdictOut } from "../src/api/queries";
 import { todayFull } from "./fixtures";
 
-const easy: VerdictOut = {
-  call: "easy",
+const base: VerdictOut = {
+  level: "moderate",
   reasons: [{ key: "acwr", text: "ACWR 1.45, over 1.3", severity: "caution" }],
   based_on: "2026-09-16", stale: false, harder_than_call: true, session_done: false,
 };
 
-function Board({ verdict = easy, rows = todayFull().conditions }: { verdict?: VerdictOut; rows?: ConditionOut[] }) {
+// The page's order: the metrics first, then the readiness container.
+function Board({ verdict = base, rows = todayFull().conditions }: { verdict?: VerdictOut; rows?: ConditionOut[] }) {
   const [active, setActive] = useState<string | null>(null);
   return (
     <>
-      <VerdictStrip verdict={verdict} active={active} onActive={setActive} />
       <Conditions readiness={todayFull().readiness} rows={rows} reasons={verdict.reasons} active={active} onActive={setActive} />
+      <ReadinessStatus verdict={verdict} active={active} onActive={setActive} />
     </>
   );
 }
 
 test.each([
-  ["go", "GO", "text-go"],
-  ["easy", "EASY", "text-easy"],
-  ["rest", "REST", "text-rest"],
-  ["none", "NO CALL", "text-ink-2"],
-] as const)("the %s call reads %s in its colour", (call, word, tone) => {
-  render(<Board verdict={{ ...easy, call, reasons: call === "go" ? [] : easy.reasons }} />);
+  ["prime", "PRIME", "text-go"],
+  ["high", "HIGH", "text-go"],
+  ["moderate", "MODERATE", "text-easy"],
+  ["low", "LOW", "text-rest"],
+  ["poor", "POOR", "text-rest"],
+  ["none", "NO READING", "text-ink-2"],
+] as const)("the %s level reads %s in its colour", (level, word, tone) => {
+  render(<Board verdict={{ ...base, level, reasons: [] }} />);
   expect(screen.getByText(word)).toHaveClass(tone);
+  expect(screen.getByText(word)).toHaveClass("text-2xl");
 });
 
-test("a go day says so in words", () => {
-  render(<Board verdict={{ ...easy, call: "go", reasons: [], harder_than_call: false }} />);
+test("the scale lights only the current step and always shows every label", () => {
+  const { unmount } = render(<Board verdict={{ ...base, level: "moderate" }} />);
+  const scale = screen.getByRole("list", { name: "Readiness scale" });
+  const steps = within(scale).getAllByRole("listitem");
+  expect(steps.map((li) => li.textContent)).toEqual(["Poor", "Low", "Moderate", "High", "Prime"]);
+  expect(steps.filter((li) => li.getAttribute("aria-current") === "true")).toHaveLength(1);
+  const current = within(scale).getByText("Moderate").closest("li")!;
+  expect(current).toHaveAttribute("aria-current", "true");
+  expect(current.querySelector("[data-bar]")).toHaveClass("bg-easy");
+  expect(within(scale).getByText("High").closest("li")!.querySelector("[data-bar]")).toHaveClass("bg-line");
+  unmount();
+  render(<Board verdict={{ ...base, level: "none", reasons: [] }} />);
+  const none = within(screen.getByRole("list", { name: "Readiness scale" })).getAllByRole("listitem");
+  expect(none.filter((li) => li.getAttribute("aria-current") === "true")).toHaveLength(0);
+});
+
+test("an all-clear says so in words", () => {
+  render(<Board verdict={{ ...base, level: "prime", reasons: [], harder_than_call: false }} />);
   expect(screen.getByText("All conditions within your limits")).toBeInTheDocument();
 });
 
-test("the strip says when the data is old, when the plan is harder, and when the session is done", () => {
-  render(<Board verdict={{ ...easy, stale: true, based_on: "2026-09-14", session_done: true }} />);
+test("a level held down only by Garmin's score explains itself", () => {
+  const info = { key: "training_readiness", text: "Garmin readiness 62, moderate band", severity: "info" } as const;
+  render(<Board verdict={{ ...base, level: "moderate", reasons: [info], harder_than_call: false }} />);
+  expect(screen.getByText("All conditions within your limits")).toBeInTheDocument(); // no flags
+  expect(screen.getByText("Garmin readiness 62, moderate band")).toBeInTheDocument();
+  expect(document.getElementById("reason-training_readiness")).not.toBeNull();
+  expect(document.getElementById("cond-training_readiness")).toHaveAttribute("aria-describedby", "reason-training_readiness");
+});
+
+test("the container says when the data is old, when the plan is harder, and when the session is done", () => {
+  render(<Board verdict={{ ...base, stale: true, based_on: "2026-09-14", session_done: true }} />);
   expect(screen.getByText(/based on Mon, Sep 14/)).toBeInTheDocument();
   expect(screen.getByText("planned session is harder than today's call")).toBeInTheDocument();
   expect(screen.getByText("session done, recover")).toBeInTheDocument();
@@ -76,7 +105,7 @@ test("a reason chip and its row light each other, by keyboard too", async () => 
   render(<Board />);
   const chip = screen.getByRole("button", { name: "ACWR 1.45, over 1.3" });
   const row = document.getElementById("cond-acwr")!;
-  await user.tab(); // the first focusable element is the chip
+  act(() => chip.focus()); // the chip now follows the table in tab order
   expect(chip).toHaveFocus();
   expect(row).toHaveAttribute("data-active", "true");
   await user.keyboard("{Enter}");
@@ -106,13 +135,14 @@ test("rows from an earlier day say which day", () => {
 
 test("a no-call reason is plain text, not a button that goes nowhere", () => {
   const none: VerdictOut = {
-    call: "none",
+    level: "none",
     reasons: [{ key: "training_readiness", text: "No Garmin data, sync first", severity: "info" }],
     based_on: null, stale: false, harder_than_call: false, session_done: false,
   };
-  render(<VerdictStrip verdict={none} active={null} onActive={() => {}} />);
+  render(<ReadinessStatus verdict={none} active={null} onActive={() => {}} />);
   expect(screen.getByText("No Garmin data, sync first")).toBeInTheDocument();
   expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  expect(screen.queryByText("All conditions within your limits")).not.toBeInTheDocument();
 });
 
 test("each row wears its state: a rail and a large figure in the same colour, the unit small", () => {

@@ -742,10 +742,10 @@ export interface components {
         /** VerdictOut */
         VerdictOut: {
             /**
-             * Call
+             * Level
              * @enum {string}
              */
-            call: "go" | "easy" | "rest" | "none";
+            level: "poor" | "low" | "moderate" | "high" | "prime" | "none";
             /** Reasons */
             reasons: components["schemas"]["ReasonOut"][];
             /** Based On */

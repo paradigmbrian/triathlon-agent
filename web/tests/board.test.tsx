@@ -74,3 +74,16 @@ test("the HOLD line appears only while a review waits", () => {
   screen.getByRole("button", { name: "HOLD · 1 change awaiting your approval" }).click();
   expect(hold).toHaveBeenCalledOnce();
 });
+
+test("the metrics come first: conditions, then readiness, then the HOLD line, then the plan", () => {
+  renderWith(<Board today={todayFull()} review={{ narration: "n", proposals: [paused().proposals[0]] }} onHold={() => {}} />);
+  const order = [
+    screen.getByRole("heading", { name: "Conditions" }),
+    screen.getByRole("region", { name: "Readiness" }),
+    screen.getByRole("button", { name: /HOLD/ }),
+    screen.getByRole("heading", { name: "Today's plan" }),
+  ];
+  for (let i = 1; i < order.length; i++) {
+    expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  }
+});

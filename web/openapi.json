@@ -2045,15 +2045,17 @@
       },
       "VerdictOut": {
         "properties": {
-          "call": {
+          "level": {
             "type": "string",
             "enum": [
-              "go",
-              "easy",
-              "rest",
+              "poor",
+              "low",
+              "moderate",
+              "high",
+              "prime",
               "none"
             ],
-            "title": "Call"
+            "title": "Level"
           },
           "reasons": {
             "items": {
@@ -2089,7 +2091,7 @@
         },
         "type": "object",
         "required": [
-          "call",
+          "level",
           "reasons",
           "based_on",
           "stale",
