@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel
 
-from tri_web.metrics import ACWR_HIGH
+from tri_web.metrics import ACWR_HIGH, ACWR_LOW, RAMP_CAUTION
 
 if TYPE_CHECKING:  # today.py imports this module
     from tri_web.today import ReadinessOut
@@ -181,3 +181,122 @@ def verdict(r: ReadinessOut | None, todays: list[dict[str, Any]], today: date) -
         harder_than_call=harder,
         session_done=done,
     )
+
+
+TSB_BAND = (-30.0, 25.0)  # outside is overreaching or detraining (metrics.TSB_ZONES)
+
+ConditionKey = Literal[
+    "training_readiness", "hrv", "resting_hr", "sleep_score", "sleep_hours", "tsb", "acwr", "ramp"
+]
+_TREND_ROWS: tuple[tuple[ConditionKey, str, str], ...] = (
+    ("training_readiness", "Readiness", ""),
+    ("hrv", "HRV", "ms"),
+    ("resting_hr", "RHR", "bpm"),
+    ("sleep_score", "Sleep", ""),
+    ("sleep_hours", "Slept", "h"),
+)
+_BAND_WORD = {"below": "low", "above": "high", "normal": "within"}
+
+
+class ConditionOut(BaseModel):
+    key: ConditionKey
+    label: str
+    value: float | None
+    unit: str
+    baseline: float | None
+    band_low: float | None
+    band_high: float | None
+    status: str
+    flagged: bool
+
+
+def _raw(r: ReadinessOut, key: str) -> float | None:
+    v = {
+        "training_readiness": r.training_readiness,
+        "hrv": r.hrv,
+        "resting_hr": r.resting_hr,
+        "sleep_score": r.sleep_score,
+        "sleep_hours": r.sleep_hours,
+    }[key]
+    return None if v is None else float(v)
+
+
+def conditions(r: ReadinessOut | None) -> list[ConditionOut]:
+    """One row per condition the board shows, built here so the web app holds no threshold."""
+    if r is None:
+        return []
+    found = flags(r)
+    flagged = {f.key for f in found}
+    if any(f.key == "hrv" and f.severity == "stop" for f in found):
+        flagged.add("resting_hr")  # the combined HRV/RHR stop is keyed hrv but covers both rows
+    out: list[ConditionOut] = []
+    for key, label, unit in _TREND_ROWS:
+        t, value = r.trends.get(key), _raw(r, key)
+        lo = hi = None
+        if t is not None and t.band is not None and t.avg_28d is not None and t.sd_28d is not None:
+            lo, hi = round(t.avg_28d - t.sd_28d, 2), round(t.avg_28d + t.sd_28d, 2)
+        if value is None:
+            status = "no data"
+        elif lo is None or t is None or t.band is None:
+            status = "no baseline"
+        else:
+            status = _BAND_WORD[t.band]
+        out.append(
+            ConditionOut(
+                key=key,
+                label=label,
+                value=value,
+                unit=unit,
+                baseline=t.avg_28d if t is not None else None,
+                band_low=lo,
+                band_high=hi,
+                status=status,
+                flagged=key in flagged,
+            )
+        )
+    out.append(
+        ConditionOut(
+            key="tsb",
+            label="Form (TSB)",
+            value=r.tsb,
+            unit="",
+            baseline=None,
+            band_low=TSB_BAND[0],
+            band_high=TSB_BAND[1],
+            status="no data" if r.tsb is None else (r.tsb_zone or "no data"),
+            flagged="tsb" in flagged,
+        )
+    )
+    if r.acwr is None:
+        acwr_status = "no data"
+    elif not acwr_counts(r):
+        acwr_status = f"ignored: CTL under {ACWR_MIN_CTL}"
+    else:
+        acwr_status = "high" if r.acwr > ACWR_HIGH else "low" if r.acwr < ACWR_LOW else "within"
+    out.append(
+        ConditionOut(
+            key="acwr",
+            label="ACWR",
+            value=r.acwr,
+            unit="",
+            baseline=None,
+            band_low=ACWR_LOW,
+            band_high=ACWR_HIGH,
+            status=acwr_status,
+            flagged="acwr" in flagged,
+        )
+    )
+    out.append(
+        ConditionOut(
+            key="ramp",
+            label="Ramp",
+            value=r.ramp_7d,
+            unit="/wk",
+            baseline=None,
+            band_low=None,
+            band_high=RAMP_CAUTION,
+            status="no data" if r.ramp_7d is None else ("fast" if r.ramp_caution else "within"),
+            flagged="ramp" in flagged,
+        )
+    )
+    return out

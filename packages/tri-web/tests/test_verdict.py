@@ -7,7 +7,7 @@ import pytest
 
 from tri_web.metrics import MetricTrend
 from tri_web.today import ReadinessOut
-from tri_web.verdict import verdict
+from tri_web.verdict import conditions, verdict
 
 TODAY = date(2026, 9, 29)
 
@@ -174,3 +174,87 @@ def test_session_done():
     assert verdict(rd(), [w(completed=True), w(completed=True)], TODAY).session_done
     assert not verdict(rd(), [w(completed=True), w()], TODAY).session_done
     assert not verdict(rd(), [], TODAY).session_done
+
+
+KEYS = [
+    "training_readiness",
+    "hrv",
+    "resting_hr",
+    "sleep_score",
+    "sleep_hours",
+    "tsb",
+    "acwr",
+    "ramp",
+]
+
+
+def rows(r: ReadinessOut | None) -> dict[str, Any]:
+    return {c.key: c for c in conditions(r)}
+
+
+def test_no_readiness_no_rows():
+    assert conditions(None) == []
+
+
+def test_row_order_labels_and_units():
+    cs = conditions(rd())
+    assert [c.key for c in cs] == KEYS
+    assert [c.label for c in cs] == [
+        "Readiness",
+        "HRV",
+        "RHR",
+        "Sleep",
+        "Slept",
+        "Form (TSB)",
+        "ACWR",
+        "Ramp",
+    ]
+    assert [c.unit for c in cs] == ["", "ms", "bpm", "", "h", "", "", "/wk"]
+
+
+def test_trend_rows_carry_baseline_band_and_status():
+    c = rows(with_trend("hrv", HRV_LOW, hrv=52))["hrv"]
+    assert (c.value, c.baseline, c.band_low, c.band_high) == (52, 60, 57, 63)
+    assert c.status == "low" and c.flagged
+    assert rows(rd())["hrv"].status == "within" and not rows(rd())["hrv"].flagged
+    assert rows(with_trend("resting_hr", RHR_HIGH, resting_hr=55))["resting_hr"].status == "high"
+
+
+def test_rows_without_data_or_baseline():
+    no_band = trend(60, 60, 3, None)
+    assert rows(with_trend("hrv", no_band))["hrv"].status == "no baseline"
+    r = rows(rd(sleep_hours=None, trends={k: v for k, v in TRENDS.items() if k != "sleep_hours"}))
+    assert r["sleep_hours"].status == "no data" and r["sleep_hours"].value is None
+
+
+def test_sleep_score_flag_follows_the_threshold_not_the_band():
+    assert rows(rd(sleep_score=59))["sleep_score"].flagged
+
+
+def test_tsb_row():
+    c = rows(rd(tsb=-31.0, tsb_zone="overreaching"))["tsb"]
+    assert (c.band_low, c.band_high, c.status, c.flagged) == (-30, 25, "overreaching", True)
+    assert rows(rd(tsb=None, tsb_zone=None))["tsb"].status == "no data"
+
+
+def test_acwr_row_statuses():
+    assert rows(rd(acwr=1.05))["acwr"].status == "within"
+    assert rows(rd(acwr=1.4))["acwr"].status == "high"
+    assert rows(rd(acwr=1.4))["acwr"].flagged
+    assert rows(rd(acwr=0.7))["acwr"].status == "low"
+    assert not rows(rd(acwr=0.7))["acwr"].flagged
+    guarded = rows(rd(acwr=1.6, ctl=19.0))["acwr"]
+    assert guarded.status == "ignored: CTL under 20" and not guarded.flagged
+    c = rows(rd())["acwr"]
+    assert (c.band_low, c.band_high) == (0.8, 1.3)
+
+
+def test_ramp_row():
+    c = rows(rd(ramp_7d=9.0, ramp_caution=True))["ramp"]
+    assert (c.value, c.band_low, c.band_high, c.status, c.flagged) == (9.0, None, 8, "fast", True)
+    assert rows(rd(ramp_7d=None))["ramp"].status == "no data"
+
+
+def test_combined_stop_flags_both_rows():
+    r = rd(trends={**TRENDS, "hrv": HRV_LOW, "resting_hr": RHR_HIGH}, hrv=52, resting_hr=55)
+    assert rows(r)["hrv"].flagged and rows(r)["resting_hr"].flagged
