@@ -22,3 +22,13 @@ export function baselineValue(c: ConditionOut): string {
   if (c.baseline == null) return "";
   return c.baseline.toFixed(DIGITS[c.key] ?? 0);
 }
+
+/** Your limits as text: "55–61", or "to 8" when only an upper limit exists. */
+export function limitRange(c: ConditionOut): string {
+  const digits = DIGITS[c.key] ?? 0;
+  const t = (v: number) => String(Number(v.toFixed(digits)));
+  if (c.band_low != null && c.band_high != null) return `${t(c.band_low)}–${t(c.band_high)}`;
+  if (c.band_high != null) return `to ${t(c.band_high)}`;
+  if (c.band_low != null) return `from ${t(c.band_low)}`;
+  return "";
+}

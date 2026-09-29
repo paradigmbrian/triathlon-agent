@@ -26,7 +26,7 @@ function Chip({ r, active, onActive }: { r: ReasonOut; active: boolean; onActive
   if (r.severity === "info") {
     // Nothing to trace: an info reason explains the level itself, so it is text, not a button.
     return (
-      <li id={`reason-${r.key}`} className={`inline-flex min-h-7 items-center rounded-full border px-3 text-sm ${CHIP.info}`}>
+      <li id={`reason-${r.key}`} className="text-sm text-ink-2">
         {r.text}
       </li>
     );
@@ -61,7 +61,7 @@ export default function ReadinessStatus({ verdict: v, active, onActive }: Props)
   return (
     <section aria-label="Readiness" className="mx-6 my-5 rounded-lg border border-line bg-surface-2 px-5 py-4">
       <div role="status" className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-        <span className="text-xs font-medium tracking-wider text-ink-2 uppercase">Readiness</span>
+        <span className="sr-only">Readiness</span>
         <span className={`text-2xl leading-none font-semibold tracking-[0.12em] ${tone.text}`}>{WORD[v.level]}</span>
         {v.stale && v.based_on && <span className="text-sm text-ink-2">based on {day(v.based_on)}</span>}
         {v.session_done && <span className="text-sm text-ink-2">session done, recover</span>}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ReadinessStatus from "../src/components/board/ReadinessStatus";
 import Conditions from "../src/components/board/Conditions";
@@ -17,7 +17,7 @@ function Board({ verdict = base, rows = todayFull().conditions }: { verdict?: Ve
   const [active, setActive] = useState<string | null>(null);
   return (
     <>
-      <Conditions readiness={todayFull().readiness} rows={rows} reasons={verdict.reasons} active={active} onActive={setActive} />
+      <Conditions readiness={todayFull().readiness} rows={rows} reasons={verdict.reasons} level={verdict.level} active={active} onActive={setActive} />
       <ReadinessStatus verdict={verdict} active={active} onActive={setActive} />
     </>
   );
@@ -176,8 +176,8 @@ test("Figures is the default view, and Trends swaps the columns for a line per r
   expect(trends).toHaveAttribute("aria-pressed", "true");
   expect(figures).toHaveAttribute("aria-pressed", "false");
   expect(screen.queryByRole("columnheader", { name: "28-day" })).not.toBeInTheDocument();
-  expect(document.querySelectorAll("svg[data-trend]")).toHaveLength(5); // the five rows with history
-  expect(screen.getAllByText("no history")).toHaveLength(3); // Form, ACWR, Ramp
+  expect(document.querySelectorAll("svg[data-trend]")).toHaveLength(8); // every row has history now
+  expect(screen.queryByText("no history")).not.toBeInTheDocument();
   expect(document.getElementById("cond-hrv")).toHaveTextContent("62 ms"); // the figure and the status word stay
   expect(document.getElementById("cond-hrv")).toHaveTextContent("high");
 });
@@ -214,4 +214,61 @@ test("a row with no 28-day baseline shows no stray '28-day' label on a narrow sc
   render(<Board />);
   expect(document.getElementById("cond-hrv")).toHaveTextContent("28-day 58");
   expect(document.getElementById("cond-tsb")).not.toHaveTextContent("28-day");
+});
+
+test("a row with no history still says so in Trends", async () => {
+  const user = userEvent.setup();
+  const rows = todayFull().conditions.map((c) => (c.key === "ramp" ? { ...c, spark: [] } : c));
+  render(<Board rows={rows} />);
+  await user.click(screen.getByRole("button", { name: "Trends" }));
+  expect(screen.getAllByText("no history")).toHaveLength(1);
+  expect(document.querySelectorAll("svg[data-trend]")).toHaveLength(7);
+});
+
+test("the readiness row wears the readiness level's tone, in a word that matches the container", () => {
+  const fig = (key: string) => document.querySelector(`#cond-${key} [data-figure]`)!;
+  const rail = (key: string) => document.querySelector(`#cond-${key} th[scope="row"]`)!;
+  const status = (key: string) => document.querySelector(`#cond-${key} [data-status]`)!;
+  const { unmount } = render(<Board verdict={{ ...base, level: "moderate" }} />);
+  expect(fig("training_readiness")).toHaveClass("text-easy");
+  expect(rail("training_readiness")).toHaveClass("border-easy");
+  expect(status("training_readiness")).toHaveTextContent("moderate");
+  expect(status("training_readiness")).toHaveClass("text-easy");
+  expect(fig("hrv")).toHaveClass("text-hold"); // the other rows keep their own-band colours
+  expect(status("hrv")).toHaveTextContent("high");
+  unmount();
+  render(<Board verdict={{ ...base, level: "poor" }} />);
+  expect(fig("training_readiness")).toHaveClass("text-rest");
+  expect(status("training_readiness")).toHaveTextContent("poor");
+  cleanup();
+  render(<Board verdict={{ ...base, level: "none", reasons: [] }} />);
+  expect(fig("training_readiness")).not.toHaveClass("text-go", "text-easy", "text-rest");
+  expect(status("training_readiness")).toHaveTextContent("within"); // no level to show, so its own-band word
+});
+
+test("your limits show as numbers beside the track", () => {
+  render(<Board />);
+  const range = (key: string) => document.querySelector(`#cond-${key} [data-range]`)!;
+  expect(range("hrv")).toHaveTextContent("55–61");
+  expect(range("sleep_hours")).toHaveTextContent("6.8–7.6");
+  expect(range("tsb")).toHaveTextContent("-30–25");
+  expect(range("acwr")).toHaveTextContent("0.8–1.3");
+  expect(range("ramp")).toHaveTextContent("to 8"); // only an upper limit
+});
+
+test("the container's Readiness label is for screen readers, and a Garmin explanation is a plain line", () => {
+  const info = { key: "training_readiness", text: "Garmin readiness 62, moderate band", severity: "info" } as const;
+  render(<Board verdict={{ ...base, level: "moderate", reasons: [info], harder_than_call: false }} />);
+  const section = screen.getByRole("region", { name: "Readiness" });
+  expect(within(section).getByText("Readiness")).toHaveClass("sr-only");
+  const line = screen.getByText("Garmin readiness 62, moderate band");
+  expect(line).not.toHaveClass("rounded-full");
+  expect(line).not.toHaveClass("border");
+});
+
+test("the band behind a trend line stays visible on a dark ground", async () => {
+  const user = userEvent.setup();
+  render(<Board />);
+  await user.click(screen.getByRole("button", { name: "Trends" }));
+  expect(document.querySelector("#cond-hrv rect[data-band]")).toHaveClass("fill-ink-2/30");
 });

@@ -8,7 +8,7 @@ export default function LimitMarker({ low, high, value }: { low: number | null; 
   const max = Math.max(value, hi) + span * 0.25;
   const pos = (x: number) => `${(((x - min) / (max - min)) * 100).toFixed(1)}%`;
   return (
-    <div aria-hidden="true" className="relative h-1.5 w-24 rounded-full bg-line">
+    <div aria-hidden="true" className="relative h-1.5 w-20 rounded-full bg-line sm:w-32">
       <div className="absolute inset-y-0 rounded-full bg-ink-2/50" style={{ left: pos(lo), right: `calc(100% - ${pos(hi)})` }} />
       <div className="absolute -top-1 h-3.5 w-0.5 rounded-full bg-ink" style={{ left: pos(value) }} />
     </div>

@@ -496,6 +496,13 @@ export interface components {
             acwr: number | null;
             /** Acwr Flag */
             acwr_flag: ("low" | "high") | null;
+            /**
+             * Load Sparks
+             * @default {}
+             */
+            load_sparks: {
+                [key: string]: (number | null)[];
+            };
         };
         /** ReasonOut */
         ReasonOut: {

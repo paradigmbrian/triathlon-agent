@@ -48,6 +48,11 @@ export function todayFull(): TodayView {
       ramp_caution: false,
       acwr: 1.11,
       acwr_flag: null,
+      load_sparks: {
+        tsb: [-8, -7, -6, -6.5, -5, -4, -3.5, -4, -5, -4.5, -4, -5, -4.8, -4.9],
+        acwr: [1.05, 1.08, 1.1, 1.12, 1.09, 1.07, 1.1, 1.13, 1.12, 1.1, 1.09, 1.11, 1.12, 1.11],
+        ramp: [2.8, 3, 3.1, 3.4, 3.2, 3, 3.3, 3.6, 3.5, 3.4, 3.3, 3.5, 3.6, 3.5],
+      },
     },
     fuel: { target: { day_type: "moderate", total_kcal: 2900, carbs_g: 380, protein_g: 150, fat_g: 80, fluid_baseline_ml: 2500, written_to_garmin: false }, targets_through: "2026-09-20" },
     week: { phase: "build", target_hours: 6, target_tss: 300, actual_hours: 2.5, actual_tss: 120, sessions: [
@@ -64,9 +69,9 @@ export function todayFull(): TodayView {
       { key: "resting_hr", label: "RHR", value: 48, unit: "bpm", baseline: 50, band_low: 48, band_high: 52, status: "within", flagged: false, spark: [51, 50, 50, 49, 49, 50, 49, 48, 49, 50, 49, 48, 49, 48] },
       { key: "sleep_score", label: "Sleep", value: 81, unit: "", baseline: 78, band_low: 73, band_high: 83, status: "within", flagged: false, spark: [75, 80, 78, 77, 79, 82, 76, 78, 80, 79, 77, 81, 78, 81] },
       { key: "sleep_hours", label: "Slept", value: 7.5, unit: "h", baseline: 7.2, band_low: 6.8, band_high: 7.6, status: "within", flagged: false, spark: [7, 7.4, 7.2, 7.1, 7.3, 7.6, 7, 7.2, 7.4, 7.3, 7.1, 7.5, 7.2, 7.5] },
-      { key: "tsb", label: "Form (TSB)", value: -4.9, unit: "", baseline: null, band_low: -30, band_high: 25, status: "neutral", flagged: false, spark: [] },
-      { key: "acwr", label: "ACWR", value: 1.11, unit: "", baseline: null, band_low: 0.8, band_high: 1.3, status: "within", flagged: false, spark: [] },
-      { key: "ramp", label: "Ramp", value: 3.5, unit: "/wk", baseline: null, band_low: null, band_high: 8, status: "within", flagged: false, spark: [] },
+      { key: "tsb", label: "Form (TSB)", value: -4.9, unit: "", baseline: null, band_low: -30, band_high: 25, status: "neutral", flagged: false, spark: [-8, -7, -6, -6.5, -5, -4, -3.5, -4, -5, -4.5, -4, -5, -4.8, -4.9] },
+      { key: "acwr", label: "ACWR", value: 1.11, unit: "", baseline: null, band_low: 0.8, band_high: 1.3, status: "within", flagged: false, spark: [1.05, 1.08, 1.1, 1.12, 1.09, 1.07, 1.1, 1.13, 1.12, 1.1, 1.09, 1.11, 1.12, 1.11] },
+      { key: "ramp", label: "Ramp", value: 3.5, unit: "/wk", baseline: null, band_low: null, band_high: 8, status: "within", flagged: false, spark: [2.8, 3, 3.1, 3.4, 3.2, 3, 3.3, 3.6, 3.5, 3.4, 3.3, 3.5, 3.6, 3.5] },
     ],
   };
 }

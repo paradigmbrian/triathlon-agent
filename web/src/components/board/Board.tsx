@@ -13,7 +13,7 @@ export default function Board({ today, review, onHold }: Props) {
   if (!today) return <p role="status" className="px-6 py-6 text-sm text-ink-2">Loading today…</p>;
   return (
     <div className="mx-auto w-full max-w-5xl pb-10">
-      <Conditions readiness={today.readiness} rows={today.conditions} reasons={today.verdict.reasons} active={active} onActive={setActive} />
+      <Conditions readiness={today.readiness} rows={today.conditions} reasons={today.verdict.reasons} level={today.verdict.level} active={active} onActive={setActive} />
       <ReadinessStatus verdict={today.verdict} active={active} onActive={setActive} />
       {review && <HoldLine count={review.proposals.length} onGo={onHold} />}
       <Plan session={today.session} fuel={today.fuel} />

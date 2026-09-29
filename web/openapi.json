@@ -1294,6 +1294,24 @@
               }
             ],
             "title": "Acwr Flag"
+          },
+          "load_sparks": {
+            "additionalProperties": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Load Sparks",
+            "default": {}
           }
         },
         "type": "object",

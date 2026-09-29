@@ -1,14 +1,15 @@
 import { useState } from "react";
-import type { ConditionOut, ReasonOut, TodayView } from "../../api/queries";
+import type { ConditionOut, ReasonOut, TodayView, VerdictOut } from "../../api/queries";
 import { day, n } from "../../lib/format";
 import LimitMarker from "./LimitMarker";
 import Sparkline from "./Sparkline";
-import { baselineValue, conditionParts } from "./format";
+import { baselineValue, conditionParts, limitRange } from "./format";
 
 type Props = {
   readiness: TodayView["readiness"];
   rows: ConditionOut[];
   reasons: ReasonOut[];
+  level?: VerdictOut["level"];
   active: string | null;
   onActive: (key: string | null) => void;
 };
@@ -26,6 +27,10 @@ const STATE = {
   plain: { text: "text-ink-2", rail: "border-line" },
 } as const;
 
+// The Readiness row is Garmin's own score, so it wears the readiness level's tone and word and
+// agrees with the container below it; every other row is judged against your own band.
+const LEVEL_STATE = { poor: STATE.stop, low: STATE.stop, moderate: STATE.caution, high: STATE.go, prime: STATE.go } as const;
+
 function stateOf(c: ConditionOut, severity: ReasonOut["severity"] | undefined) {
   if (c.flagged) return STATE[severity ?? "caution"];
   if (c.status === "within") return STATE.go;
@@ -33,7 +38,7 @@ function stateOf(c: ConditionOut, severity: ReasonOut["severity"] | undefined) {
   return STATE.hold;
 }
 
-export default function Conditions({ readiness, rows, reasons, active, onActive }: Props) {
+export default function Conditions({ readiness, rows, reasons, level, active, onActive }: Props) {
   // Remember the last rows (React's adjust-state-during-render pattern) so only a value that
   // changes after a refetch flashes; the first render flashes nothing.
   const [prevRows, setPrevRows] = useState(rows);
@@ -89,7 +94,8 @@ export default function Conditions({ readiness, rows, reasons, active, onActive 
           </thead>
           <tbody>
             {rows.map((c) => {
-              const state = stateOf(c, severity.get(c.key));
+              const byLevel = c.key === "training_readiness" && level && level !== "none" ? level : null;
+              const state = byLevel ? LEVEL_STATE[byLevel] : stateOf(c, severity.get(c.key));
               const parts = conditionParts(c);
               return (
                 <tr
@@ -108,7 +114,7 @@ export default function Conditions({ readiness, rows, reasons, active, onActive 
                   <td key={`${c.key}:${c.value}`} className={`col-start-2 row-start-1 pr-3 ${changed.has(c.key) ? "board-flash" : ""}`}>
                     {parts ? (
                       <>
-                        <span data-figure className={`text-4xl leading-none font-semibold tracking-tight ${c.flagged || c.status === "within" || state === STATE.hold ? state.text : ""}`}>{parts.num}</span>
+                        <span data-figure className={`text-4xl leading-none font-semibold tracking-tight ${state === STATE.plain ? "" : state.text}`}>{parts.num}</span>
                         {parts.unit && <span data-unit className="text-sm font-normal whitespace-pre text-ink-2">{parts.unit}</span>}
                       </>
                     ) : (
@@ -118,14 +124,19 @@ export default function Conditions({ readiness, rows, reasons, active, onActive 
                   {view === "figures" ? (
                     <>
                       <td className="col-start-2 row-start-2 pr-3 pb-2 text-ink-2">{baselineValue(c) && <span className="text-xs sm:hidden">28-day </span>}{baselineValue(c)}</td>
-                      <td className="col-start-3 row-start-2 pr-3 pb-2"><LimitMarker low={c.band_low} high={c.band_high} value={c.value} /></td>
+                      <td className="col-start-3 row-start-2 pr-3 pb-2">
+                        <div className="flex items-center gap-2">
+                          <LimitMarker low={c.band_low} high={c.band_high} value={c.value} />
+                          <span data-range className="text-xs whitespace-nowrap text-ink-2">{limitRange(c)}</span>
+                        </div>
+                      </td>
                     </>
                   ) : (
                     <td className={`col-span-2 col-start-2 row-start-2 pr-3 pb-2 ${state === STATE.plain ? "text-ink" : state.text}`}>
                       {c.spark.some((v) => v != null) ? <Sparkline values={c.spark} low={c.band_low} high={c.band_high} /> : <span className="text-ink-2">no history</span>}
                     </td>
                   )}
-                  <td data-status className={`col-start-3 row-start-1 text-xs font-semibold tracking-wide uppercase ${state.text}`}>{c.status}</td>
+                  <td data-status className={`col-start-3 row-start-1 text-xs font-semibold tracking-wide uppercase ${state.text}`}>{byLevel ?? c.status}</td>
                 </tr>
               );
             })}
