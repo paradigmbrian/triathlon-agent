@@ -261,7 +261,7 @@ async def test_workout_detail_and_per_sport_week(nocommit, runtime):
 async def test_today_carries_the_verdict_and_conditions(nocommit, runtime):
     seed_metrics(nocommit, TODAY)  # HRV 50 below band and RHR 55 above band on TODAY
     view = await build_today(runtime(today=TODAY))
-    assert view.verdict.call == "rest"
+    assert view.verdict.level == "poor"
     assert [(r.key, r.severity) for r in view.verdict.reasons] == [("hrv", "stop")]
     assert view.verdict.based_on == TODAY and not view.verdict.stale
     keys = [c.key for c in view.conditions]
@@ -272,4 +272,4 @@ async def test_today_carries_the_verdict_and_conditions(nocommit, runtime):
 
 async def test_no_metrics_is_no_call(nocommit, runtime):
     view = await build_today(runtime(today=TODAY))
-    assert view.verdict.call == "none" and view.conditions == []
+    assert view.verdict.level == "none" and view.conditions == []

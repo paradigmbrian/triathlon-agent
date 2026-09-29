@@ -1,4 +1,4 @@
-"""The go / easy / rest call from the athlete's own numbers."""
+"""The readiness level from Garmin's score and the athlete's own numbers."""
 
 from datetime import date, timedelta
 from typing import Any
@@ -58,75 +58,134 @@ def with_trend(key: str, t: MetricTrend, **over: Any) -> ReadinessOut:
 HRV_LOW = trend(52, 60, 3, "below")
 RHR_HIGH = trend(55, 48, 2, "above")
 
+# Garmin's top band, so only the flags can cap the level. Never pass training_readiness as well.
+PRIME: dict[str, Any] = dict(training_readiness=96)
 
-def call(r: ReadinessOut | None, todays: list[dict[str, Any]] | None = None) -> str:
-    return verdict(r, todays or [], TODAY).call
+
+def level(r: ReadinessOut | None, todays: list[dict[str, Any]] | None = None) -> str:
+    return verdict(r, todays or [], TODAY).level
 
 
-def test_no_readiness_is_no_call():
+def test_no_readiness_is_no_reading():
     v = verdict(None, [], TODAY)
-    assert v.call == "none" and v.based_on is None and not v.stale
+    assert v.level == "none" and v.based_on is None and not v.stale
     assert [(r.key, r.text, r.severity) for r in v.reasons] == [
         ("training_readiness", "No Garmin data, sync first", "info")
     ]
 
 
-def test_clean_day_is_go():
-    v = verdict(rd(), [], TODAY)
-    assert v.call == "go" and v.reasons == [] and v.based_on == TODAY and not v.stale
+def test_clean_day_with_a_prime_score_is_prime():
+    v = verdict(rd(**PRIME), [], TODAY)
+    assert v.level == "prime" and v.reasons == [] and v.based_on == TODAY and not v.stale
+
+
+@pytest.mark.parametrize(
+    ("score", "expected"),
+    [
+        (24, "poor"),
+        (25, "low"),
+        (49, "low"),
+        (50, "moderate"),
+        (74, "moderate"),
+        (75, "high"),
+        (94, "high"),
+        (95, "prime"),
+    ],
+)
+def test_garmin_bands_set_the_level(score, expected):
+    assert level(rd(training_readiness=score)) == expected
+
+
+def test_missing_garmin_score_caps_at_high_and_says_so():
+    v = verdict(rd(training_readiness=None), [], TODAY)
+    assert v.level == "high"
+    assert [(r.key, r.text, r.severity) for r in v.reasons] == [
+        ("training_readiness", "No Garmin readiness score today, capped at high", "info")
+    ]
+
+
+def test_garmin_holds_the_level_down_and_gives_the_reason():
+    v = verdict(rd(training_readiness=62), [], TODAY)
+    assert v.level == "moderate"
+    assert [(r.key, r.text, r.severity) for r in v.reasons] == [
+        ("training_readiness", "Garmin readiness 62, moderate band", "info")
+    ]
+
+
+def test_no_extra_reason_when_a_readiness_flag_already_explains():
+    v = verdict(rd(training_readiness=40), [], TODAY)
+    assert v.level == "low"
+    assert [(r.key, r.severity) for r in v.reasons] == [("training_readiness", "caution")]
+
+
+def test_no_extra_reason_when_the_flags_are_the_cap():
+    v = verdict(rd(sleep_score=59, **PRIME), [], TODAY)
+    assert v.level == "high"
+    assert [(r.key, r.severity) for r in v.reasons] == [("sleep_score", "caution")]
 
 
 @pytest.mark.parametrize(
     ("r", "key"),
     [
-        (with_trend("hrv", HRV_LOW, hrv=52), "hrv"),
-        (with_trend("resting_hr", RHR_HIGH, resting_hr=55), "resting_hr"),
-        (rd(sleep_score=59), "sleep_score"),
-        (rd(training_readiness=49), "training_readiness"),
-        (rd(acwr=1.31, acwr_flag="high"), "acwr"),
-        (rd(ramp_7d=9.0, ramp_caution=True), "ramp"),
+        (with_trend("hrv", HRV_LOW, hrv=52, **PRIME), "hrv"),
+        (with_trend("resting_hr", RHR_HIGH, resting_hr=55, **PRIME), "resting_hr"),
+        (rd(sleep_score=59, **PRIME), "sleep_score"),
+        (rd(acwr=1.31, acwr_flag="high", **PRIME), "acwr"),
+        (rd(ramp_7d=9.0, ramp_caution=True, **PRIME), "ramp"),
     ],
 )
-def test_each_caution_alone_is_easy(r, key):
+def test_each_caution_alone_caps_at_high(r, key):
     v = verdict(r, [], TODAY)
-    assert v.call == "easy"
+    assert v.level == "high"
     assert [(x.key, x.severity) for x in v.reasons] == [(key, "caution")]
 
 
+def test_a_readiness_caution_is_low_because_the_score_is_under_50():
+    v = verdict(rd(training_readiness=49), [], TODAY)
+    assert v.level == "low"
+    assert [(x.key, x.severity) for x in v.reasons] == [("training_readiness", "caution")]
+
+
 def test_threshold_edges_do_not_flag():
-    assert call(rd(sleep_score=60)) == "go"
-    assert call(rd(training_readiness=50)) == "go"
-    assert call(rd(acwr=1.3)) == "go"
+    assert level(rd(sleep_score=60, **PRIME)) == "prime"
+    assert level(rd(acwr=1.3, **PRIME)) == "prime"
+    v = verdict(rd(training_readiness=50), [], TODAY)
+    assert v.level == "moderate"
+    assert [r.severity for r in v.reasons] == ["info"]  # the Garmin band only, no flag
 
 
-def test_two_cautions_easy_three_rest():
-    assert call(rd(sleep_score=59, training_readiness=49)) == "easy"
-    assert call(rd(sleep_score=59, training_readiness=49, ramp_7d=9.0, ramp_caution=True)) == "rest"
+def test_two_cautions_moderate_three_low():
+    two = rd(sleep_score=59, ramp_7d=9.0, ramp_caution=True, **PRIME)
+    assert level(two) == "moderate"
+    three = rd(sleep_score=59, ramp_7d=9.0, ramp_caution=True, acwr=1.31, acwr_flag="high", **PRIME)
+    assert level(three) == "low"
 
 
 @pytest.mark.parametrize(
     ("r", "key"),
     [
         (rd(training_readiness=24), "training_readiness"),
-        (rd(tsb=-31.0, tsb_zone="overreaching"), "tsb"),
-        (rd(acwr=1.51, acwr_flag="high"), "acwr"),
+        (rd(tsb=-31.0, tsb_zone="overreaching", **PRIME), "tsb"),
+        (rd(acwr=1.51, acwr_flag="high", **PRIME), "acwr"),
     ],
 )
-def test_each_stop_is_rest(r, key):
+def test_each_stop_is_poor(r, key):
     v = verdict(r, [], TODAY)
-    assert v.call == "rest"
+    assert v.level == "poor"
     assert [(x.key, x.severity) for x in v.reasons] == [(key, "stop")]
 
 
 def test_readiness_25_is_a_caution_not_a_stop():
     v = verdict(rd(training_readiness=25), [], TODAY)
-    assert v.call == "easy" and v.reasons[0].severity == "caution"
+    assert v.level == "low" and v.reasons[0].severity == "caution"
 
 
 def test_hrv_low_and_rhr_high_together_are_one_stop():
-    r = rd(trends={**TRENDS, "hrv": HRV_LOW, "resting_hr": RHR_HIGH}, hrv=52, resting_hr=55)
+    r = rd(
+        trends={**TRENDS, "hrv": HRV_LOW, "resting_hr": RHR_HIGH}, hrv=52, resting_hr=55, **PRIME
+    )
     v = verdict(r, [], TODAY)
-    assert v.call == "rest"
+    assert v.level == "poor"
     assert [(x.key, x.severity) for x in v.reasons] == [("hrv", "stop")]
     assert "52" in v.reasons[0].text and "55" in v.reasons[0].text
 
@@ -137,18 +196,18 @@ def test_stops_come_before_cautions():
 
 
 def test_acwr_guard():
-    assert call(rd(acwr=1.6, acwr_flag="high", ctl=19.9)) == "go"
-    assert call(rd(acwr=1.6, acwr_flag="high", ctl=20.0)) == "rest"
-    assert call(rd(acwr=1.6, acwr_flag="high", ctl=None)) == "go"
+    assert level(rd(acwr=1.6, acwr_flag="high", ctl=19.9, **PRIME)) == "prime"
+    assert level(rd(acwr=1.6, acwr_flag="high", ctl=20.0, **PRIME)) == "poor"
+    assert level(rd(acwr=1.6, acwr_flag="high", ctl=None, **PRIME)) == "prime"
 
 
 def test_stale_edges():
-    one = verdict(rd(date=TODAY - timedelta(days=1), is_today=False), [], TODAY)
-    assert one.call == "go" and one.stale and one.based_on == TODAY - timedelta(days=1)
-    three = verdict(rd(date=TODAY - timedelta(days=3), is_today=False), [], TODAY)
-    assert three.call == "go" and three.stale
-    four = verdict(rd(date=TODAY - timedelta(days=4), is_today=False), [], TODAY)
-    assert four.call == "none" and four.based_on == TODAY - timedelta(days=4)
+    one = verdict(rd(date=TODAY - timedelta(days=1), is_today=False, **PRIME), [], TODAY)
+    assert one.level == "prime" and one.stale and one.based_on == TODAY - timedelta(days=1)
+    three = verdict(rd(date=TODAY - timedelta(days=3), is_today=False, **PRIME), [], TODAY)
+    assert three.level == "prime" and three.stale
+    four = verdict(rd(date=TODAY - timedelta(days=4), is_today=False, **PRIME), [], TODAY)
+    assert four.level == "none" and four.based_on == TODAY - timedelta(days=4)
     assert four.reasons[0].text == "Last Garmin data Fri Sep 25, sync first"
 
 
@@ -161,13 +220,15 @@ def w(**over: Any) -> dict[str, Any]:
 
 
 def test_harder_than_call():
-    easy = rd(sleep_score=59)
-    assert verdict(easy, [w(planned_if=0.8)], TODAY).harder_than_call
-    assert not verdict(easy, [w(planned_if=0.7)], TODAY).harder_than_call
-    assert verdict(easy, [w(planned_tss=60)], TODAY).harder_than_call  # 60 TSS/h, IF unknown
-    assert not verdict(easy, [w(planned_tss=50)], TODAY).harder_than_call
-    assert not verdict(easy, [w(planned_if=0.8, completed=True)], TODAY).harder_than_call
-    assert not verdict(rd(), [w(planned_if=0.9)], TODAY).harder_than_call  # go
+    moderate = rd(sleep_score=59, ramp_7d=9.0, ramp_caution=True, **PRIME)
+    assert verdict(moderate, [w(planned_if=0.8)], TODAY).harder_than_call
+    assert not verdict(moderate, [w(planned_if=0.7)], TODAY).harder_than_call
+    assert verdict(moderate, [w(planned_tss=60)], TODAY).harder_than_call  # 60 TSS/h, IF unknown
+    assert not verdict(moderate, [w(planned_tss=50)], TODAY).harder_than_call
+    assert not verdict(moderate, [w(planned_if=0.8, completed=True)], TODAY).harder_than_call
+    assert not verdict(rd(**PRIME), [w(planned_if=0.9)], TODAY).harder_than_call  # prime
+    high = rd(sleep_score=59, **PRIME)  # one caution no longer warns
+    assert not verdict(high, [w(planned_if=0.9)], TODAY).harder_than_call
 
 
 def test_session_done():

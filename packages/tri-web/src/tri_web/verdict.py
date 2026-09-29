@@ -1,6 +1,7 @@
-"""The morning call, go / easy / rest, from the athlete's own numbers against his own baseline,
-and the condition rows the board shows beside it. Pure: build_today hands it the readiness
-view and today's workouts. Every threshold lives here or in metrics.py, never in the web app."""
+"""The morning readiness level, poor to prime, from Garmin's score and the athlete's own numbers
+against his own baseline, and the condition rows the board shows beside it. Pure: build_today
+hands it the readiness view and today's workouts. Every threshold lives here or in metrics.py,
+never in the web app."""
 
 from __future__ import annotations
 
@@ -24,7 +25,11 @@ NO_CALL_DAYS = 3
 HARD_IF = 0.75  # a planned session at or above this intensity is harder than easy
 HARD_TSS_PER_H = 55  # the same test when planned IF is unknown
 
-Call = Literal["go", "easy", "rest", "none"]
+Level = Literal["poor", "low", "moderate", "high", "prime", "none"]
+_STEPS: tuple[Level, ...] = ("poor", "low", "moderate", "high", "prime")
+# A Training Readiness score at or over each edge climbs one step:
+# 25 low, 50 moderate, 75 high, 95 prime.
+GARMIN_BANDS = (25, 50, 75, 95)
 Severity = Literal["caution", "stop", "info"]
 
 
@@ -35,7 +40,7 @@ class ReasonOut(BaseModel):
 
 
 class VerdictOut(BaseModel):
-    call: Call
+    level: Level
     reasons: list[ReasonOut]  # stops first, then cautions
     based_on: date | None
     stale: bool
@@ -143,6 +148,20 @@ def _hard(w: dict[str, Any]) -> bool:
     return float(tss) / (float(secs) / 3600) >= HARD_TSS_PER_H
 
 
+def _garmin_cap(score: int | None) -> Level:
+    """Garmin's own band. With no score the cap is high, so a missing reading is never prime."""
+    if score is None:
+        return "high"
+    return _STEPS[sum(score >= edge for edge in GARMIN_BANDS)]
+
+
+def _flag_cap(found: list[ReasonOut]) -> Level:
+    """Any stop is poor; else 3+ cautions low, two moderate, one high, none prime."""
+    if any(f.severity == "stop" for f in found):
+        return "poor"
+    return _STEPS[max(1, 4 - len(found))]
+
+
 def verdict(r: ReadinessOut | None, todays: list[dict[str, Any]], today: date) -> VerdictOut:
     done = bool(todays) and all(bool(w["completed"]) for w in todays)
     if r is None:
@@ -150,7 +169,7 @@ def verdict(r: ReadinessOut | None, todays: list[dict[str, Any]], today: date) -
             key="training_readiness", text="No Garmin data, sync first", severity="info"
         )
         return VerdictOut(
-            call="none",
+            level="none",
             reasons=[reason],
             based_on=None,
             stale=False,
@@ -162,7 +181,7 @@ def verdict(r: ReadinessOut | None, todays: list[dict[str, Any]], today: date) -
         text = f"Last Garmin data {r.date:%a %b} {r.date.day}, sync first"
         reason = ReasonOut(key="training_readiness", text=text, severity="info")
         return VerdictOut(
-            call="none",
+            level="none",
             reasons=[reason],
             based_on=r.date,
             stale=True,
@@ -170,12 +189,25 @@ def verdict(r: ReadinessOut | None, todays: list[dict[str, Any]], today: date) -
             session_done=done,
         )
     found = flags(r)
-    stops = any(f.severity == "stop" for f in found)
-    c: Call = "rest" if stops or len(found) >= 3 else "easy" if found else "go"
-    harder = c in ("easy", "rest") and any(not w["completed"] and _hard(w) for w in todays)
+    score = r.training_readiness
+    garmin, capped = _garmin_cap(score), _flag_cap(found)
+    lvl: Level = min(garmin, capped, key=_STEPS.index)
+    reasons = list(found)
+    if _STEPS.index(garmin) < _STEPS.index(capped) and not any(
+        f.key == "training_readiness" for f in found
+    ):
+        text = (
+            f"Garmin readiness {score}, {garmin} band"
+            if score is not None
+            else f"No Garmin readiness score today, capped at {garmin}"
+        )
+        reasons.append(ReasonOut(key="training_readiness", text=text, severity="info"))
+    harder = lvl in ("poor", "low", "moderate") and any(
+        not w["completed"] and _hard(w) for w in todays
+    )
     return VerdictOut(
-        call=c,
-        reasons=found,
+        level=lvl,
+        reasons=reasons,
         based_on=r.date,
         stale=age >= STALE_DAYS,
         harder_than_call=harder,
