@@ -200,3 +200,18 @@ test("chips still find their row in the Trends view", async () => {
   await user.click(screen.getByRole("button", { name: "ACWR 1.45, over 1.3" }));
   expect(document.getElementById("cond-acwr")).toHaveFocus();
 });
+
+test("on a narrow screen a row stacks: label, figure and status first, the extras under them", () => {
+  render(<Board />);
+  const row = document.getElementById("cond-hrv")!;
+  expect(row).toHaveClass("grid", "sm:table-row");
+  expect(row.querySelector("[data-status]")).toHaveClass("col-start-3", "row-start-1");
+  // the column headers stay for screen readers when the row stacks
+  expect(document.querySelector("thead")).toHaveClass("max-sm:sr-only");
+});
+
+test("a row with no 28-day baseline shows no stray '28-day' label on a narrow screen", () => {
+  render(<Board />);
+  expect(document.getElementById("cond-hrv")).toHaveTextContent("28-day 58");
+  expect(document.getElementById("cond-tsb")).not.toHaveTextContent("28-day");
+});

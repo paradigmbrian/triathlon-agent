@@ -25,7 +25,7 @@ export default function Sparkline({ values, low, high }: { values: (number | nul
   if (run.length) runs.push(run.join(" "));
   const last = values.map((v, i) => (v == null ? -1 : i)).reduce((a, b) => Math.max(a, b), -1);
   return (
-    <svg data-trend aria-hidden="true" viewBox={`0 0 ${W} ${H}`} className="h-7 w-40" fill="none">
+    <svg data-trend aria-hidden="true" viewBox={`0 0 ${W} ${H}`} className="h-7 w-32 sm:w-40" fill="none">
       {banded && <rect data-band x={0} y={y(high)} width={W} height={Math.max(1, y(low) - y(high))} className="fill-ink-2/20" />}
       {runs.map((points, i) => (
         <polyline key={i} points={points} stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />

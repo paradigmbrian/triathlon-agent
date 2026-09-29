@@ -72,7 +72,7 @@ export default function Conditions({ readiness, rows, reasons, active, onActive 
         <p className="mt-2 text-sm text-ink-2">No Garmin data yet, sync first</p>
       ) : (
         <table className="mt-2 w-full text-sm tabular-nums">
-          <thead className="text-left text-xs text-ink-2">
+          <thead className="text-left text-xs text-ink-2 max-sm:sr-only">
             <tr>
               <th scope="col" className="py-1.5 font-medium">Condition</th>
               <th scope="col" className="font-medium">Now</th>
@@ -102,10 +102,10 @@ export default function Conditions({ readiness, rows, reasons, active, onActive 
                   onMouseLeave={() => onActive(null)}
                   onFocus={() => onActive(c.key)}
                   onBlur={() => onActive(null)}
-                  className={`border-t border-line focus:outline-none focus-visible:ring-2 focus-visible:ring-hold ${active === c.key ? "bg-hold/10" : ""}`}
+                  className={`grid grid-cols-[6rem_minmax(0,1fr)_minmax(0,1fr)] items-center gap-x-3 border-t border-line sm:table-row focus:outline-none focus-visible:ring-2 focus-visible:ring-hold ${active === c.key ? "bg-hold/10" : ""}`}
                 >
-                  <th scope="row" className={`border-l-4 py-3 pr-3 pl-3 text-left text-xs font-normal tracking-wider text-ink-2 uppercase ${state.rail}`}>{c.label}</th>
-                  <td key={`${c.key}:${c.value}`} className={`pr-3 ${changed.has(c.key) ? "board-flash" : ""}`}>
+                  <th scope="row" className={`col-start-1 row-start-1 border-l-4 py-3 pr-3 pl-3 text-left text-xs font-normal tracking-wider text-ink-2 uppercase ${state.rail}`}>{c.label}</th>
+                  <td key={`${c.key}:${c.value}`} className={`col-start-2 row-start-1 pr-3 ${changed.has(c.key) ? "board-flash" : ""}`}>
                     {parts ? (
                       <>
                         <span data-figure className={`text-4xl leading-none font-semibold tracking-tight ${c.flagged || c.status === "within" || state === STATE.hold ? state.text : ""}`}>{parts.num}</span>
@@ -117,15 +117,15 @@ export default function Conditions({ readiness, rows, reasons, active, onActive 
                   </td>
                   {view === "figures" ? (
                     <>
-                      <td className="pr-3 text-ink-2">{baselineValue(c)}</td>
-                      <td className="pr-3"><LimitMarker low={c.band_low} high={c.band_high} value={c.value} /></td>
+                      <td className="col-start-2 row-start-2 pr-3 pb-2 text-ink-2">{baselineValue(c) && <span className="text-xs sm:hidden">28-day </span>}{baselineValue(c)}</td>
+                      <td className="col-start-3 row-start-2 pr-3 pb-2"><LimitMarker low={c.band_low} high={c.band_high} value={c.value} /></td>
                     </>
                   ) : (
-                    <td className={`pr-3 ${state === STATE.plain ? "text-ink" : state.text}`}>
+                    <td className={`col-span-2 col-start-2 row-start-2 pr-3 pb-2 ${state === STATE.plain ? "text-ink" : state.text}`}>
                       {c.spark.some((v) => v != null) ? <Sparkline values={c.spark} low={c.band_low} high={c.band_high} /> : <span className="text-ink-2">no history</span>}
                     </td>
                   )}
-                  <td data-status className={`text-xs font-semibold tracking-wide uppercase ${state.text}`}>{c.status}</td>
+                  <td data-status className={`col-start-3 row-start-1 text-xs font-semibold tracking-wide uppercase ${state.text}`}>{c.status}</td>
                 </tr>
               );
             })}

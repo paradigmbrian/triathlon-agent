@@ -91,3 +91,8 @@ test("the tabs show every section, mark the current one, and the jobs sit in the
   expect(screen.getByRole("button", { name: "Weekly check-in" })).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /Account menu/ })).not.toBeInTheDocument();
 });
+
+test("the observations line takes a row of its own on a narrow screen, so the job buttons never sit on it", () => {
+  renderWith(<Header today={todayFull()} />);
+  expect(screen.getByText(/Wed, Sep 16/).parentElement).toHaveClass("basis-full", "sm:basis-0");
+});
