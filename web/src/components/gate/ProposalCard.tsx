@@ -7,7 +7,7 @@ export default function ProposalCard({ p }: { p: ProposalJson }) {
     <div className="rounded-md border border-line bg-surface p-3">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm">
         <span className="font-mono text-xs text-ink-2">{p.id}</span>
-        <span className={`text-[11px] font-semibold tracking-wide uppercase ${tone}`}>{p.domain}</span>
+        <span className={`text-xs font-semibold tracking-wide uppercase ${tone}`}>{p.domain}</span>
         <span className="font-medium">{p.summary}</span>
       </div>
       {p.question ? (

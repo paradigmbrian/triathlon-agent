@@ -164,7 +164,7 @@ export default function SchemaForm({ schema, proposal, errors, onChange, onRemov
     <div role="group" aria-label={`proposal ${proposal.id}`} className="rounded-md border border-line bg-surface p-3">
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="font-mono text-xs text-ink-2">{proposal.id}</span>
-        <span className={`text-[11px] font-semibold tracking-wide uppercase ${domain === "planning" ? "text-planning" : "text-nutrition"}`}>{domain}</span>
+        <span className={`text-xs font-semibold tracking-wide uppercase ${domain === "planning" ? "text-planning" : "text-nutrition"}`}>{domain}</span>
         {canRemove && (
           <button type="button" onClick={onRemove} aria-label="remove proposal" className="ml-auto text-xs text-danger">
             remove proposal

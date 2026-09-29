@@ -5,7 +5,7 @@ const tagColor: Record<string, string> = { planning: "text-planning", nutrition:
 export function Bubble({ role, where, children }: { role: "user" | "assistant" | "consult" | "report" | "error"; where?: string | null; children: ReactNode }) {
   if (role === "user") {
     return (
-      <div className="ml-auto max-w-[85%] rounded-2xl rounded-br-sm border border-accent/30 bg-accent/15 px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap">
+      <div className="ml-auto max-w-[85%] rounded-2xl rounded-br-sm border border-accent/30 bg-accent/15 px-3.5 py-2 text-base leading-relaxed whitespace-pre-wrap">
         {children}
       </div>
     );
@@ -19,9 +19,9 @@ export function Bubble({ role, where, children }: { role: "user" | "assistant" |
   const tag = where && where !== "coach" ? where : null;
   return (
     <div
-      className={`max-w-[85%] rounded-2xl rounded-bl-sm border border-line bg-surface-2 px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap ${role === "consult" ? "font-mono text-xs text-ink-2" : ""}`}
+      className={`max-w-[85%] rounded-2xl rounded-bl-sm border border-line bg-surface-2 px-3.5 py-2 leading-relaxed whitespace-pre-wrap ${role === "consult" ? "font-mono text-xs text-ink-2" : "text-base"}`}
     >
-      {tag && <span className={`mr-2 text-[11px] font-semibold tracking-wide uppercase ${tagColor[tag] ?? "text-ink-2"}`}>{tag}</span>}
+      {tag && <span className={`mr-2 text-xs font-semibold tracking-wide uppercase ${tagColor[tag] ?? "text-ink-2"}`}>{tag}</span>}
       {children}
     </div>
   );
