@@ -1,7 +1,7 @@
 # tri-web preflight board: a go / easy / rest verdict and a new visual world
 
 **Date:** 2026-09-29
-**Status:** Approved 2026-09-29
+**Status:** Approved 2026-09-29. Amended 2026-09-29 after the first build review: see §8, which supersedes the call vocabulary in §2.2 and §2.3 and the order and verdict strip in §3.3.
 **Purpose:** Replace tri-web's look with the "Go / No-Go Preflight Board" direction chosen in the Impeccable shape round (seed `f2f09b9e`, pick card, code-led), with Today as the lead surface. Add the server-side verdict that the board leads with. Product truth lives in `PRODUCT.md`. This spec follows `2026-09-28-web-polish-design.md` (merged to `main` @ 4fa5b1d) and replaces that spec's Today cards. Line numbers are `main` @ 4fa5b1d.
 
 ## 1. Decisions already made
@@ -235,3 +235,48 @@ Definition of done:
 - `npm --prefix web run lint && npm --prefix web run test && npm --prefix web run build`;
 - the Impeccable finish (§4);
 - Brian's look in the browser.
+
+## 8. Amendment: readiness scale, metrics first (2026-09-29, after the first build review)
+
+Brian reviewed the built board and asked for three changes. Where this section and §1–§3 disagree, this section wins. Sections not named here are unchanged.
+
+### 8.1 What Brian said
+
+- The call was read before the metrics. The metrics should come first, then a container for the status.
+- The GO / EASY / REST wording should give way to a Garmin-style scale from Poor to the top step. Garmin's own labels are Poor, Low, Moderate, High, Prime, so "Prime" is the top step (Brian wrote "Peaking").
+- The level is Garmin's Training Readiness score band, capped by his own flags.
+
+### 8.2 Level rule (supersedes the Call paragraph of §2.2)
+
+`VerdictOut.call` becomes `level: Literal["poor", "low", "moderate", "high", "prime", "none"]`. The flags table, the stale rule, the ACWR guard and the reasons are unchanged. The level is the lower of two caps, ordered poor < low < moderate < high < prime.
+
+| Cap | poor | low | moderate | high | prime |
+|---|---|---|---|---|---|
+| Garmin band (`training_readiness`) | under 25 | 25–49 | 50–74 | 75–94 | 95 and up |
+| Flags | any stop | 3 or more cautions | 2 cautions | 1 caution | none |
+
+- **No Garmin score today:** the Garmin cap is `high`, so a missing reading can never produce `prime`.
+- **`none`:** unchanged: no readiness row, or one more than `NO_CALL_DAYS` old.
+- **Constants:** the band edges live in `verdict.py` as `GARMIN_BANDS = (25, 50, 75, 95)`.
+- **`harder_than_call`:** now true when the level is `poor`, `low` or `moderate` and a planned, not completed session is harder than easy (§2.3 tests unchanged). It no longer fires at `high`, where a single caution used to trigger it.
+- **§2.3 model:** rename `call` to `level`; every other field is unchanged.
+
+### 8.3 Layout (supersedes items 1–3 of §3.3 and the first-viewport order)
+
+1. **Conditions table first**, then the readiness container, then the HOLD line, then Today's plan and Week.
+2. **Readiness container** (replaces the verdict strip; `role="status"`, `aria-label="Readiness"`):
+   - a small "Readiness" label and the level word (`POOR`, `LOW`, `MODERATE`, `HIGH`, `PRIME`, or `NO READING` for `none`) at `text-2xl`, well under the 36px figures;
+   - a five-segment scale, Poor to Prime, with the current step lit; the labels are always visible;
+   - the reason chips, still linked to their rows above; `based on {day}` when stale; `harder_than_call` and `session_done` lines as before.
+3. **Colour** reuses the existing tokens: prime and high `go`, moderate `easy`, low and poor `rest`. The word and the lit segment carry the step; colour never does alone.
+4. The "One loud element" anti-goal now means the figures lead: the level is a single quiet container, not the loudest thing on the page.
+
+### 8.4 Conditions rows (built after §3.3 was approved, recorded here)
+
+- Each row has a 4px left rail, a `text-4xl` semibold figure and a small unit, all in the row's state colour: a flagged row its reason's colour, a row inside its band `go`, a row outside its band but not flagged `hold`, and a row with no band word plain. The status word takes the same colour. The web app maps the server's status words; it compares no value against a limit.
+- A Figures | Trends switch above the table. Trends replaces the 28-day and limit columns with a 14-day line per row: the band shaded, today's dot, a break at a missing day. `ConditionOut.spark` carries the history for the five trend rows; Form, ACWR and Ramp send `[]` and show "no history".
+
+### 8.5 Tests and rollout
+
+- **Existing tests that change:** `test_verdict.py` and `test_today.py` (`call` to `level`, the new mapping), `verdict.test.tsx`, `board.test.tsx`, `fixtures.tsx` and the e2e stub. All belong to this branch; no test outside the board changes.
+- **Rollout:** unchanged: no migration, no prompt change, no eval run.
