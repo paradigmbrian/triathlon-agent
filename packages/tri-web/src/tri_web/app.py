@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from tri_web.events import Busy
-from tri_web.routes import coach, jobs, memory, system, today
+from tri_web.routes import coach, jobs, memory, progress, system, today
 from tri_web.runtime import Runtime
 from tri_web.schemas import EditRejected, NoReview, Paused
 
@@ -44,6 +44,7 @@ def create_app(
     app.include_router(memory.router, prefix="/api/coach", tags=["memory"])
     app.include_router(system.router, prefix="/api/system", tags=["system"])
     app.include_router(today.router, prefix="/api", tags=["today"])
+    app.include_router(progress.router, prefix="/api", tags=["progress"])
 
     @app.exception_handler(Busy)
     async def busy(request: Request, exc: Busy) -> JSONResponse:

@@ -259,6 +259,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Progress */
+        get: operations["get_progress_api_progress_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -400,6 +417,19 @@ export interface components {
             /** Priorities */
             priorities: string | null;
         };
+        /** LongestOut */
+        LongestOut: {
+            /**
+             * Duration Sec
+             * @default 0
+             */
+            duration_sec: number;
+            /**
+             * Distance M
+             * @default 0
+             */
+            distance_m: number;
+        };
         /** MemoryEntry */
         MemoryEntry: {
             /** Id */
@@ -442,6 +472,58 @@ export interface components {
             better: boolean | null;
             /** Spark */
             spark: (number | null)[];
+        };
+        /** PmcPoint */
+        PmcPoint: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Ctl */
+            ctl: number | null;
+            /** Atl */
+            atl: number | null;
+            /** Tsb */
+            tsb: number | null;
+            /** Tss */
+            tss: number | null;
+        };
+        /** ProgressView */
+        ProgressView: {
+            /**
+             * Range
+             * @enum {string}
+             */
+            range: "6w" | "6m" | "12m" | "all";
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** As Of */
+            as_of: string | null;
+            /** Pmc */
+            pmc: components["schemas"]["PmcPoint"][];
+            /** Ramp */
+            ramp: components["schemas"]["RampOut"][];
+            /** Weeks */
+            weeks: components["schemas"]["tri_web__progress__WeekOut"][];
+            share: components["schemas"]["ShareOut"];
+        };
+        /** RampOut */
+        RampOut: {
+            /** Days */
+            days: number;
+            /** Delta */
+            delta: number | null;
+            /** Series */
+            series: (number | null)[];
         };
         /** Readiness */
         Readiness: {
@@ -576,6 +658,22 @@ export interface components {
             workouts: components["schemas"]["WorkoutOut"][];
             fuel: components["schemas"]["FuelPlanOut"] | null;
         };
+        /** ShareOut */
+        ShareOut: {
+            completed: components["schemas"]["ShareTotals"];
+            planned: components["schemas"]["ShareTotals"];
+        };
+        /** ShareTotals */
+        ShareTotals: {
+            /** Duration Sec */
+            duration_sec?: {
+                [key: string]: number;
+            };
+            /** Distance M */
+            distance_m?: {
+                [key: string]: number;
+            };
+        };
         /** SportCount */
         SportCount: {
             /** Sport */
@@ -592,6 +690,34 @@ export interface components {
             planned_hours: number;
             /** Actual Hours */
             actual_hours: number;
+        };
+        /** SportTotals */
+        SportTotals: {
+            /**
+             * Duration Sec
+             * @default 0
+             */
+            duration_sec: number;
+            /**
+             * Distance M
+             * @default 0
+             */
+            distance_m: number;
+            /**
+             * Elevation M
+             * @default 0
+             */
+            elevation_m: number;
+            /**
+             * Calories
+             * @default 0
+             */
+            calories: number;
+            /**
+             * Tss
+             * @default 0
+             */
+            tss: number;
         };
         /** StatusOut */
         StatusOut: {
@@ -668,7 +794,7 @@ export interface components {
             session: components["schemas"]["SessionOut"] | null;
             readiness: components["schemas"]["ReadinessOut"] | null;
             fuel: components["schemas"]["FuelOut"];
-            week: components["schemas"]["WeekOut"] | null;
+            week: components["schemas"]["tri_web__today__WeekOut"] | null;
             labs: components["schemas"]["LabsOut"] | null;
             /** Labs Enabled */
             labs_enabled: boolean;
@@ -776,28 +902,6 @@ export interface components {
             /** Of */
             of: number | null;
         };
-        /**
-         * WeekOut
-         * @description null: "No plan; ask the coach to build one".
-         */
-        WeekOut: {
-            /** Phase */
-            phase: string;
-            /** Target Hours */
-            target_hours: number | null;
-            /** Target Tss */
-            target_tss: number | null;
-            /** Actual Hours */
-            actual_hours: number;
-            /** Actual Tss */
-            actual_tss: number;
-            /** Sessions */
-            sessions: components["schemas"]["SportCount"][];
-            /** Planned To Date */
-            planned_to_date: number;
-            /** Completed To Date */
-            completed_to_date: number;
-        };
         /** WorkoutOut */
         WorkoutOut: {
             /** Tp Workout Id */
@@ -829,6 +933,43 @@ export interface components {
         YamlOut: {
             /** Yaml */
             yaml: string;
+        };
+        /** WeekOut */
+        tri_web__progress__WeekOut: {
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /** Partial */
+            partial: boolean;
+            /** By Sport */
+            by_sport: {
+                [key: string]: components["schemas"]["SportTotals"];
+            };
+            longest: components["schemas"]["LongestOut"];
+        };
+        /**
+         * WeekOut
+         * @description null: "No plan; ask the coach to build one".
+         */
+        tri_web__today__WeekOut: {
+            /** Phase */
+            phase: string;
+            /** Target Hours */
+            target_hours: number | null;
+            /** Target Tss */
+            target_tss: number | null;
+            /** Actual Hours */
+            actual_hours: number;
+            /** Actual Tss */
+            actual_tss: number;
+            /** Sessions */
+            sessions: components["schemas"]["SportCount"][];
+            /** Planned To Date */
+            planned_to_date: number;
+            /** Completed To Date */
+            completed_to_date: number;
         };
     };
     responses: never;
@@ -1242,6 +1383,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TodayView"];
+                };
+            };
+        };
+    };
+    get_progress_api_progress_get: {
+        parameters: {
+            query?: {
+                range?: "6w" | "6m" | "12m" | "all";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProgressView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

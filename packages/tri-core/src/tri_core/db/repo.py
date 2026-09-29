@@ -249,6 +249,13 @@ def list_workouts_between(
     ).fetchall()
 
 
+def list_daily_metrics_between(conn: Conn, start: date, end: date) -> list[dict[str, Any]]:
+    return conn.execute(
+        "select * from daily_metrics where metric_date between %s and %s order by metric_date",
+        (start, end),
+    ).fetchall()
+
+
 def mark_missing_deleted(conn: Conn, start: date, end: date, seen_ids: Collection[str]) -> int:
     """Tombstone live workouts dated in [start, end] that the TrainingPeaks listing for that
     window did not return. Rows outside the window are never touched. A tombstoned workout lets

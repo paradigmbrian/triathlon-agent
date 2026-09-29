@@ -482,6 +482,55 @@
           }
         }
       }
+    },
+    "/api/progress": {
+      "get": {
+        "tags": [
+          "progress"
+        ],
+        "summary": "Get Progress",
+        "operationId": "get_progress_api_progress_get",
+        "parameters": [
+          {
+            "name": "range",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "6w",
+                "6m",
+                "12m",
+                "all"
+              ],
+              "type": "string",
+              "default": "12m",
+              "title": "Range"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProgressView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -936,6 +985,22 @@
         "title": "LabsOut",
         "description": "null with labs_enabled: \"No panels stored\"; labs_missing: \"apply\nmigrations/005_wellness.sql\"."
       },
+      "LongestOut": {
+        "properties": {
+          "duration_sec": {
+            "type": "number",
+            "title": "Duration Sec",
+            "default": 0
+          },
+          "distance_m": {
+            "type": "number",
+            "title": "Distance M",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "LongestOut"
+      },
       "MemoryEntry": {
         "properties": {
           "id": {
@@ -1102,6 +1167,180 @@
           "spark"
         ],
         "title": "MetricTrend"
+      },
+      "PmcPoint": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "ctl": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ctl"
+          },
+          "atl": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Atl"
+          },
+          "tsb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tsb"
+          },
+          "tss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tss"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "ctl",
+          "atl",
+          "tsb",
+          "tss"
+        ],
+        "title": "PmcPoint"
+      },
+      "ProgressView": {
+        "properties": {
+          "range": {
+            "type": "string",
+            "enum": [
+              "6w",
+              "6m",
+              "12m",
+              "all"
+            ],
+            "title": "Range"
+          },
+          "start": {
+            "type": "string",
+            "format": "date",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date",
+            "title": "End"
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "pmc": {
+            "items": {
+              "$ref": "#/components/schemas/PmcPoint"
+            },
+            "type": "array",
+            "title": "Pmc"
+          },
+          "ramp": {
+            "items": {
+              "$ref": "#/components/schemas/RampOut"
+            },
+            "type": "array",
+            "title": "Ramp"
+          },
+          "weeks": {
+            "items": {
+              "$ref": "#/components/schemas/tri_web__progress__WeekOut"
+            },
+            "type": "array",
+            "title": "Weeks"
+          },
+          "share": {
+            "$ref": "#/components/schemas/ShareOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "range",
+          "start",
+          "end",
+          "as_of",
+          "pmc",
+          "ramp",
+          "weeks",
+          "share"
+        ],
+        "title": "ProgressView"
+      },
+      "RampOut": {
+        "properties": {
+          "days": {
+            "type": "integer",
+            "title": "Days"
+          },
+          "delta": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta"
+          },
+          "series": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Series"
+          }
+        },
+        "type": "object",
+        "required": [
+          "days",
+          "delta",
+          "series"
+        ],
+        "title": "RampOut"
       },
       "Readiness": {
         "properties": {
@@ -1504,6 +1743,42 @@
         "title": "SessionOut",
         "description": "null: \"No session planned\"."
       },
+      "ShareOut": {
+        "properties": {
+          "completed": {
+            "$ref": "#/components/schemas/ShareTotals"
+          },
+          "planned": {
+            "$ref": "#/components/schemas/ShareTotals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "completed",
+          "planned"
+        ],
+        "title": "ShareOut"
+      },
+      "ShareTotals": {
+        "properties": {
+          "duration_sec": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Duration Sec"
+          },
+          "distance_m": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Distance M"
+          }
+        },
+        "type": "object",
+        "title": "ShareTotals"
+      },
       "SportCount": {
         "properties": {
           "sport": {
@@ -1546,6 +1821,37 @@
           "actual_hours"
         ],
         "title": "SportCount"
+      },
+      "SportTotals": {
+        "properties": {
+          "duration_sec": {
+            "type": "number",
+            "title": "Duration Sec",
+            "default": 0
+          },
+          "distance_m": {
+            "type": "number",
+            "title": "Distance M",
+            "default": 0
+          },
+          "elevation_m": {
+            "type": "number",
+            "title": "Elevation M",
+            "default": 0
+          },
+          "calories": {
+            "type": "number",
+            "title": "Calories",
+            "default": 0
+          },
+          "tss": {
+            "type": "number",
+            "title": "Tss",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "SportTotals"
       },
       "StatusOut": {
         "properties": {
@@ -1783,7 +2089,7 @@
           "week": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/WeekOut"
+                "$ref": "#/components/schemas/tri_web__today__WeekOut"
               },
               {
                 "type": "null"
@@ -2156,72 +2462,6 @@
         ],
         "title": "WeekHeader"
       },
-      "WeekOut": {
-        "properties": {
-          "phase": {
-            "type": "string",
-            "title": "Phase"
-          },
-          "target_hours": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Target Hours"
-          },
-          "target_tss": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Target Tss"
-          },
-          "actual_hours": {
-            "type": "number",
-            "title": "Actual Hours"
-          },
-          "actual_tss": {
-            "type": "number",
-            "title": "Actual Tss"
-          },
-          "sessions": {
-            "items": {
-              "$ref": "#/components/schemas/SportCount"
-            },
-            "type": "array",
-            "title": "Sessions"
-          },
-          "planned_to_date": {
-            "type": "integer",
-            "title": "Planned To Date"
-          },
-          "completed_to_date": {
-            "type": "integer",
-            "title": "Completed To Date"
-          }
-        },
-        "type": "object",
-        "required": [
-          "phase",
-          "target_hours",
-          "target_tss",
-          "actual_hours",
-          "actual_tss",
-          "sessions",
-          "planned_to_date",
-          "completed_to_date"
-        ],
-        "title": "WeekOut",
-        "description": "null: \"No plan; ask the coach to build one\"."
-      },
       "WorkoutOut": {
         "properties": {
           "tp_workout_id": {
@@ -2365,6 +2605,103 @@
           "yaml"
         ],
         "title": "YamlOut"
+      },
+      "tri_web__progress__WeekOut": {
+        "properties": {
+          "week_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Week Start"
+          },
+          "partial": {
+            "type": "boolean",
+            "title": "Partial"
+          },
+          "by_sport": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SportTotals"
+            },
+            "type": "object",
+            "title": "By Sport"
+          },
+          "longest": {
+            "$ref": "#/components/schemas/LongestOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "week_start",
+          "partial",
+          "by_sport",
+          "longest"
+        ],
+        "title": "WeekOut"
+      },
+      "tri_web__today__WeekOut": {
+        "properties": {
+          "phase": {
+            "type": "string",
+            "title": "Phase"
+          },
+          "target_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Hours"
+          },
+          "target_tss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Tss"
+          },
+          "actual_hours": {
+            "type": "number",
+            "title": "Actual Hours"
+          },
+          "actual_tss": {
+            "type": "number",
+            "title": "Actual Tss"
+          },
+          "sessions": {
+            "items": {
+              "$ref": "#/components/schemas/SportCount"
+            },
+            "type": "array",
+            "title": "Sessions"
+          },
+          "planned_to_date": {
+            "type": "integer",
+            "title": "Planned To Date"
+          },
+          "completed_to_date": {
+            "type": "integer",
+            "title": "Completed To Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "phase",
+          "target_hours",
+          "target_tss",
+          "actual_hours",
+          "actual_tss",
+          "sessions",
+          "planned_to_date",
+          "completed_to_date"
+        ],
+        "title": "WeekOut",
+        "description": "null: \"No plan; ask the coach to build one\"."
       }
     }
   }
