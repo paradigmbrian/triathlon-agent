@@ -8,6 +8,10 @@ const CHIP = { stop: "border-rest/70 text-rest", caution: "border-easy/70 text-e
 type Props = { verdict: VerdictOut; active: string | null; onActive: (key: string | null) => void };
 
 function Chip({ r, active, onActive }: { r: ReasonOut; active: boolean; onActive: Props["onActive"] }) {
+  if (r.severity === "info") {
+    // Nothing to trace: there is no row behind a no-call reason.
+    return <li className={`inline-flex min-h-7 items-center rounded-full border px-3 text-sm ${CHIP.info}`}>{r.text}</li>;
+  }
   const toRow = () => {
     const row = document.getElementById(`cond-${r.key}`);
     row?.scrollIntoView?.({ block: "nearest" });

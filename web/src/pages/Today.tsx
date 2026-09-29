@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Board from "../components/board/Board";
 import Chat from "../components/chat/Chat";
 import Gate from "../components/gate/Gate";
@@ -12,6 +12,13 @@ export default function Today() {
   // 2 s); this query just reads whatever that invalidation last put in the cache.
   const thread = useThread();
   const [coachOpen, setCoachOpen] = useState(false);
+  const toggle = useRef<HTMLButtonElement>(null);
+  const wasOpen = useRef(false);
+  // Closing the coach hides the control that had focus; hand focus back to the Coach toggle.
+  useEffect(() => {
+    if (wasOpen.current && !coachOpen) toggle.current?.focus();
+    wasOpen.current = coachOpen;
+  }, [coachOpen]);
   const paused = stream.state.interrupt ?? thread.data?.paused ?? null;
   const held = !paused ? (thread.data?.held ?? null) : null;
   const review = paused ?? held ?? today.data?.pending ?? null;
@@ -47,6 +54,7 @@ export default function Today() {
       <div className={`min-w-0 flex-1 overflow-y-auto ${coachOpen ? "hidden xl:block" : ""}`}>
         <div className="flex justify-end px-6 pt-4 xl:hidden">
           <button
+            ref={toggle}
             type="button"
             aria-expanded={coachOpen}
             aria-controls="coach-panel"

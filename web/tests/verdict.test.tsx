@@ -103,3 +103,14 @@ test("rows from an earlier day say which day", () => {
   render(<Conditions readiness={{ ...t.readiness!, is_today: false, date: "2026-09-14" }} rows={t.conditions} reasons={[]} active={null} onActive={() => {}} />);
   expect(screen.getByText(/from Mon, Sep 14/)).toBeInTheDocument();
 });
+
+test("a no-call reason is plain text, not a button that goes nowhere", () => {
+  const none: VerdictOut = {
+    call: "none",
+    reasons: [{ key: "training_readiness", text: "No Garmin data, sync first", severity: "info" }],
+    based_on: null, stale: false, harder_than_call: false, session_done: false,
+  };
+  render(<VerdictStrip verdict={none} active={null} onActive={() => {}} />);
+  expect(screen.getByText("No Garmin data, sync first")).toBeInTheDocument();
+  expect(screen.queryByRole("button")).not.toBeInTheDocument();
+});

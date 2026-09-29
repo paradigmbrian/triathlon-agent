@@ -27,6 +27,19 @@ test("the coach toggle opens the panel and Escape closes it", async () => {
   expect(toggle).toHaveAttribute("aria-expanded", "false");
 });
 
+test("closing the coach returns focus to the Coach toggle", async () => {
+  stub();
+  const user = userEvent.setup();
+  renderWith(<Today />);
+  const toggle = await screen.findByRole("button", { name: "Coach" });
+  await user.click(toggle);
+  await user.click(screen.getByRole("button", { name: "Back to board" }));
+  expect(toggle).toHaveFocus();
+  await user.click(toggle);
+  await user.keyboard("{Escape}");
+  expect(toggle).toHaveFocus();
+});
+
 test("hold opens the coach and focuses the gate", async () => {
   stub({ ...threadEmpty(), paused: paused() });
   const user = userEvent.setup();
