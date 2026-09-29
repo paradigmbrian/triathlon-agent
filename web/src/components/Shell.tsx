@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
 import { Outlet, useLocation } from "react-router";
 import { useToday } from "../api/queries";
-import AvatarMenu from "./AvatarMenu";
 import Header from "./Header";
+import JobButton from "./jobs/JobButton";
+import Tabs from "./shell/Tabs";
 
 export default function Shell() {
   const today = useToday();
@@ -23,7 +24,17 @@ export default function Shell() {
       >
         Skip to main content
       </a>
-      <Header today={today.data} now={today.dataUpdatedAt || undefined} slots={<AvatarMenu />} />
+      <Header
+        today={today.data}
+        now={today.dataUpdatedAt || undefined}
+        slots={
+          <div className="flex items-start gap-2">
+            <div className="w-40"><JobButton kind="sync" label="Sync now" body={{}} /></div>
+            <div className="w-40"><JobButton kind="checkin" label="Weekly check-in" body={{ sync: true }} /></div>
+          </div>
+        }
+      />
+      <Tabs />
       <main id="main" ref={main} tabIndex={-1} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto focus:outline-none">
         <Outlet />
       </main>

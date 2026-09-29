@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Route, Routes } from "react-router";
 import { renderWith, todayFull } from "./fixtures";
@@ -23,43 +23,6 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.restoreAllMocks();
-});
-
-test("the avatar menu holds the five sections, marks the current one, and the two jobs", async () => {
-  const user = userEvent.setup();
-  renderWith(tree(), { route: "/progress" });
-  expect(screen.getByText(/Coming soon/)).toBeInTheDocument();
-  expect(screen.queryByRole("link", { name: "Progress" })).not.toBeInTheDocument();
-  const avatar = screen.getByRole("button", { name: "Account menu" });
-  expect(avatar).toHaveAttribute("aria-expanded", "false");
-  await user.click(avatar);
-  expect(avatar).toHaveAttribute("aria-expanded", "true");
-  for (const name of ["Today", "Progress", "Nutrition", "Labs", "Settings"]) {
-    expect(screen.getByRole("link", { name })).toBeInTheDocument();
-  }
-  expect(screen.getByRole("link", { name: "Progress" })).toHaveAttribute("aria-current", "page");
-  expect(screen.getByRole("button", { name: "Sync now" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Weekly check-in" })).toBeInTheDocument();
-});
-
-test("the menu closes on Escape, on an outside click, and after following a link", async () => {
-  const user = userEvent.setup();
-  renderWith(tree(), { route: "/progress" });
-  const avatar = screen.getByRole("button", { name: "Account menu" });
-
-  await user.click(avatar);
-  await user.keyboard("{Escape}");
-  expect(screen.queryByRole("link", { name: "Settings" })).not.toBeInTheDocument();
-  expect(avatar).toHaveFocus();
-
-  await user.click(avatar);
-  await user.click(screen.getByText(/Coming soon/));
-  expect(screen.queryByRole("link", { name: "Settings" })).not.toBeInTheDocument();
-
-  await user.click(avatar);
-  await user.click(screen.getByRole("link", { name: "Settings" }));
-  expect(screen.getByText("settings body")).toBeInTheDocument();
-  expect(screen.queryByRole("link", { name: "Settings" })).not.toBeInTheDocument();
 });
 
 test("the shell's top bar shows today's header on every page", async () => {
@@ -88,7 +51,6 @@ test("a skip link targets main, and main takes focus after a route change", asyn
   expect(screen.getByRole("link", { name: "Skip to main content" })).toHaveAttribute("href", "#main");
   const main = screen.getByRole("main");
   expect(main).not.toHaveFocus();
-  await user.click(screen.getByRole("button", { name: "Account menu" }));
   await user.click(screen.getByRole("link", { name: "Settings" }));
   expect(main).toHaveFocus();
 });
@@ -116,4 +78,16 @@ test("the shell marks a sync stale from the fetch-time clock", async () => {
   vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify(t), { status: 200 }));
   renderWith(tree(), { route: "/settings" });
   expect(await screen.findByText(/· stale/)).toBeInTheDocument();
+});
+
+test("the tabs show every section, mark the current one, and the jobs sit in the top bar", () => {
+  renderWith(tree(), { route: "/progress" });
+  const nav = screen.getByRole("navigation", { name: "Sections" });
+  for (const name of ["Today", "Progress", "Nutrition", "Labs", "Settings"]) {
+    expect(within(nav).getByRole("link", { name })).toBeInTheDocument();
+  }
+  expect(within(nav).getByRole("link", { name: "Progress" })).toHaveAttribute("aria-current", "page");
+  expect(screen.getByRole("button", { name: "Sync now" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Weekly check-in" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Account menu/ })).not.toBeInTheDocument();
 });
