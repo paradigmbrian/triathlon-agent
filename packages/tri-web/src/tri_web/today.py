@@ -21,6 +21,7 @@ from tri_web.metrics import (
     MetricTrend,
     acwr,
     acwr_flag,
+    load_sparks,
     ramp,
     trend,
     tsb_zone,
@@ -116,6 +117,8 @@ class ReadinessOut(BaseModel):
     ramp_caution: bool
     acwr: float | None  # ATL / CTL
     acwr_flag: Literal["low", "high"] | None
+    # Form, ACWR and Ramp over the last SPARK_DAYS days, for the board's Trends view
+    load_sparks: dict[str, list[float | None]] = {}
 
 
 class TargetOut(BaseModel):
@@ -249,6 +252,7 @@ def _readiness(row: dict[str, Any], today: date, history: list[dict[str, Any]]) 
         ramp_caution=ramp_7d is not None and ramp_7d > RAMP_CAUTION,
         acwr=ratio,
         acwr_flag=acwr_flag(ratio),
+        load_sparks=load_sparks(series("ctl"), series("atl"), series("tsb")),
     )
 
 

@@ -273,3 +273,16 @@ async def test_today_carries_the_verdict_and_conditions(nocommit, runtime):
 async def test_no_metrics_is_no_call(nocommit, runtime):
     view = await build_today(runtime(today=TODAY))
     assert view.verdict.level == "none" and view.conditions == []
+
+
+async def test_today_serves_form_acwr_and_ramp_history(nocommit, runtime):
+    seed_metrics(nocommit, TODAY)  # CTL 40 rising 0.5 a day, ATL 50 then 60, TSB 0 then -6.5
+    view = await build_today(runtime(today=TODAY))
+    assert view.readiness is not None
+    sparks = view.readiness.load_sparks
+    assert set(sparks) == {"tsb", "acwr", "ramp"} and all(len(v) == 14 for v in sparks.values())
+    assert sparks["tsb"][-1] == -6.5 and sparks["tsb"][0] == 0.0
+    assert sparks["acwr"][-1] == round(60 / 53.5, 2)
+    assert sparks["ramp"][-1] == 3.5
+    by_key = {c.key: c for c in view.conditions}
+    assert by_key["tsb"].spark == sparks["tsb"] and by_key["ramp"].spark == sparks["ramp"]

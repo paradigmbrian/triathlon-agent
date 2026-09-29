@@ -331,3 +331,11 @@ def test_trend_rows_carry_their_history_and_the_rest_carry_none():
     assert r["tsb"].spark == [] and r["acwr"].spark == [] and r["ramp"].spark == []
     no_trend = rows(rd(trends={k: v for k, v in TRENDS.items() if k != "hrv"}))
     assert no_trend["hrv"].spark == []
+
+
+def test_condition_rows_carry_load_history_when_the_server_has_it():
+    r = rd(load_sparks={"tsb": [1.0, None, -2.0], "acwr": [1.1, 1.2], "ramp": [3.5]})
+    got = rows(r)
+    assert got["tsb"].spark == [1.0, None, -2.0]
+    assert got["acwr"].spark == [1.1, 1.2] and got["ramp"].spark == [3.5]
+    assert rows(rd(load_sparks={"tsb": [1.0]}))["acwr"].spark == []

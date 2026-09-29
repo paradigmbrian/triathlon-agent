@@ -299,7 +299,7 @@ def conditions(r: ReadinessOut | None) -> list[ConditionOut]:
             band_high=TSB_BAND[1],
             status="no data" if r.tsb is None else (r.tsb_zone or "no data"),
             flagged="tsb" in flagged,
-            spark=[],
+            spark=list(r.load_sparks.get("tsb", [])),
         )
     )
     if r.acwr is None:
@@ -319,7 +319,7 @@ def conditions(r: ReadinessOut | None) -> list[ConditionOut]:
             band_high=ACWR_HIGH,
             status=acwr_status,
             flagged="acwr" in flagged,
-            spark=[],
+            spark=list(r.load_sparks.get("acwr", [])),
         )
     )
     out.append(
@@ -333,7 +333,7 @@ def conditions(r: ReadinessOut | None) -> list[ConditionOut]:
             band_high=RAMP_CAUTION,
             status="no data" if r.ramp_7d is None else ("fast" if r.ramp_caution else "within"),
             flagged="ramp" in flagged,
-            spark=[],
+            spark=list(r.load_sparks.get("ramp", [])),
         )
     )
     return out

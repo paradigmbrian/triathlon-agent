@@ -93,3 +93,17 @@ def acwr_flag(value: float | None) -> Literal["low", "high"] | None:
     if value > ACWR_HIGH:
         return "high"
     return None
+
+
+def load_sparks(
+    ctl: list[float | None], atl: list[float | None], tsb: list[float | None]
+) -> dict[str, list[float | None]]:
+    """The last SPARK_DAYS days of Form, ACWR and Ramp (CTL gained over the seven days before
+    each day), oldest first. Inputs are one value per day, oldest first, None for a gap; a day
+    missing an input is a gap in the output, never interpolated."""
+    days = range(len(ctl) - SPARK_DAYS, len(ctl))
+    return {
+        "tsb": tsb[-SPARK_DAYS:],
+        "acwr": [acwr(atl[i], ctl[i]) for i in days],
+        "ramp": [ramp(ctl[i], ctl[i - SHORT_DAYS]) if i >= SHORT_DAYS else None for i in days],
+    }

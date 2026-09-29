@@ -7,6 +7,7 @@ from tri_web.metrics import (
     RAMP_CAUTION,
     acwr,
     acwr_flag,
+    load_sparks,
     ramp,
     trend,
     tsb_zone,
@@ -73,3 +74,28 @@ def test_acwr_flag_band():
     assert acwr_flag(0.79) == "low"
     assert acwr_flag(0.8) is None and acwr_flag(1.3) is None
     assert acwr_flag(1.31) == "high"
+
+
+def test_load_sparks_follow_each_day():
+    ctl: list[float | None] = [40 + 0.5 * i for i in range(28)]
+    atl: list[float | None] = [50.0] * 28
+    tsb: list[float | None] = [float(i) for i in range(28)]
+    s = load_sparks(ctl, atl, tsb)
+    assert s["tsb"] == tsb[-14:]
+    assert len(s["acwr"]) == 14 and s["acwr"][-1] == round(50 / 53.5, 2)
+    assert s["ramp"] == [3.5] * 14  # 0.5 a day for seven days
+
+
+def test_load_sparks_keep_a_gap_as_a_gap():
+    ctl: list[float | None] = [40.0] * 28
+    ctl[20] = None  # the day a week before the last one, and the 7th of the 14 shown
+    atl: list[float | None] = [50.0] * 28
+    atl[26] = None
+    tsb: list[float | None] = [0.0] * 28
+    tsb[25] = None
+    s = load_sparks(ctl, atl, tsb)
+    assert s["tsb"][11] is None and s["tsb"][10] == 0.0
+    assert s["acwr"][12] is None and s["acwr"][13] == 1.25
+    assert s["ramp"][6] is None  # CTL missing that day
+    assert s["ramp"][13] is None  # CTL missing seven days before the last day
+    assert s["ramp"][12] == 0.0
