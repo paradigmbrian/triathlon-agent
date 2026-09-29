@@ -2,6 +2,7 @@
 
 **Date:** 2026-09-28
 **Status:** Approved 2026-09-28
+**Amended:** 2026-09-28, while planning: `acwr_flag` (§6.1, §6.2, §6.3) and the full list of existing test lines that change (§7).
 **Purpose:** Option A from the 2026-09-28 web review: a styling and accessibility pass over the React app and richer numbers on the four Today cards, backed by a `ui-ux-pro-max` audit. The Progress page with charts and the visible navigation rail (option B) get their own spec. Line numbers are `main` @ 328ed9a.
 
 ## 1. Decisions already made
@@ -88,10 +89,11 @@ Functions:
 - `tsb_zone(tsb: float | None) -> str | None`.
 - `ramp(ctl_now, ctl_week_ago) -> float | None`: the difference, None if either is missing.
 - `acwr(atl, ctl) -> float | None`: `atl / ctl`, None when `ctl` is missing or 0.
+- `acwr_flag(acwr: float | None) -> Literal["low", "high"] | None`: outside `ACWR_LOW`..`ACWR_HIGH`, so the thresholds live only here.
 
 ### 6.2 `TodayView` changes (`tri_web/today.py`)
 
-- `ReadinessOut` gains `trends: dict[str, MetricTrend]` for `hrv`, `resting_hr` (lower is better), `sleep_score`, `sleep_hours` and `training_readiness`, plus `tsb_zone`, `ramp_7d`, `ramp_caution: bool` and `acwr`. `build_today` reads `daily_metrics` for the 28 days ending at the row it already picks (`today.py:215`) in the same connection, and a day with no row is None.
+- `ReadinessOut` gains `trends: dict[str, MetricTrend]` for `hrv`, `resting_hr` (lower is better), `sleep_score`, `sleep_hours` and `training_readiness`, plus `tsb_zone`, `ramp_7d`, `ramp_caution: bool`, `acwr` and `acwr_flag`. `build_today` reads `daily_metrics` for the 28 days ending at the row it already picks (`today.py:215`) in the same connection, and a day with no row is None.
 - `WorkoutOut` gains `actual_if`, `avg_hr`, `avg_power` and `normalized_power`, read from the `workouts` columns.
 - `SportCount` gains `planned_tss`, `actual_tss`, `planned_hours` and `actual_hours`. Bricks count under `brick` as they do today.
 - `WeekOut` gains `planned_to_date` and `completed_to_date`: sessions dated on or before today and how many of those are completed.
@@ -100,7 +102,7 @@ Functions:
 
 ### 6.3 Cards
 
-- **Readiness.** The headline is `training_readiness`, falling back to `sleep_score` when it is null, with the label saying which. Under it is one row per trend: the value, a 14-day sparkline, and an arrow with `vs 28-day avg` coloured `good`/`warn` by `better`. An outside-band value adds the word "low" or "high". The load line reads `TSB -4.9 · neutral`, then `ramp +6.1/wk`, which turns `warn` with "fast" past `RAMP_CAUTION`, then `ACWR 1.11`, which turns `warn` with "high" or "low" outside 0.8–1.3. CTL and ATL stay on the small line.
+- **Readiness.** The headline is `training_readiness`, falling back to `sleep_score` when it is null, with the label saying which. Under it is one row per trend: the value, a 14-day sparkline, and an arrow with `vs 28-day avg` coloured `good`/`warn` by `better`. An outside-band value adds the word "low" or "high". The load line reads `TSB -4.9 · neutral`, then `ramp +6.1/wk`, which turns `warn` with "fast" past `RAMP_CAUTION`, then `ACWR 1.11`, which turns `warn` with the `acwr_flag` word ("high" or "low"). CTL and ATL stay on the small line.
 - **Session.** A completed workout adds `IF 0.82 · 148 bpm · 212 W (NP 225)` when present, and `{pct}% of planned` for duration and TSS when both sides exist.
 - **Week.** Under the hours bar, one row per sport shows `run 1/2 · 42 of 60 TSS · 1.2 of 2.0 h`. The compliance figure is `completed_to_date / planned_to_date` as "3 of 4 so far". It is hidden when `planned_to_date` is 0.
 - **Sparkline.** `web/src/components/today/Spark.tsx` is an inline SVG polyline (`aria-hidden`, gaps for null days, `currentColor`); the row's text carries the meaning.
@@ -120,7 +122,7 @@ Functions:
   - `chat.test.tsx`: an assistant `**bold**` renders `<strong>`, a user bubble does not, the log role and `aria-busy`.
   - `shell.test.tsx`: the skip link and focus on a route change.
   - A header test for `failed` and `stale`.
-- **Existing tests touched (needs Brian's OK with this spec):** `web/tests/fixtures.tsx` gains the new fields. `strip.test.tsx:18` keeps asserting "81", now as the secondary sleep score. No assertion is weakened or removed.
+- **Existing tests touched (needs Brian's OK with this spec):** `web/tests/fixtures.tsx` gains the new fields. `strip.test.tsx:18` keeps asserting "81", now as the secondary sleep score. `strip.test.tsx:25` changes from the joined `run 1/2 · bike 1/2` line to one assertion per sport row. `shell.test.tsx:31` and `:49` change from `/arrives in sub-project 2/` to `/Coming soon/` for the new placeholder copy. No assertion is weakened or removed.
 - **Manual.** `tri-web serve`, check light and dark mode, 375 px width, reduced motion on (macOS Accessibility → Display), and VoiceOver reading one streamed reply once.
 
 ## 8. Out of scope
