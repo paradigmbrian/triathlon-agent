@@ -54,18 +54,25 @@ test("a trend row says how today compares, in words and colour", () => {
   const t = todayFull();
   t.readiness!.trends.hrv = { ...t.readiness!.trends.hrv, now: 50, band: "below", better: false };
   renderWith(<Strip today={t} />);
-  const row = screen.getByText(/↓ 8 vs 28-day avg · low/);
-  expect(row).toHaveClass("text-warn");
-  expect(screen.getByText(/↓ 2 vs 28-day avg/)).toHaveClass("text-good"); // RHR 48 vs 50, lower is better
+  const hrv = screen.getByText("↓8 low");
+  expect(hrv).toHaveClass("text-warn");
+  expect(hrv).toHaveTextContent("vs 28-day avg"); // screen-reader text
+  expect(screen.getByText("↓2")).toHaveClass("text-good"); // RHR 48 vs 50, lower is better
+  expect(screen.getByText("arrows: vs 28-day avg")).toBeInTheDocument();
 });
 
 test("the load line names the TSB zone and flags ramp and ACWR", () => {
   const t = todayFull();
   t.readiness = { ...t.readiness!, ramp_7d: 9.2, ramp_caution: true, acwr: 1.45, acwr_flag: "high" };
   renderWith(<Strip today={t} />);
-  expect(screen.getByText(/TSB -4\.9 · neutral/)).toBeInTheDocument();
-  expect(screen.getByText("ramp +9.2/wk fast")).toHaveClass("text-warn");
-  expect(screen.getByText("ACWR 1.45 high")).toHaveClass("text-warn");
+  const tsb = screen.getByText("TSB -4.9 neutral");
+  expect(tsb).toHaveClass("text-ink-2");
+  const ramp = screen.getByText("ramp +9.2/wk fast");
+  const acwr = screen.getByText("ACWR 1.45 high");
+  expect(ramp).toHaveClass("text-warn");
+  expect(acwr).toHaveClass("text-warn");
+  expect(ramp.parentElement).toBe(tsb.parentElement); // one row of chips
+  expect(acwr.parentElement).toBe(tsb.parentElement);
 });
 
 test("the readiness card copes with no trends and no load", () => {
@@ -111,15 +118,15 @@ test("skeletons pulse only when motion is allowed", () => {
 
 test("the headline carries its own vs-28-day-avg context", () => {
   renderWith(<Strip today={todayFull()} />);
-  expect(screen.getByText("↑ 7 vs 28-day avg")).toHaveClass("text-good");
+  expect(screen.getByText("↑7")).toHaveClass("text-good");
 });
 
 test("a delta that rounds to zero reads as level, not as an arrow", () => {
   const t = todayFull();
   t.readiness!.trends.hrv = { ...t.readiness!.trends.hrv, now: 57.6, avg_28d: 58, band: "normal", better: false };
   renderWith(<Strip today={t} />);
-  expect(screen.getByText("= 28-day avg")).toHaveClass("text-ink-2");
-  expect(screen.queryByText(/↓ 0 vs/)).not.toBeInTheDocument();
+  expect(screen.getByText("=")).toHaveClass("text-ink-2");
+  expect(screen.queryByText(/↓0/)).not.toBeInTheDocument();
 });
 
 test("a ramp that rounds to zero never shows a minus sign", () => {
@@ -127,4 +134,9 @@ test("a ramp that rounds to zero never shows a minus sign", () => {
   t.readiness = { ...t.readiness!, ramp_7d: -0.04 };
   renderWith(<Strip today={t} />);
   expect(screen.getByText("ramp 0.0/wk")).toBeInTheDocument();
+});
+
+test("the readiness card draws no sparklines", () => {
+  const { container } = renderWith(<Strip today={todayFull()} />);
+  expect(container.querySelector("polyline")).toBeNull();
 });
