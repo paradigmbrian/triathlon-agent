@@ -1,7 +1,7 @@
 # tri-web preflight board: a go / easy / rest verdict and a new visual world
 
 **Date:** 2026-09-29
-**Status:** Draft
+**Status:** Approved 2026-09-29
 **Purpose:** Replace tri-web's look with the "Go / No-Go Preflight Board" direction chosen in the Impeccable shape round (seed `f2f09b9e`, pick card, code-led), with Today as the lead surface. Add the server-side verdict that the board leads with. Product truth lives in `PRODUCT.md`. This spec follows `2026-09-28-web-polish-design.md` (merged to `main` @ 4fa5b1d) and replaces that spec's Today cards. Line numbers are `main` @ 4fa5b1d.
 
 ## 1. Decisions already made
