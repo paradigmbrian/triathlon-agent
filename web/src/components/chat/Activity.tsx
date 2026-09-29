@@ -4,7 +4,7 @@ export default function Activity({ text, args, where }: { text: string; args?: u
   const [open, setOpen] = useState(false);
   return (
     <div className="text-xs text-ink-2">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="rounded font-mono hover:text-ink" aria-expanded={open}>
+      <button type="button" onClick={() => setOpen((o) => !o)} className="inline-flex min-h-6 items-center rounded font-mono hover:text-ink" aria-expanded={open}>
         {where !== "coach" ? `[${where}] ` : ""}{text}
       </button>
       {open && args !== undefined && (

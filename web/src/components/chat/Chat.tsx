@@ -31,11 +31,14 @@ export default function Chat({ thread, stream, gate, paused }: Props) {
         : thread?.stuck
           ? "the last run stopped early, send any message to continue"
           : undefined;
+  // Warn only when the athlete has to act; a running turn or job is routine.
+  const hintTone = state.lost || paused || thread?.stuck ? "warn" : "muted";
+  const streaming = busy || state.status === "streaming";
   return (
     // Below md the Today column scrolls as a whole and the chat keeps a viewport-tall pane
     // (minus the top bar); from md it fills whatever the card column leaves beside it.
     <div className="flex min-h-[calc(100dvh-3.5rem)] min-w-0 flex-1 flex-col md:min-h-0">
-      <div ref={scroller} onScroll={onScroll} data-testid="chat-messages" className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+      <div role="log" aria-label="Conversation" aria-live="polite" aria-busy={streaming} ref={scroller} onScroll={onScroll} data-testid="chat-messages" className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
           {thread?.messages.map((m) =>
             m.role === "activity" ? (
@@ -60,7 +63,7 @@ export default function Chat({ thread, stream, gate, paused }: Props) {
             <Bubble role="error">
               {state.error}
               {state.lastText && (
-                <button type="button" onClick={() => void stream.retry()} className="ml-3 underline">
+                <button type="button" onClick={() => void stream.retry()} className="ml-3 inline-flex min-h-6 items-center px-1 underline">
                   retry
                 </button>
               )}
@@ -75,6 +78,7 @@ export default function Chat({ thread, stream, gate, paused }: Props) {
         initialText={state.draft?.text}
         disabled={busy || state.status === "streaming" || paused}
         hint={hint}
+        hintTone={hintTone}
         onSend={(t) => void stream.send(t)}
       />
     </div>
