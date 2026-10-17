@@ -3,6 +3,7 @@ compute_progress is pure over row dicts; build_progress fetches them."""
 
 from __future__ import annotations
 
+import asyncio
 from collections import defaultdict
 from datetime import date, timedelta
 from typing import Any, Literal
@@ -185,10 +186,19 @@ def compute_progress(
     )
 
 
-async def build_progress(rt: Runtime, range_: RangeKey) -> ProgressView:
-    today = rt.today()
+def _read_progress(
+    rt: Runtime, range_: RangeKey, today: date
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """The workouts and metrics rows behind the charts. Runs in a worker thread so the event loop
+    keeps streaming a coach turn meanwhile."""
     with rt.connect() as conn:
         workouts = crepo.list_workouts_between(conn, range_floor(range_, today), today)
         as_of = crepo.latest_ctl_date(conn, today)
         metrics = crepo.list_daily_metrics_between(conn, metrics_floor(range_, today, as_of), today)
+    return workouts, metrics
+
+
+async def build_progress(rt: Runtime, range_: RangeKey) -> ProgressView:
+    today = rt.today()
+    workouts, metrics = await asyncio.to_thread(_read_progress, rt, range_, today)
     return compute_progress(range_, today, workouts, metrics)
