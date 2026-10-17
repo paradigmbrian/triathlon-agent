@@ -34,6 +34,8 @@ Deeper context lives next to the code:
   the tables, upsert semantics, conventions, the read-only rule.
 - [`packages/tri-core/src/tri_core/mcp/README.md`](packages/tri-core/src/tri_core/mcp/README.md):
   the two MCP servers, auth, result conventions, the allow-list.
+- [`docs/superpowers/status.md`](docs/superpowers/status.md): what is open and what shipped,
+  one row per spec with its plans and merges.
 - [`docs/superpowers/specs/`](docs/superpowers/specs/): the approved designs.
   [`docs/superpowers/plans/`](docs/superpowers/plans/): the implementation plans that built them.
 

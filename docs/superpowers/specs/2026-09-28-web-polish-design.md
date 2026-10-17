@@ -1,7 +1,7 @@
 # tri-web polish: accessible styling, markdown chat, richer Today cards
 
 **Date:** 2026-09-28
-**Status:** Approved 2026-09-28
+**Status:** Implemented 2026-09-29 (merge `4fa5b1d`).
 **Amended:** 2026-09-29, after Brian's review in the browser: the Readiness card became compact tiles and load chips, with no sparklines (§1, §6.3). 2026-09-28, while planning: `acwr_flag` (§6.1, §6.2, §6.3) and the full list of existing test lines that change (§7).
 **Purpose:** Option A from the 2026-09-28 web review: a styling and accessibility pass over the React app and richer numbers on the four Today cards, backed by a `ui-ux-pro-max` audit. The Progress page with charts and the visible navigation rail (option B) get their own spec. Line numbers are `main` @ 328ed9a.
 

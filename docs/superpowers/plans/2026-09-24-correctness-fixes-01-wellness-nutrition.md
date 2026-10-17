@@ -1,5 +1,7 @@
 # Correctness fixes Plan 1 of 2: wellness and nutrition Implementation Plan
 
+**Status:** Implemented 2026-09-25 (merge `b14a0bc`).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Fix the lab-result misreports and the nutrition maths and gates from the correctness-fixes spec, with migration 006.

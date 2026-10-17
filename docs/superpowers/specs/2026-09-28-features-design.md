@@ -1,7 +1,7 @@
 # Features: a personal lab baseline, a gut-training ladder and sweat rate, resumable turns with an ask-while-paused composer, weekly and race readiness, per-sport TSS
 
 **Date:** 2026-09-28
-**Status:** Draft
+**Status:** Open: draft, no implementation plan yet (round two).
 **Purpose:** Build the four features from `docs/notes/2026-09-24-codebase-review.md` that the round-one specs left open. One of three round-two specs, alongside `2026-09-28-optimizations-design.md` and `2026-09-28-test-gaps-design.md`. It yields five plans, C1, C2, C3, C4a and C4b, independent of each other. Line numbers are `fix/eval-followups` @ 0c096ca.
 
 ## 1. Decisions already made

@@ -1,7 +1,7 @@
 # Agent harness — shared agent builders, turn driver and persistence (module `tri_core.harness`)
 
 **Date:** 2026-09-15
-**Status:** Draft
+**Status:** Implemented 2026-09-16 (merges `a9c4a8b`, `6e06e78`, `8f3a62d`, `506c086`).
 **Purpose:** Five packages each carry their own copy of the harness around LangGraph: agent builders, the agent-as-tool runner, handoff plumbing, checkpointer and store setup, and the REPL turn driver. This spec moves that code into one module in tri-core. It is a pure refactor: no prompt, graph, tool, terminal output or error text changes. The model-routing spec (2026-09-15) lands afterwards and adds its fallback middleware in one place instead of five.
 
 Companion specs: `model-routing` (2026-09-15, amended to follow this one); `tri-coach` (2026-09-11) owns the handoff tools, `ask_analyst`, `ask_wellness` and the turn classifier that tri-web streams; `tri-planning` (2026-09-07), `tri-nutrition` (2026-09-10), `tri-wellness` (2026-09-10) and `tri-analyze` (2026-09-06, alignment 2026-09-13) own the REPLs and checkpointers consolidated here; `tri-web` (2026-09-14) imports `tri_coach.repl.run_turn`, `TurnPrinter` and the readiness checks.

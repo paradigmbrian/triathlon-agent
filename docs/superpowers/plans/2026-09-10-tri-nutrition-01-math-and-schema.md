@@ -1,5 +1,7 @@
 # tri-nutrition Plan 1 of 4: Math and Schema Implementation Plan
 
+**Status:** Implemented 2026-09-10 (commits `af602cd` to `8266bb2`, direct to main).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Create the `tri-nutrition` package with the nutrition domain models, the constants table, the pure energy and day-target math (`profile + sessions -> DayTarget per day`), the three bounds validators, the nutrition tables migration and the repository over them, plus the `garmin_spec(enabled_tools=...)` change in tri-core. Every rule is unit-tested; nothing calls a model. This is spec milestone 1.

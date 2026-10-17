@@ -1,7 +1,7 @@
 # tri-wellness — Functional-Medicine Lab Interpreter (package `tri_wellness`)
 
 **Date:** 2026-09-10
-**Status:** Approved design, pending implementation plan
+**Status:** Implemented 2026-09-12 (plans `2026-09-11-tri-wellness-01` to `-03`, direct to main, last commit `b223e1f`).
 **Purpose:** A LangChain/LangGraph learning project that also produces a useful tool: an agent that ingests the athlete's lab work from PDFs and structured exports, evaluates every marker against curated functional-medicine ranges, and writes an interpretation grounded in the training, sleep and recovery data already synced to Postgres by tri-core. Version 1 is the lab interpreter. Its stored panels are the foundation for a later longitudinal wellness tracker.
 
 Companion specs: `tri-analyze` design (2026-09-06) and `tri-planning` design (2026-09-07). This spec assumes the workspace, tri-core, the Postgres store and the REPL conventions they established.

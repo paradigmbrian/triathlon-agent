@@ -1,5 +1,7 @@
 # tri-coach Plan 1 of 3: Sub-Package Preparation Implementation Plan
 
+**Status:** Implemented 2026-09-12 (commits `3140bd8` to `2853f2f`, direct to main).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make tri-core, tri-planning and tri-nutrition composable by the coach without building the coach: planning derives its phase and ids from the tables at the start of every run; both graphs gain an `embedded` mode that ends with `pending_changes` instead of pausing at review; both apply nodes become thin wrappers over a callable `apply_changes`; nutrition gains a regenerate entry that goes straight to `targets`; both sub-agent prompts gain a directed section for briefs from the head coach; tri-core gains `open_live_servers` (tools grouped per server) and `ToolsCaller` (a `ToolCaller` over adapter-bound tools). Every existing CLI behaves as before. This is spec milestone 1.

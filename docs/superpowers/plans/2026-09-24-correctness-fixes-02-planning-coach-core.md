@@ -1,5 +1,7 @@
 # Correctness fixes Plan 2 of 2: planning, coach, core, analyze and web Implementation Plan
 
+**Status:** Implemented 2026-09-25 (merge `146a2a1`).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Fix the planning, coach, core, analyst and web defects from the correctness-fixes spec.

@@ -1,5 +1,7 @@
 # Eval Cost Follow-up Implementation Plan
 
+**Status:** Implemented 2026-09-28 (merge `3c11c15`).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Price 1-hour cache writes at their own rate, and mark every subset and rescore run `gate: false` with a `not a gate run` line, on top of the eval-cost work already on `main` (`9f4f048`).

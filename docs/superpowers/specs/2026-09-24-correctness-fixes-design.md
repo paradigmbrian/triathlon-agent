@@ -1,7 +1,7 @@
 # Correctness fixes: what the athlete sees and what gets written
 
 **Date:** 2026-09-24
-**Status:** Draft
+**Status:** Implemented 2026-09-25 (merges `b14a0bc`, `146a2a1`).
 **Purpose:** Fix the defects from `docs/notes/2026-09-24-codebase-review.md` that misreport a result or write something wrong to TrainingPeaks, Garmin or the lab tables. Each item is one function or one guard. First of five specs; the data layer, guardrails, evaluators and hygiene specs follow and assume these are in. Line numbers are `main` @ 6540055.
 
 ## 1. Decisions already made

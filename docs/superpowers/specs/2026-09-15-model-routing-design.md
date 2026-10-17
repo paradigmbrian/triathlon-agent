@@ -1,7 +1,7 @@
 # Model routing — per-role model, effort and Claude fallback (module `tri_core.llm`)
 
 **Date:** 2026-09-15
-**Status:** Draft (amended 2026-09-15 to follow the agent harness spec; amended 2026-09-22 after the harness merged, see §11)
+**Status:** Implemented 2026-09-24 (merges `165cf49`, `0186d8f`). Amended 2026-09-15 to follow the agent harness spec and 2026-09-22 after the harness merged (§11). Tuning results: `docs/notes/2026-09-24-model-routing-tuning.md`.
 **Prerequisite:** the agent harness spec (`2026-09-15-tri-harness-design.md`, branch `docs/tri-harness-spec`) lands first. Its plans move `make_subagent`, the chat-agent builders, checkpointer setup and the turn drivers into `tri_core.harness`, and leave only `make_model` in each package's `llm.py`. The file and line references in §2 and §5.3 describe `main` @ 3a5a82c, before that move, and are re-checked when plan 01 is written.
 **Purpose:** Replace the single `TRI_MODEL` pin with a per-role model registry. Each role (coach, analyst, lab extraction, eval judge, ...) gets its own model, effort, output ceiling and fallback chain, so light work stops paying for heavy settings and an overloaded model no longer fails the turn. Every role launches on today's model; a role moves to a lighter model or effort only when its eval shows it holds quality.
 

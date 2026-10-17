@@ -1,5 +1,7 @@
 # tri-analyze Plan 1 of 2: Alignment Implementation Plan
 
+**Status:** Implemented 2026-09-13 (merge `9623c5d`).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Bring `tri-analyze` into the siblings' shape (spec milestone 1): flat layout, its own settings and LangSmith project, a system prompt rendered per model call from runtime context by `@dynamic_prompt`, a `TOOL_GUIDE` that describes every bound tool including the two the coach adds, a REPL that survives any turn failure, a `chat` that exits cleanly when the database is down, and `tri-coach` calling the analyst with `context=`. The old `agent/` sub-package and its README go; the package README, root README, `.env.example` and the old spec's status line are updated.

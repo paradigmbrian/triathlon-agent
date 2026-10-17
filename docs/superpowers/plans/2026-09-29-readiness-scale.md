@@ -1,5 +1,7 @@
 # Readiness Scale Implementation Plan
 
+**Status:** Implemented 2026-09-29 (commits `e1c8981` to `1fb159c`, direct to main).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the go / easy / rest call with a Garmin-style Poor to Prime readiness level (Garmin's score band, capped by Brian's own flags), and move the status container below the conditions table so the metrics are read first.

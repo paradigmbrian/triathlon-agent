@@ -1,5 +1,7 @@
 # tri-web Plan 1 of 3: Server Core (runtime, event stream, thread, review, coach routes, `serve`) Implementation Plan
 
+**Status:** Implemented 2026-09-14 (merge `66f3575`).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A `tri-web` package whose FastAPI server opens the coach graph the way the CLI does, streams a coach turn as server-sent events over `POST /api/coach/turns`, recovers a paused review from the checkpoint on `GET /api/coach/thread`, resumes it through `POST /api/coach/review` (approve, reject, edit with server-side validation), reports `GET /api/system/status`, and starts with `uv run tri-web serve [--no-live] [--port 8321]`.

@@ -1,5 +1,7 @@
 # tri-planning Plan 3 of 4: Graph v1 Implementation Plan
 
+**Status:** Implemented 2026-09-08 (commits `a2f4909` to `def0bdf`, direct to main).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A `tri-planning chat` REPL in which a hand-built LangGraph `StateGraph` takes the athlete from intake (a `create_agent` sub-agent that establishes a `TrainingGoal`) through the pure targets, per-week session design by the model, a human-in-the-loop review pause, and an `apply` step that writes approved sessions to the TrainingPeaks calendar, with state persisted in Postgres so a review decision survives process exit. First plan on the calendar. This is spec milestone 3.

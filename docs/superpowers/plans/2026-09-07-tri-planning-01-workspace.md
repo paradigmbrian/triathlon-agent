@@ -1,5 +1,7 @@
 # tri-planning Plan 1 of 4: Workspace Restructure Implementation Plan
 
+**Status:** Implemented 2026-09-07 (commit `d4fc69e`, direct to main).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Turn `tri-analyze-agent/` into the uv workspace monorepo `triathlon_agent/` with `packages/tri-core` (config, MCP client, database, sync, test helpers) and `packages/tri-analyze` (the analyst agent), with git history preserved, all existing tests green, and `tri sync` plus `tri-analyze chat` working. This is spec milestone 1. No new behavior.

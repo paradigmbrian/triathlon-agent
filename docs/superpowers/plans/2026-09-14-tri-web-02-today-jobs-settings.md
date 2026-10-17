@@ -1,5 +1,7 @@
 # tri-web Plan 2 of 3: Today, Jobs (sync, check-in), Memory, Reset, Static Serving Implementation Plan
 
+**Status:** Implemented 2026-09-14 (merge `86d50e5`).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Finish the server: `GET /api/today` assembles the strip's numbers in one call; `POST /api/jobs/sync` and `POST /api/jobs/checkin` run as in-process jobs whose progress lines replay over `GET /api/jobs/{id}/events`; `GET`/`DELETE /api/coach/memory`, `POST /api/coach/reset`; `web/dist` is served from the same port when it exists.

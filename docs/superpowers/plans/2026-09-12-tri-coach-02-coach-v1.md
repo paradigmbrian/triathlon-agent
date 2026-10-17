@@ -1,5 +1,7 @@
 # tri-coach Plan 2 of 3: Coach v1 Implementation Plan
 
+**Status:** Implemented 2026-09-12 (commits `340b09d` to `00ed820`, direct to main).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Create the `tri-coach` package: the agent the athlete talks to. It answers questions through the analyst (agent-as-tool), decides on its own authority when a plan or nutrition change is warranted, briefs the planning and nutrition graphs (handoffs, run embedded and stateless), presents one change set at a single review gate, and dispatches the approved changes through each package's `apply_changes`. Coach-owned athlete memory lives in the LangGraph Store. Commands: `tri-coach chat`, `tri-coach memory`, `tri-coach reset`. This is spec milestone 2; the check-in command, the post-apply nutrition regeneration gate and the routing evaluation are milestone 3.

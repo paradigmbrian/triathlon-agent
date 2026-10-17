@@ -1,5 +1,7 @@
 # tri-harness Plan 1 of 4: Harness Core (`tri_core.harness`) Implementation Plan
 
+**Status:** Implemented 2026-09-15 (merge `a9c4a8b`).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add `tri_core.harness` to tri-core. It provides the text helpers, agent builders, agent-as-tool runner, handoff plumbing, Postgres persistence helpers and the turn driver, each with its own tests. No existing module calls it yet.

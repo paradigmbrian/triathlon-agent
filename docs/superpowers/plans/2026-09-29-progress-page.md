@@ -1,5 +1,7 @@
 # Progress Page Implementation Plan
 
+**Status:** Implemented 2026-09-29 (commits `292e2db` to `123ab0e`, fast-forwarded from `feat/progress-page`).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Fill the `/progress` placeholder with a PMC chart, ramp rates, weekly volume by sport, longest workout and sport share, all computed from data already synced.

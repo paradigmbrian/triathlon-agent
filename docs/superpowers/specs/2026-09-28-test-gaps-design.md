@@ -1,7 +1,7 @@
 # Test gaps: judges checked against labels, fallback through a real agent loop, a web e2e on the real backend
 
 **Date:** 2026-09-28
-**Status:** Draft
+**Status:** Open: draft, no implementation plan yet (round two).
 **Purpose:** Close the test gaps from `docs/notes/2026-09-24-codebase-review.md` that the round-one plans left open, so the eval baselines and the model-routing gate can be trusted. One of three round-two specs, alongside `2026-09-28-optimizations-design.md` and `2026-09-28-features-design.md`; independent of both. Line numbers are `fix/eval-followups` @ 0c096ca.
 
 ## 1. Decisions already made

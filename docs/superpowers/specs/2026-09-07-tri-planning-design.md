@@ -1,7 +1,7 @@
 # tri-planning — Triathlon Training Planning Agent (package `tri_planning`)
 
 **Date:** 2026-09-07
-**Status:** Approved design, pending implementation plan
+**Status:** Implemented 2026-09-11 (plans `2026-09-07-tri-planning-01` to `-04`, direct to main, last commit `d66a54b`).
 **Purpose:** A LangChain/LangGraph learning project that also produces a useful tool: an agent that establishes a training goal, builds a periodized plan on the athlete's TrainingPeaks calendar, and adjusts that plan as training unfolds, using Garmin and TrainingPeaks data already synced to Postgres by the analyze project.
 
 Companion spec: `tri-analyze` design (2026-09-06), which this spec assumes and extends.

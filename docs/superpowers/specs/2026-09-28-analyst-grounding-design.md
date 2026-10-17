@@ -1,7 +1,7 @@
 # Analyst grounding: zones in context, weekdays, SQL arithmetic, a judge that checks derivations
 
 **Date:** 2026-09-28
-**Status:** Draft
+**Status:** Implemented 2026-09-28 (merge `8eb8506`). `grounded` reached 6/12; the remaining failures are in `docs/notes/2026-09-28-analyst-grounding-runs.md`.
 **Purpose:** Fix what the local `analyst-v2-base` run (`.evals/fresh-decision-92.jsonl`, grounded 1/12) showed. The analyst invents zone ranges, thresholds and baselines, miscounts, and misnames weekdays. The judge fails plain conversions it could check, misreads SQL rows, and misnames weekdays itself. Follows `2026-09-24-evaluators-design.md`; lands before `2026-09-28-test-gaps-design.md` §4.1, whose calibration labels must use this spec's `grounded` rule. Line numbers are `main` @ 8acf0bf.
 
 ## 1. Decisions already made

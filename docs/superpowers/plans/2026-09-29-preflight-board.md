@@ -1,5 +1,7 @@
 # Preflight Board Implementation Plan
 
+**Status:** Implemented 2026-09-29 (commits `0b593b4` to `a672719`, direct to main).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Lead Today with a server-computed go / easy / rest verdict and restyle tri-web as a dark-first preflight board: verdict strip, conditions table and a docked coach panel.

@@ -1,7 +1,7 @@
 # tri-web — The Athlete's Web UI, sub-project 1: foundation, Today, coach chat (package `tri_web`, app `web/`)
 
 **Date:** 2026-09-14
-**Status:** Implemented (plans 01 to 03, 2026-09-14)
+**Status:** Implemented 2026-09-14 (merges `66f3575`, `86d50e5`, `eaa7fb1`).
 **Purpose:** A local web UI over the existing agents. This sub-project builds the server that hosts the coach graph behind HTTP, the React shell, the Today page with its strip of today's numbers, the coach chat with streaming and the review gate (approve, reject, edit), and the operational buttons (sync now, weekly check-in, coach memory, reset). Progress charts, nutrition management and lab management are sub-projects 2 to 4 (§14) and get their own specs.
 
 Companion specs: `tri-coach` (2026-09-11) owns the graph, the review gate and the memory this UI drives; `tri-planning` (2026-09-07) and `tri-nutrition` (2026-09-10) own the change models the gate editor renders; `tri-wellness` (2026-09-10) owns the labs summary the Today strip shows.

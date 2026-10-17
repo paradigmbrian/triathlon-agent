@@ -1,5 +1,7 @@
 # tri-nutrition Plan 3 of 4: Fueling Implementation Plan
 
+**Status:** Implemented 2026-09-10 (commits `ef06604` to `386134d`, direct to main).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** The fuel node: one structured-output call per qualifying session in the horizon and one for the goal event when it is within 21 days, each validated by `bounds.validate_fuel` / `validate_race` with one retry, stored in `fuel_plans`, and written to TrainingPeaks after approval as private workout notes (sessions) and a calendar note (race). Apply gains the TrainingPeaks operations with note ownership. This is spec milestone 3.

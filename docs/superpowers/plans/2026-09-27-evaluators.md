@@ -1,5 +1,7 @@
 # Evaluators Implementation Plan
 
+**Status:** Implemented 2026-09-28 (merge `9f4e6b1`). Open: the design-v2 eval run has not been run.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** The eval suites measure truth rather than shape: the coach judge sees the evidence a brief could cite, the analyst judge accepts derivations it can check, the analyst's SQL runs against a seeded Postgres, and every eval prints scored counts from one shared module.
