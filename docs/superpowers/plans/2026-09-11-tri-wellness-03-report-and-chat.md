@@ -1,5 +1,7 @@
 # tri-wellness Plan 3 of 3: Report and Chat Implementation Plan
 
+**Status:** Implemented 2026-09-12 (commits `d770156` to `b223e1f`, direct to main).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add `tri-wellness report` (evaluate a stored panel, one streaming model call with a fixed ten-section structure, saved to `lab_reports`), `tri-wellness chat` (a `create_agent` loop over the read-only SQL tool and three findings tools), `tri-wellness panels`, and a LangSmith dataset of findings sets with code evaluators that check every report cites a functional range for every non-optimal marker. This is spec milestone 3 and completes v1.

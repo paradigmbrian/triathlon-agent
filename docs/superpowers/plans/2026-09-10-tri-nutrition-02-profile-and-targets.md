@@ -1,5 +1,7 @@
 # tri-nutrition Plan 2 of 4: Profile and Targets Implementation Plan
 
+**Status:** Implemented 2026-09-10 (commits `9614c96` to `78000ef`, direct to main).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** The first end-to-end nutrition conversation: the intake sub-agent interviews the athlete and saves a `NutritionProfile` to the LangGraph Store; the targets node derives the 14-day horizon from the training plan and proposes Garmin day targets; the athlete approves at a durable `interrupt()`; the apply node writes them to Garmin Connect and records every call. `tri-nutrition chat` and `tri-nutrition reset` work. This is spec milestone 2. Fueling (Plan 3) and the check-in analysis (Plan 4) come later.

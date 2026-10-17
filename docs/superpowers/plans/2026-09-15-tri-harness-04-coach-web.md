@@ -1,5 +1,7 @@
 # tri-harness Plan 4 of 4: tri-coach and tri-web on the harness Implementation Plan
 
+**Status:** Implemented 2026-09-16 (merge `506c086`).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Delete tri-coach's own copies of the harness and point tri-coach and tri-web at `tri_core.harness`. The copies are `graph/checkpointer.py`, `text.py`, `make_subagent` and `one_tool_call_at_a_time` in `graph/llm.py`, the handoff plumbing, the agent-as-tool skeletons, `text_of` and the body of `run_turn`. Nothing the athlete sees in the terminal or the browser changes.

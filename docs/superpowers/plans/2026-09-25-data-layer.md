@@ -1,5 +1,7 @@
 # Data layer: sync ahead, tombstones, Garmin activities, record-before-write Implementation Plan
 
+**Status:** Implemented 2026-09-26 (merge `a850c94`; follow-up `91faf25`).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make `workouts` match the TrainingPeaks calendar 28 days forward and backwards (deletions included), keep every Garmin activity so a brick has both legs, and put a `pending` row in the change tables before every TrainingPeaks or Garmin write.

@@ -1,5 +1,7 @@
 # Guardrails 02: Consult Budget, One Held-Review Rule, Private Sub-graphs Implementation Plan
 
+**Status:** Implemented 2026-09-27 (merge `8545f8e`). Open: the coach-v4 eval comparison has not been run.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** The coach cannot consult a sub-agent past its per-turn budget, every host answers "a review is waiting" with one shared definition, and the embedded planning and nutrition graphs stop writing checkpoints into the coach's thread.

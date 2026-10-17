@@ -1,7 +1,7 @@
 # Repo hygiene: CI, migrations, a read-only SQL role, TypeScript strict, MCP environment
 
 **Date:** 2026-09-24
-**Status:** Draft
+**Status:** Implemented 2026-09-27 (merge `38d2661`).
 **Purpose:** Make the checks that gate every merge run without anyone remembering them, make schema changes recorded and repeatable, take the SQL tool off the owner role, turn on TypeScript strict mode, and stop handing every secret in the environment to the two MCP subprocesses. Fifth of the five specs from `docs/notes/2026-09-24-codebase-review.md`; independent of the other four and safe to execute in any order relative to them.
 
 ## 1. Decisions already made

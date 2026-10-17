@@ -1,5 +1,7 @@
 # tri-nutrition Plan 4 of 4: Check-in Implementation Plan
 
+**Status:** Implemented 2026-09-11 (commits `02b2957` to `41e2288`, direct to main).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** The check-in: a `checkin` sub-agent that reads logged intake against the stored targets, body composition, recovery and workout comments, records fueling feedback into the Store's fuel log, and proposes profile changes (or a horizon regeneration) that the graph turns into a reviewed change set; the `tri-nutrition check-in [--yes]` command that runs it unattended; and a LangSmith dataset with code evaluators and an LLM judge over the fueling prompts. This is spec milestone 4.

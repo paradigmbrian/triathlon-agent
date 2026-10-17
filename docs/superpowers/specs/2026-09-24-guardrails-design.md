@@ -1,7 +1,7 @@
 # Guardrails: Python-owned TSS, validate-then-refuse, a consult budget, one held-review rule, private sub-graphs
 
 **Date:** 2026-09-24
-**Status:** Draft
+**Status:** Implemented 2026-09-27 (merges `d9ca6b0`, `8545f8e`). Open: the coach-v4 comparison (`uv run tri-coach eval`, 13 cases) has not been run.
 **Purpose:** Move the limits that today live in prompt prose into code: the arithmetic a model cannot do reliably, the validation that today proposes anyway, the consult budget nothing enforces, the four different answers to "a review is waiting", and the embedded graphs that write to Postgres while claiming to be private. Third of five specs; assumes the correctness fixes and the data layer are in. Line numbers are `main` @ 6540055.
 
 ## 1. Decisions already made

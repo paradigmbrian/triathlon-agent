@@ -1,5 +1,7 @@
 # tri-coach Plan 3 of 4: Wellness Consult Implementation Plan
 
+**Status:** Implemented 2026-09-13 (commits `196a3c4` to `354ef39`, direct to main).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Give the head coach read access to everything `tri-wellness` knows: an `ask_wellness` agent-as-tool that runs wellness's chat agent on a throwaway thread, and a lab summary line in the coach's per-turn context block, so lab findings inform the coach's planning and nutrition briefs. This is spec milestone 3 (§6.6). Nothing the coach does writes a wellness row.

@@ -1,5 +1,7 @@
 # tri-planning Plan 4 of 4: Adjust and Check-in Implementation Plan
 
+**Status:** Implemented 2026-09-11 (commits `6f6f67d` to `d66a54b`, direct to main).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Once a plan is active, the graph's `adjust` node runs a `create_agent` sub-agent that reviews the last week against plan, reads live readiness and HRV, proposes calendar changes through `propose_calendar_changes`, and extends the designed window with `design_next_week` when fewer than two designed weeks remain. A non-interactive `tri-planning check-in [--yes]` runs that review on a schedule-friendly path. A LangSmith dataset plus a code evaluator give a validator pass rate per design-prompt version. This is spec milestone 4.

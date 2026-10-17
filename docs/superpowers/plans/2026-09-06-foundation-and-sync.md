@@ -1,5 +1,7 @@
 # tri_analyze Foundation and Sync Implementation Plan
 
+**Status:** Implemented 2026-09-06 (commit `51ad9ff`, direct to main).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Stand up the Python project, a local Postgres store, an MCP client wrapper, and the `tri-analyze sync` command that pulls TrainingPeaks and Garmin data into Postgres. This is spec milestones 1 and 2. The agent (milestones 3 and 4) is a separate plan written after this one lands.

@@ -1,7 +1,7 @@
 # Progress page: performance management and weekly volume
 
 **Date:** 2026-09-29
-**Status:** Approved 2026-09-29; implemented on `feat/progress-page` (plan: `docs/superpowers/plans/2026-09-29-progress-page.md`)
+**Status:** Implemented 2026-09-29 (commits `292e2db` to `123ab0e`, fast-forwarded from `feat/progress-page`).
 **Purpose:** Piece 1 of three toward surfacing the TrainingPeaks dashboard metrics (Brian's screenshots, 2026-09-29) in tri-web. This piece fills the `/progress` placeholder using only data already synced. Piece 2 (sleep, HRV, weight and body-fat history) and piece 3 (time in zones, peak power/HR/pace) get their own specs; piece 3 starts with a feasibility spike because the store holds per-workout aggregates only. Line references are `main` @ 9760e03.
 
 ## 1. Decisions already made

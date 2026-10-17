@@ -1,5 +1,7 @@
 # Model routing Plan 1 of 2: Role registry and Claude fallback Implementation Plan
 
+**Status:** Implemented 2026-09-24 (merge `165cf49`).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the single `TRI_MODEL` pin with a per-role model registry in `tri_core.llm`, route every model construction through it, and retry an overloaded or unavailable model call on the next Claude model, with no other change in behaviour: every role still runs `claude-opus-5` at its default effort.

@@ -1,5 +1,7 @@
 # tri-wellness Plan 2 of 3: Ingest Implementation Plan
 
+**Status:** Implemented 2026-09-11 (commits `4dcb34b` to `7c0fc2c`, direct to main).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add `tri-wellness ingest <file>`: extraction from a PDF (one structured-output model call with the PDF as a document block) or a structured export (deterministic parser, model fallback), the pure normalize step from Plan 1, a review interrupt with a terminal table, context prompts and a YAML editor, and a store step that writes one panel in one transaction. First real panel in the database. This is spec milestone 2.

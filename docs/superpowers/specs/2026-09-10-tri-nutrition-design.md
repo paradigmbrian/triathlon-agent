@@ -1,7 +1,7 @@
 # tri-nutrition — Endurance Nutrition Agent (package `tri_nutrition`)
 
 **Date:** 2026-09-10
-**Status:** Approved design; revised 2026-09-10 after the first live run (Garmin holds only today's target, see §2 and §8)
+**Status:** Implemented 2026-09-11 (plans `2026-09-10-tri-nutrition-01` to `-04`, direct to main, last commit `41e2288`). Revised 2026-09-10 after the first live run: Garmin holds only today's target, see §2 and §8.
 **Purpose:** A LangChain/LangGraph learning project that also produces a useful tool: an agent that interviews the athlete about diet, restrictions, habits, body composition and physique goals, then derives periodized daily nutrition targets and per-session fueling plans from the training plan, writes them to Garmin Connect and TrainingPeaks after approval, and checks in against logged intake and body composition as training unfolds.
 
 Companion specs: `tri-analyze` (2026-09-06) and `tri-planning` (2026-09-07). This spec assumes both and copies their patterns.

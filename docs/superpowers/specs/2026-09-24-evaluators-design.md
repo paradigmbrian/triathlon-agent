@@ -1,7 +1,7 @@
 # Evaluators: judges that see the evidence, an analyst target on real SQL, counts in every report
 
 **Date:** 2026-09-24
-**Status:** Draft
+**Status:** Implemented 2026-09-28 (merge `9f4e6b1`; follow-ups `a04184b`). Open: the design-v2 run (`uv run tri-planning eval`, 23 cases) has not been run.
 **Purpose:** Make the eval suites measure truth rather than shape, so the model-routing gate in `docs/superpowers/specs/2026-09-15-model-routing-design.md` §7.2 rests on numbers that mean something. Fourth of five specs; assumes the correctness fixes are in and is independent of the data layer and guardrails specs. Line numbers are `main` @ 6540055.
 
 ## 1. Decisions already made

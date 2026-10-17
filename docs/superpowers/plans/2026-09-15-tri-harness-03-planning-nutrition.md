@@ -1,5 +1,7 @@
 # tri-harness Plan 3 of 4: tri-planning and tri-nutrition on the harness Implementation Plan
 
+**Status:** Implemented 2026-09-16 (merge `8f3a62d`).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** tri-planning and tri-nutrition drop their copies of the harness: both `graph/checkpointer.py` files, both `make_subagent` copies, both REPL printers and `_text_of`, and the Store helpers in `tri_nutrition/store.py`. Every caller, including the ones in tri-coach and tri-web, uses `tri_core.harness` instead, with no observable change.

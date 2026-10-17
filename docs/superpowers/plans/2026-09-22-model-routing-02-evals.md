@@ -1,5 +1,7 @@
 # Model routing Plan 2 of 2: Eval wiring and tuning Implementation Plan
 
+**Status:** Implemented 2026-09-24 (merge `0186d8f`).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Give every eval its target's own model and the judge its own model, record which models each experiment ran on, add `tri-planning eval` in place of `scripts/design_eval.py`, and set out the athlete-run tuning that decides each role's default.

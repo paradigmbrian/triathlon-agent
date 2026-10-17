@@ -1,5 +1,7 @@
 # tri-planning Plan 2 of 4: Targets and Schema Implementation Plan
 
+**Status:** Implemented 2026-09-07 (commits `cce499c` to `cddc49f`, direct to main).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Create the `tri-planning` package with the planning domain models, the periodization constants, the pure targets builder (goal + fitness -> week targets), the pure week validator, the planning tables migration and the repository over them. Every rule is unit-tested; nothing calls a model. This is spec milestone 2.

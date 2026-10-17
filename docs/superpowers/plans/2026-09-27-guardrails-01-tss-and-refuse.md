@@ -1,5 +1,7 @@
 # Guardrails 01: Python-owned TSS and Validate-then-Refuse Implementation Plan
 
+**Status:** Implemented 2026-09-27 (merge `d9ca6b0`).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** The planner computes every session's TSS from duration and intensity and scales the week to its target; a week or fuel plan that still fails validation after its one retry is stored with its violations and never proposed.

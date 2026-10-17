@@ -1,5 +1,7 @@
 # tri-wellness Plan 1 of 3: Ranges and Evaluate Implementation Plan
 
+**Status:** Implemented 2026-09-11 (commits `061ffda` to `fdfd3cd`, direct to main).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Create the `tri-wellness` package with the lab tables migration, the lab domain models, the curated `markers.yaml` range table and the registry that validates it, the pure `normalize` step (raw lab rows to canonical results), the pure `evaluate` step (results plus contexts to `Finding`s), the training-context reader over `workouts` and `daily_metrics`, and the repository over the new tables. Nothing here calls a model. This is spec milestone 1.

@@ -1,5 +1,7 @@
 # tri-harness Plan 2 of 4: tri-analyze and tri-wellness onto `tri_core.harness` Implementation Plan
 
+**Status:** Implemented 2026-09-15 (merge `6e06e78`).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** tri-analyze and tri-wellness stop carrying their own copies of the harness. Their agent builders, text helper, turn printers, stream loops and checkpointer module give way to `tri_core.harness`, with no change to anything a user or a test can observe.

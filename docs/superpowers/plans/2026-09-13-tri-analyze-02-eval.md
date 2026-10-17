@@ -1,5 +1,7 @@
 # tri-analyze Plan 2 of 2: Evaluation Implementation Plan
 
+**Status:** Implemented 2026-09-13 (merge `b8c1b04`).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** `tri-analyze eval` (spec milestone 2): twelve analyst cases in a LangSmith dataset `tri_analyze_feedback`, a target that runs the real `build_agent` over stub tools with canned results, three code checks over the tool calls and the answer, one LLM judge scoring grounding and feedback quality, and an experiment named `analyst-v<PROMPT_VERSION>`. Exit 0 only when every evaluator passes and no example errored.

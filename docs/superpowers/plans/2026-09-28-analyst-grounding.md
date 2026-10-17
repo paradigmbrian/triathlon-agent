@@ -1,5 +1,7 @@
 # Analyst Grounding Implementation Plan
 
+**Status:** Implemented 2026-09-28 (merge `8eb8506`).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** The analyst judge checks derivations instead of demanding shown arithmetic and reads SQL rows by column name and weekdays from a calendar line; then the analyst sees weekdays and the athlete's zones in its context, and its rules forbid invented ranges, baselines and mental arithmetic.

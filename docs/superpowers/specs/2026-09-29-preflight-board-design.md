@@ -1,7 +1,7 @@
 # tri-web preflight board: a go / easy / rest verdict and a new visual world
 
 **Date:** 2026-09-29
-**Status:** Approved 2026-09-29. Amended 2026-09-29 after the first build review: see §8, which supersedes the call vocabulary in §2.2 and §2.3 and the order and verdict strip in §3.3.
+**Status:** Implemented 2026-09-29 (commits `0b593b4` to `a672719`, direct to main; `DESIGN.md` recorded in `9760e03`). Amended 2026-09-29 after the first build review: §8 supersedes the call vocabulary in §2.2 and §2.3 and the order and verdict strip in §3.3 (plan `2026-09-29-readiness-scale.md`).
 **Purpose:** Replace tri-web's look with the "Go / No-Go Preflight Board" direction chosen in the Impeccable shape round (seed `f2f09b9e`, pick card, code-led), with Today as the lead surface. Add the server-side verdict that the board leads with. Product truth lives in `PRODUCT.md`. This spec follows `2026-09-28-web-polish-design.md` (merged to `main` @ 4fa5b1d) and replaces that spec's Today cards. Line numbers are `main` @ 4fa5b1d.
 
 ## 1. Decisions already made

@@ -1,5 +1,7 @@
 # tri-web Plan 3 of 3: The React App (shell, Today strip, coach chat, gate, jobs, settings) Implementation Plan
 
+**Status:** Implemented 2026-09-14 (merge `eaa7fb1`).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** The athlete's browser UI in `web/`: a shell with a rail and header, the Today page with its four-card strip over a chat that streams the coach's turn, a review gate with approve, reject and a schema-generated edit form (YAML fallback), Sync now and Weekly check-in job buttons, and a Settings page with memory, reset and readiness. `npm --prefix web run build` produces `web/dist`, which `tri-web serve` already serves.

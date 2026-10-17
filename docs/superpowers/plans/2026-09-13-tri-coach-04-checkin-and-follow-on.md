@@ -1,5 +1,7 @@
 # tri-coach Plan 4 of 4: Check-in, Follow-on Gate and Routing Eval Implementation Plan
 
+**Status:** Implemented 2026-09-13 (commits `415fc2b` to `2ab4b70`, direct to main).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Finish the coach (spec milestone 4). After an approved plan change moves sessions, nutrition is regenerated from the stored plan and comes back as a second gate in the same command. `tri-coach check-in` runs the weekly checklist unattended, writes a `checkin` memory entry, and exits with the planning check-in's codes. `tri-coach eval` runs a LangSmith routing dataset (lab questions included) with three evaluators. The approval/pending defects parked by plan 2 and `ask_analyst`'s spec §9 gap are fixed on the way.
