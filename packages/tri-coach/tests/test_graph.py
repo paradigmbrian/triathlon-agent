@@ -511,3 +511,20 @@ async def test_a_rejected_review_resets_the_consult_budget(nocommit, make_deps, 
     # each planning consult makes 2 model calls (the move, then "ok"); a second consult reaching
     # the model (rather than the budget message) doubles the count
     assert planning.calls == 4 and out["consults"] == {"planning": 1}
+
+
+async def test_coach_node_reads_its_context_off_the_event_loop(nocommit, make_deps, mem_store):
+    from dataclasses import replace
+
+    from tri_core.testing import slow_connect, ticks_during
+
+    deps = make_deps(
+        **scripted(coach=[AIMessage(content="Rest today.")], planning=[], nutrition=[], analyst=[])
+    )
+    deps = replace(deps, connect=slow_connect(deps.connect, 0.3))
+    graph = build_graph(deps, InMemorySaver(serde=make_serde(STATE_TYPES)), mem_store)
+    out, ticks = await ticks_during(
+        graph.ainvoke({"messages": [HumanMessage("should I train?")]}, CFG)
+    )
+    assert out["messages"][-1].content == "Rest today."
+    assert ticks >= 10

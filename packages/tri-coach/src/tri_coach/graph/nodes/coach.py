@@ -11,7 +11,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.store.base import BaseStore
 
 from tri_coach import memory as M
-from tri_coach.context import load_context
+from tri_coach.context import load_context_off_loop
 from tri_coach.graph.deps import CoachDeps
 from tri_coach.graph.state import CoachState
 from tri_coach.prompts.coach import render_system_prompt
@@ -44,10 +44,9 @@ def make_coach_node(deps: CoachDeps) -> Any:
         state: CoachState, config: RunnableConfig, *, store: BaseStore
     ) -> dict[str, Any]:
         spent = state.get("consults") or {}
-        with deps.connect() as conn:
-            ctx = await load_context(
-                conn, store, deps.today(), state.get("pending"), labs_enabled=labs_enabled
-            )
+        ctx = await load_context_off_loop(
+            deps.connect, store, deps.today(), state.get("pending"), labs_enabled=labs_enabled
+        )
         left = {d: max(0, deps.max_consults - spent.get(d, 0)) for d in ("planning", "nutrition")}
         ctx = replace(ctx, consults_left=left)
         entries = await M.get_entries(store)

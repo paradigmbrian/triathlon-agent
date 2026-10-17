@@ -3,6 +3,9 @@ tables and both Store namespaces; rendered byte-stable for a fixed input."""
 
 from __future__ import annotations
 
+import asyncio
+from collections.abc import Callable
+from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any
@@ -98,6 +101,38 @@ async def load_context(
     *,
     labs_enabled: bool = False,
 ) -> CoachContext:
+    profile = await S.get_profile(store)
+    return read_context(conn, profile, today, pending, labs_enabled=labs_enabled)
+
+
+async def load_context_off_loop(
+    connect: Callable[[], AbstractContextManager[Conn]],
+    store: BaseStore,
+    today: date,
+    pending: ChangeSet | None,
+    *,
+    labs_enabled: bool = False,
+) -> CoachContext:
+    """`load_context` for an event loop that must stay free: the store read stays on the loop;
+    the connection opens, runs its queries and closes in a worker thread."""
+    profile = await S.get_profile(store)
+
+    def read() -> CoachContext:
+        with connect() as conn:
+            return read_context(conn, profile, today, pending, labs_enabled=labs_enabled)
+
+    return await asyncio.to_thread(read)
+
+
+def read_context(
+    conn: Conn,
+    profile: NutritionProfile | None,
+    today: date,
+    pending: ChangeSet | None,
+    *,
+    labs_enabled: bool = False,
+) -> CoachContext:
+    """Everything `load_context` reads from the database; synchronous, so it runs off the loop."""
     phase, goal_id, plan_id = repo.derive_phase(conn)
     goal = repo.get_goal(conn, goal_id) if goal_id is not None else None
     plan = repo.get_plan(conn, plan_id) if plan_id is not None else None
@@ -118,7 +153,6 @@ async def load_context(
         "where completed and deleted_at is null and workout_date between %s and %s",
         (monday, today),
     ).fetchone()
-    profile = await S.get_profile(store)
     stored = nrepo.list_targets(conn, today, today + timedelta(days=365))
     labs_missing = labs_enabled and not _lab_tables_present(conn)
     labs = load_lab_summary(conn) if labs_enabled and not labs_missing else None

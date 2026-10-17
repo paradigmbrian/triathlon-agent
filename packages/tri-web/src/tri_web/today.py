@@ -3,17 +3,23 @@ labs) plus today's rows from workouts, daily_metrics, nutrition_targets and fuel
 
 from __future__ import annotations
 
+import asyncio
 from collections import defaultdict
 from datetime import date, datetime, timedelta
-from typing import Any, Literal
+from typing import Any, Literal, NamedTuple
 
 from pydantic import BaseModel, Field
 
-from tri_coach.context import LabSummary, load_context
+from tri_coach.context import CoachContext, LabSummary, read_context
+from tri_coach.models import ChangeSet
 from tri_core.db import repo as crepo
+from tri_core.db.models import SyncState
 from tri_core.harness.turns import paused_review
 from tri_nutrition import repo as nrepo
+from tri_nutrition.nutrition.models import NutritionProfile, StoredDayTarget, StoredFuelPlan
+from tri_nutrition.store import get_profile
 from tri_planning import repo as prepo
+from tri_planning.planning.models import PlanWeekRow
 from tri_planning.planning.targets import week_monday
 from tri_web.metrics import (
     BASELINE_DAYS,
@@ -270,6 +276,59 @@ def _labs(s: LabSummary | None) -> LabsOut | None:
     )
 
 
+class _TodayRows(NamedTuple):
+    ctx: CoachContext
+    todays: list[dict[str, Any]]
+    week_rows: list[dict[str, Any]]
+    metric: dict[str, Any] | None
+    history: list[dict[str, Any]]
+    targets: list[StoredDayTarget]
+    fuel_plans: list[StoredFuelPlan]
+    syncs: list[SyncState]
+    weeks: list[PlanWeekRow]
+
+
+def _read_today(
+    rt: Runtime,
+    profile: NutritionProfile | None,
+    today: date,
+    held: ChangeSet | None,
+    labs_enabled: bool,
+) -> _TodayRows:
+    """Every query behind the Today view, on one connection. Runs in a worker thread so the
+    event loop keeps streaming a coach turn meanwhile."""
+    monday = week_monday(today)
+    with rt.connect() as conn:
+        ctx = read_context(conn, profile, today, held, labs_enabled=labs_enabled)
+        metric = conn.execute(
+            "select * from daily_metrics where metric_date <= %s order by metric_date desc limit 1",
+            (today,),
+        ).fetchone()
+        return _TodayRows(
+            ctx=ctx,
+            todays=crepo.list_workouts_between(conn, today, today),
+            week_rows=crepo.list_workouts_between(conn, monday, monday + timedelta(days=6)),
+            metric=metric,
+            history=(
+                conn.execute(
+                    "select * from daily_metrics where metric_date between %s and %s",
+                    (
+                        metric["metric_date"] - timedelta(days=BASELINE_DAYS - 1),
+                        metric["metric_date"],
+                    ),
+                ).fetchall()
+                if metric is not None
+                else []
+            ),
+            targets=nrepo.list_targets(conn, today, today),
+            fuel_plans=nrepo.list_fuel_plans(conn, today, today),
+            syncs=[
+                s for s in (crepo.get_sync_state(conn, src) for src in SOURCES) if s is not None
+            ],
+            weeks=prepo.list_weeks(conn, ctx.plan.id) if ctx.plan is not None else [],
+        )
+
+
 async def build_today(rt: Runtime) -> TodayView:
     today = rt.today()
     monday = week_monday(today)
@@ -278,26 +337,18 @@ async def build_today(rt: Runtime) -> TodayView:
     paused = paused_review(snap)
     held = values.get("pending")
     labs_enabled = rt.settings.tri_athlete_sex is not None
-    with rt.connect() as conn:
-        ctx = await load_context(conn, rt.store, today, held, labs_enabled=labs_enabled)
-        todays = crepo.list_workouts_between(conn, today, today)
-        week_rows = crepo.list_workouts_between(conn, monday, monday + timedelta(days=6))
-        metric = conn.execute(
-            "select * from daily_metrics where metric_date <= %s order by metric_date desc limit 1",
-            (today,),
-        ).fetchone()
-        history = (
-            conn.execute(
-                "select * from daily_metrics where metric_date between %s and %s",
-                (metric["metric_date"] - timedelta(days=BASELINE_DAYS - 1), metric["metric_date"]),
-            ).fetchall()
-            if metric is not None
-            else []
-        )
-        targets = nrepo.list_targets(conn, today, today)
-        fuel_plans = nrepo.list_fuel_plans(conn, today, today)
-        syncs = [s for s in (crepo.get_sync_state(conn, src) for src in SOURCES) if s is not None]
-        weeks = prepo.list_weeks(conn, ctx.plan.id) if ctx.plan is not None else []
+    profile = await get_profile(rt.store)
+    (
+        ctx,
+        todays,
+        week_rows,
+        metric,
+        history,
+        targets,
+        fuel_plans,
+        syncs,
+        weeks,
+    ) = await asyncio.to_thread(_read_today, rt, profile, today, held, labs_enabled)
 
     goal = None
     if ctx.goal is not None:

@@ -19,7 +19,7 @@ The one place to see what is open and what shipped. Each spec and plan also carr
 
 | Spec | State | Next step |
 |---|---|---|
-| [`2026-09-28-optimizations-design.md`](specs/2026-09-28-optimizations-design.md) | Draft, no plan | Write the plan first in round two: coach thread bound and cacheable prefix (§4.4), parallel sync (§4.3), fuel fingerprint (§4.2), SQL cell cap (§4.1), non-blocking web reads (§4.6). |
+| [`2026-09-28-optimizations-design.md`](specs/2026-09-28-optimizations-design.md) | Draft, no plan | Write the plan first in round two: coach thread bound and cacheable prefix (§4.4), parallel sync (§4.3), fuel fingerprint (§4.2), SQL cell cap (§4.1). Of §4.6, Today, Progress and the coach node already read off the event loop (`fix/web-db-off-loop`); the planning, nutrition and wellness graph nodes still read on it. |
 | [`2026-09-28-test-gaps-design.md`](specs/2026-09-28-test-gaps-design.md) | Draft, no plan | Second: judge calibration (§4.1) before more analyst prompt work; bought-plan reject test (§4.2); real-backend e2e (§4.4). |
 | [`2026-09-28-features-design.md`](specs/2026-09-28-features-design.md) | Draft, no plan | Third: C3 resumable turns and ask-while-paused, C4a weekly and race readiness; then C1, C2, C4b. |
 
@@ -30,7 +30,6 @@ The one place to see what is open and what shipped. Each spec and plan also carr
 | Design-v2 eval run: `uv run tri-planning eval`, 23 cases, no baseline (~$1 per the usage audit) | [evaluators](plans/2026-09-27-evaluators.md) | Needs Brian's approval before it runs. |
 | Coach-v4 eval comparison: `uv run tri-coach eval`, 13 cases, no baseline (~$1 per the usage audit) | [guardrails-02](plans/2026-09-27-guardrails-02-consults-and-held-reviews.md) | Needs Brian's approval before it runs. |
 | Analyst `grounded` at 6/12 | [analyst-grounding](specs/2026-09-28-analyst-grounding-design.md) | After judge calibration (test-gaps §4.1). Failures: `docs/notes/2026-09-28-analyst-grounding-runs.md`. |
-| Sync DB calls on the event loop in `build_today`, `build_progress` and the coach node | `docs/notes/2026-10-17-codebase-review.md` | Fix with `asyncio.to_thread` (part of optimizations §4.6). |
 | Nutrition and Labs pages are placeholders | `PRODUCT.md` | No spec yet. |
 
 ## Shipped
